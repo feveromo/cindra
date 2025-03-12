@@ -252,11 +252,9 @@ function openGoogleAIStudio(prompt, content, title) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
-  // Format with requested tags - ensure URLs are untouched
+  // Format with requested tags - ensure URLs are untouched with minimal line spacing
   const formattedPrompt = `<Task>${prompt}</Task>
-
 <ContentTitle>${title}</ContentTitle>
-
 <Transcript>${cleanedContent}</Transcript>`;
 
   console.log('Formatted prompt length:', formattedPrompt.length);

@@ -1,0 +1,192 @@
+:root {
+  --primary-color: #4285f4;
+  --secondary-color: #34a853;
+  --background-color: #ffffff;
+  --text-color: #202124;
+  --border-color: #dadce0;
+  --hover-color: #f8f9fa;
+}
+
+[data-theme="dark"] {
+  --primary-color: #8ab4f8;
+  --secondary-color: #81c995;
+  --background-color: #202124;
+  --text-color: #e8eaed;
+  --border-color: #5f6368;
+  --hover-color: #303134;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+  padding: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  margin-right: 12px;
+}
+
+h1 {
+  font-size: 24px;
+  flex-grow: 1;
+}
+
+.version {
+  font-size: 14px;
+  color: #5f6368;
+}
+
+.settings-container {
+  background-color: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.settings-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  display: flex;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.setting-label {
+  width: 200px;
+  padding-right: 16px;
+  font-weight: 500;
+}
+
+.setting-controls {
+  flex-grow: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.radio-container {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: var(--hover-color);
+}
+
+.radio-container:hover {
+  background-color: var(--border-color);
+}
+
+.radio-label {
+  margin-left: 8px;
+}
+
+.shortcut-info {
+  background-color: var(--hover-color);
+  padding: 16px;
+  border-radius: 4px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.shortcut-label {
+  flex-grow: 1;
+}
+
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.key {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  min-width: 24px;
+  text-align: center;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.primary-btn {
+  padding: 10px 24px;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primary-btn:hover {
+  background-color: #3367d6;
+}
+
+.status {
+  font-size: 14px;
+}
+
+.footer {
+  text-align: center;
+  font-size: 14px;
+  color: #5f6368;
+} 

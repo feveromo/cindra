@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Summary Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="images/icon48.png" alt="Logo" class="logo">
+      <h1>YouTube Summary Settings</h1>
+      <span class="version">v1.0.0</span>
+    </div>
+
+    <div class="settings-container">
+      <div class="settings-section">
+        <h2>General Settings</h2>
+        
+        <div class="setting-item">
+          <span class="setting-label">Theme:</span>
+          <div class="setting-controls">
+            <label class="radio-container">
+              <input type="radio" name="theme" id="auto-theme" value="auto">
+              <span class="radio-label">Auto</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="theme" id="light-theme" value="light">
+              <span class="radio-label">Light</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="theme" id="dark-theme" value="dark">
+              <span class="radio-label">Dark</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label">Copy Format:</span>
+          <div class="setting-controls">
+            <label class="radio-container">
+              <input type="radio" name="copy-format" id="plain-text" value="plain">
+              <span class="radio-label">Plain Text</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="copy-format" id="markdown" value="markdown">
+              <span class="radio-label">Markdown</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label">YouTube Summary Widget:</span>
+          <div class="setting-controls">
+            <label class="radio-container">
+              <input type="radio" name="yt-widget" id="visible-widget" value="visible">
+              <span class="radio-label">Visible</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="yt-widget" id="hidden-widget" value="hidden">
+              <span class="radio-label">Hidden</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label">Summary Button on Video Thumbnail:</span>
+          <div class="setting-controls">
+            <label class="radio-container">
+              <input type="radio" name="thumb-button" id="visible-thumb" value="visible">
+              <span class="radio-label">Visible</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="thumb-button" id="hidden-thumb" value="hidden">
+              <span class="radio-label">Hidden</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <span class="setting-label">Summary Button on Website & PDF:</span>
+          <div class="setting-controls">
+            <label class="radio-container">
+              <input type="radio" name="web-button" id="visible-web" value="visible">
+              <span class="radio-label">Visible</span>
+            </label>
+            <label class="radio-container">
+              <input type="radio" name="web-button" id="hidden-web" value="hidden">
+              <span class="radio-label">Hidden</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2>Keyboard Shortcuts</h2>
+        <div class="shortcut-info">
+          <p>Use the following keyboard shortcut to control the extension:</p>
+          <div class="shortcut-item">
+            <span class="shortcut-label">Summarize the content:</span>
+            <span class="shortcut-keys">
+              <span class="key">Ctrl</span>
+              +
+              <span class="key">X</span>
+              +
+              <span class="key">X</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="save-btn" class="primary-btn">Save Settings</button>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="footer">
+      <p>&copy; 2023 YouTube Summary Extension</p>
+    </div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html> 

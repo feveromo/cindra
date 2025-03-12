@@ -189,4 +189,36 @@ h2 {
   text-align: center;
   font-size: 14px;
   color: #5f6368;
+}
+
+.range-container {
+  display: none;
+}
+
+.range-container input[type="range"] {
+  display: none;
+}
+
+:root[data-theme="dark"] .range-container input[type="range"] {
+  display: none;
+}
+
+.range-container input[type="range"]::-webkit-slider-thumb {
+  display: none;
+}
+
+.range-container input[type="range"]::-moz-range-thumb {
+  display: none;
+}
+
+#char-limit-value {
+  display: none;
+}
+
+.setting-hint {
+  display: none;
+}
+
+:root[data-theme="dark"] .setting-hint {
+  display: none;
 } 

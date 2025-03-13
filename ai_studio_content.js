@@ -38,8 +38,6 @@ function showNotification(message, duration = 5000) {
 
 // Flag to track whether we've already submitted the prompt
 let promptSubmitted = false;
-// Flag to track the last prompt we attempted to submit
-let lastSubmittedPrompt = '';
 // Flag to track if we're currently in the submission process
 let isSubmitting = false;
 
@@ -57,7 +55,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     // Reset the flag when receiving a new prompt
     promptSubmitted = false;
-    lastSubmittedPrompt = message.prompt || '';
     insertPromptAndSubmit(message.prompt, message.title);
     sendResponse({ status: 'Attempting to insert prompt' });
     return true;
@@ -106,8 +103,9 @@ function isGeneratingResponse() {
   // Check for elements that indicate generation is in progress
   const stopButton = document.querySelector('button.run-button.stop-generating');
   const progressIndicator = document.querySelector('.response-container .progress-indicator');
+  const processingIndicator = document.querySelector('.processing-indicator');
   
-  return stopButton !== null || progressIndicator !== null;
+  return stopButton !== null || progressIndicator !== null || processingIndicator !== null;
 }
 
 // Function to insert prompt into the textarea and submit
@@ -126,18 +124,34 @@ function insertPromptAndSubmit(prompt, title) {
   // Set flag that we're in the submission process
   isSubmitting = true;
   
-  // Store the prompt we're about to submit
-  lastSubmittedPrompt = prompt;
-  
   console.log('Attempting to insert prompt into AI Studio');
   showNotification('💡 Inserting content...');
   
-  // Wait for the textarea to be available
-  waitForElement('textarea.textarea.gmat-body-medium')
+  // Try to find the textarea and submit button using multiple selectors
+  const textareaSelectors = [
+    'textarea.textarea.gmat-body-medium',
+    'textarea.textarea',
+    'div[contenteditable="true"]',
+    '.input-area textarea'
+  ];
+  
+  const findTextarea = async () => {
+    for (const selector of textareaSelectors) {
+      try {
+        const textarea = await waitForElement(selector, 5000);
+        if (textarea) return textarea;
+      } catch (e) {
+        console.log(`Textarea not found with selector: ${selector}`);
+      }
+    }
+    throw new Error('Textarea not found');
+  };
+  
+  findTextarea()
     .then(textarea => {
       console.log('Textarea found, setting value');
       
-      // Check if we're already generating - don't overwrite if so
+      // Check if we're already generating
       if (isGeneratingResponse()) {
         console.log('Response already generating, not modifying textarea');
         promptSubmitted = true;
@@ -145,42 +159,48 @@ function insertPromptAndSubmit(prompt, title) {
         return Promise.reject(new Error('Already submitted'));
       }
       
-      // Clear the textarea first to avoid appending to existing content
-      textarea.value = '';
+      // Clear the textarea first
+      if (textarea.tagName.toLowerCase() === 'div') {
+        // Handle contenteditable div
+        textarea.innerHTML = '';
+      } else {
+        // Handle textarea
+        textarea.value = '';
+      }
+      
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
       
       // Small delay to ensure clearing took effect
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 100));
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 300));
     })
     .then(textarea => {
-      // Set the prompt in the textarea
-      textarea.value = prompt;
+      // Set the prompt
+      if (textarea.tagName.toLowerCase() === 'div') {
+        // Handle contenteditable div
+        textarea.innerHTML = prompt;
+      } else {
+        // Handle textarea
+        textarea.value = prompt;
+      }
       
-      // Better event simulation for Angular components
-      const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-      textarea.dispatchEvent(inputEvent);
+      // Fire appropriate events
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      textarea.dispatchEvent(new Event('change', { bubbles: true }));
       
-      const changeEvent = new Event('change', { bubbles: true, cancelable: true });
-      textarea.dispatchEvent(changeEvent);
-      
-      // Focus the textarea to ensure the UI updates properly
+      // Focus on the textarea
       textarea.focus();
       
-      // Fire a keypress event which often helps with Angular components
-      textarea.dispatchEvent(new KeyboardEvent('keypress', { key: 'a' }));
-      
-      showNotification('💡 Content inserted, waiting for Run button...');
-      console.log('Content inserted, waiting for Run button to enable');
-      
-      // Give the UI time to update and register the content
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 1500));
-    })
-    .then((textarea) => {
       // Set the document title for reference
       if (title) {
         document.title = `Summary: ${title} - Google AI Studio`;
       }
       
+      showNotification('💡 Content inserted, preparing to submit...');
+      
+      // Give the UI time to update
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 1000));
+    })
+    .then(textarea => {
       // Double-check we're not already generating
       if (promptSubmitted || isGeneratingResponse()) {
         console.log('Already submitted or generation in progress, skipping button click');
@@ -188,183 +208,186 @@ function insertPromptAndSubmit(prompt, title) {
         return Promise.reject(new Error('Already submitted'));
       }
       
-      showNotification('💡 Run button found, sending summary to AI...');
+      // Try multiple methods to submit the prompt
       
-      // Use a single submission method: Ctrl+Enter
-      // Create a keyboard event for Ctrl+Enter that should trigger submit
-      const enterEvent = new KeyboardEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 13,
-        which: 13,
-        ctrlKey: true,
-        bubbles: true,
-        cancelable: true
-      });
+      // Method 1: Find and click the run button
+      const runButtonSelectors = [
+        'button.run-button:not(.disabled)',
+        'button[aria-label="Send message"]',
+        'button.send-button:not([disabled])'
+      ];
       
-      // Focus and send Ctrl+Enter
-      textarea.focus();
-      textarea.dispatchEvent(enterEvent);
-      console.log('Ctrl+Enter shortcut sent');
-      
-      // Mark as submitted to prevent duplicate submissions
-      promptSubmitted = true;
-      
-      // Clear the pending prompt to prevent resubmission when tab is reopened
-      chrome.storage.local.remove(['pendingPrompt', 'pendingTitle']);
-      
-      // Allow small window before checking if we actually managed to submit
-      return new Promise(resolve => setTimeout(() => {
-        // If we're generating a response, all good
-        if (isGeneratingResponse()) {
-          console.log('Submission confirmed - response generation detected');
-          resolve();
-        } else {
-          // We're not generating, something didn't work
-          console.log('Submission may have failed - no response generation detected');
-          resolve();
-        }
-      }, 1000));
-    })
-    .then(() => {
-      // Reset the submission flag
-      isSubmitting = false;
-      
-      // No need for a notification here, the generation UI will show progress
-      
-      // Add a MutationObserver to watch for and remove any duplicate text that might appear
-      const observer = new MutationObserver((mutations) => {
-        const textarea = document.querySelector('textarea.textarea.gmat-body-medium');
-        if (textarea && textarea.value && textarea.value !== lastSubmittedPrompt) {
-          if (textarea.value.includes(lastSubmittedPrompt) && 
-              textarea.value.length > lastSubmittedPrompt.length) {
-            console.log('Detected extra content in textarea, cleaning up');
-            textarea.value = lastSubmittedPrompt;
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      const findAndClickButton = async () => {
+        for (const selector of runButtonSelectors) {
+          try {
+            const button = await waitForElement(selector, 2000);
+            if (button) {
+              console.log(`Found button with selector: ${selector}, clicking`);
+              button.click();
+              return true;
+            }
+          } catch (e) {
+            console.log(`Button not found with selector: ${selector}`);
           }
         }
-      });
+        return false;
+      };
       
-      // Start observing with a short timeout to allow the normal submission to complete
-      setTimeout(() => {
-        const textarea = document.querySelector('textarea.textarea.gmat-body-medium');
-        if (textarea) {
-          observer.observe(textarea, { attributes: true, childList: true, characterData: true, subtree: true });
+      return findAndClickButton().then(buttonClicked => {
+        if (buttonClicked) {
+          showNotification('💡 Prompt sent to AI, generating response...');
+          console.log('Run button clicked');
+          promptSubmitted = true;
+        } else {
+          // Method 2: Use keyboard shortcut (Ctrl+Enter)
+          console.log('No button found, trying keyboard shortcut');
           
-          // Stop observing after 2 seconds
-          setTimeout(() => observer.disconnect(), 2000);
+          // Create a keyboard event for Ctrl+Enter
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            which: 13,
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true
+          });
+          
+          // Focus and send Ctrl+Enter
+          textarea.focus();
+          textarea.dispatchEvent(enterEvent);
+          console.log('Ctrl+Enter shortcut sent');
+          
+          showNotification('💡 Using keyboard shortcut to submit...');
+          
+          // Give a slight delay to check if it worked
+          return new Promise(resolve => 
+            setTimeout(() => {
+              if (isGeneratingResponse()) {
+                promptSubmitted = true;
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            }, 1000)
+          );
         }
-      }, 500);
+      });
+    })
+    .then(success => {
+      if (success || promptSubmitted) {
+        console.log('Prompt submitted successfully');
+        
+        // Clear the pending prompt to prevent resubmission
+        chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+      } else {
+        console.log('Neither button nor shortcut worked, trying direct DOM injection');
+        
+        // Method 3: Inject script into page to bypass potential CSP issues
+        const script = document.createElement('script');
+        script.textContent = `
+          (function() {
+            try {
+              // Find the button via DOM
+              const runButtons = [
+                document.querySelector('button.run-button:not(.disabled)'),
+                document.querySelector('button[aria-label="Send message"]'),
+                document.querySelector('button.send-button:not([disabled])')
+              ].filter(btn => btn !== null);
+              
+              if (runButtons.length > 0) {
+                console.log('Found button through injected script, clicking');
+                runButtons[0].click();
+              } else {
+                console.log('No button found through injected script');
+                
+                // Try to find the textarea and use Enter
+                const textarea = document.querySelector('textarea.textarea') || 
+                                document.querySelector('div[contenteditable="true"]');
+                if (textarea) {
+                  console.log('Found textarea, sending keyboard event');
+                  textarea.focus();
+                  
+                  // Create and dispatch keyboard event
+                  const enterEvent = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    ctrlKey: true,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  textarea.dispatchEvent(enterEvent);
+                }
+              }
+            } catch (e) {
+              console.error('Error in injected script:', e);
+            }
+          })();
+        `;
+        
+        document.body.appendChild(script);
+        setTimeout(() => {
+          script.remove();
+          
+          // Check one more time if we're generating
+          if (isGeneratingResponse()) {
+            promptSubmitted = true;
+            console.log('Prompt submission confirmed via injected script');
+            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+          } else {
+            console.log('Submission failed even with injected script');
+            showNotification('⚠️ Please press Ctrl+Enter to submit manually', 8000);
+          }
+        }, 1000);
+      }
     })
     .catch(error => {
-      // Reset the submission flag
-      isSubmitting = false;
+      console.error('Error in insertPromptAndSubmit:', error.message);
       
-      // If we already submitted, this is not an error
+      // If already submitted, this is not an error
       if (error.message === 'Already submitted' || promptSubmitted || isGeneratingResponse()) {
+        isSubmitting = false;
         return;
       }
       
-      console.error('Error in insertPromptAndSubmit:', error.message);
-      
-      // Simple fallback with notification but no alert dialog
-      showNotification('⚠️ Trying alternate method to send summary request...');
-      
-      try {
-        const textarea = document.querySelector('textarea.textarea');
-        if (textarea && !promptSubmitted && !isGeneratingResponse()) {
-          // Clear the textarea first
-          textarea.value = '';
-          textarea.dispatchEvent(new Event('input', { bubbles: true }));
-          
-          // Small delay to ensure clearing took effect
-          setTimeout(() => {
-            // Set the value and fire events
-            textarea.value = prompt;
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            textarea.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // Try a direct click via injected script
-            const scriptEl = document.createElement('script');
-            scriptEl.textContent = `
-              (function() {
-                setTimeout(() => {
-                  // Check if already generating
-                  const stopButton = document.querySelector('button.run-button.stop-generating');
-                  const progressIndicator = document.querySelector('.response-container .progress-indicator');
-                  
-                  if (stopButton !== null || progressIndicator !== null) {
-                    console.log('Generation already in progress, not clicking again');
-                    return;
-                  }
-                  
-                  const runButton = document.querySelector('button.run-button:not(.disabled)');
-                  if (runButton) {
-                    console.log('Fallback method: Found button and clicking');
-                    runButton.click();
-                  } else {
-                    console.log('Fallback method: Button not found');
-                    // Try Ctrl+Enter shortcut as last resort
-                    const textarea = document.querySelector('textarea.textarea');
-                    if (textarea) {
-                      textarea.focus();
-                      const e = new KeyboardEvent('keydown', {
-                        key: 'Enter',
-                        code: 'Enter',
-                        keyCode: 13,
-                        which: 13,
-                        ctrlKey: true,
-                        bubbles: true,
-                        cancelable: true
-                      });
-                      textarea.dispatchEvent(e);
-                    }
-                  }
-                }, 1000);
-              })();
-            `;
-            document.body.appendChild(scriptEl);
-            setTimeout(() => {
-              if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
-            }, 2000);
-            
-            // Mark as submitted
-            promptSubmitted = true;
-            
-            // Clear the pending prompt to prevent resubmission when tab is reopened
-            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle']);
-            
-            showNotification('💡 Content inserted. You may need to press Ctrl+Enter to start the summary generation.', 8000);
-          }, 100);
-        }
-      } catch (e) {
-        console.error('Fallback also failed:', e);
-        showNotification('⚠️ Unable to auto-submit. Please press Ctrl+Enter to run.', 8000);
-      }
+      // Show error notification
+      showNotification('⚠️ Unable to automatically submit. Please press Ctrl+Enter to run.', 8000);
+    })
+    .finally(() => {
+      // Always reset submission flag when done
+      isSubmitting = false;
     });
 }
 
 // Auto-check for pending prompts when the page loads
-setTimeout(() => {
-  if (window.location.pathname.includes('/prompts/new_chat')) {
-    console.log('New chat page detected, checking for pending prompts');
-    
-    chrome.storage.local.get(['pendingPrompt', 'pendingTitle', 'promptTimestamp'], function(result) {
-      if (result.pendingPrompt) {
-        // Check if the prompt is fresh (created within the last 2 minutes)
-        const currentTime = Date.now();
-        const promptTime = result.promptTimestamp || 0;
-        const twoMinutesInMs = 2 * 60 * 1000;
-        
-        if (currentTime - promptTime < twoMinutesInMs) {
-          console.log('Found fresh pending prompt, inserting');
-          insertPromptAndSubmit(result.pendingPrompt, result.pendingTitle);
-        } else {
-          console.log('Found stale pending prompt, ignoring');
-          // Clear old prompts to prevent future resubmissions
-          chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+window.addEventListener('load', () => {
+  // Small delay to ensure page is fully loaded
+  setTimeout(() => {
+    if (window.location.pathname.includes('/prompts/new_chat') || 
+        window.location.pathname.includes('/app') ||
+        window.location.href.includes('aistudio.google.com')) {
+      
+      console.log('AI Studio page detected, checking for pending prompts');
+      
+      chrome.storage.local.get(['pendingPrompt', 'pendingTitle', 'promptTimestamp'], function(result) {
+        if (result.pendingPrompt) {
+          // Check if the prompt is fresh (created within the last 5 minutes)
+          const currentTime = Date.now();
+          const promptTime = result.promptTimestamp || 0;
+          const fiveMinutesInMs = 5 * 60 * 1000;
+          
+          if (currentTime - promptTime < fiveMinutesInMs) {
+            console.log('Found fresh pending prompt, inserting');
+            insertPromptAndSubmit(result.pendingPrompt, result.pendingTitle);
+          } else {
+            console.log('Found stale pending prompt, ignoring');
+            // Clear old prompts to prevent future resubmissions
+            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+          }
         }
-      }
-    });
-  }
-}, 2000); 
+      });
+    }
+  }, 2000);
+}); 

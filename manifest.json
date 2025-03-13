@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YouTube Summary",
   "version": "1.0.0",
-  "description": "Summarize YouTube videos, webpages, and PDFs using Google AI Studio",
+  "description": "Summarize YouTube videos, webpages, and PDFs using Google AI Studio or Perplexity",
   "permissions": [
     "activeTab",
     "storage",
@@ -12,6 +12,8 @@
   "host_permissions": [
     "https://aistudio.google.com/*",
     "https://www.youtube.com/*",
+    "https://www.perplexity.ai/*",
+    "https://perplexity.ai/*",
     "*://*/*"
   ],
   "action": {
@@ -39,6 +41,14 @@
     {
       "matches": ["*://aistudio.google.com/*"],
       "js": ["ai_studio_content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://www.perplexity.ai/*", 
+        "*://perplexity.ai/*"
+      ],
+      "js": ["perplexity_content.js"],
       "run_at": "document_idle"
     }
   ]

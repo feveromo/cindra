@@ -67,7 +67,13 @@ function extractPageContent(tab, config) {
     // Create a formatted content string with the URL included separately
     const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
     
-    openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
+    // Send to appropriate AI model based on settings
+    if (config.aiModel === 'perplexity') {
+      openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
+    } else {
+      // Default to Google AI Studio
+      openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
+    }
   });
 }
 
@@ -140,7 +146,13 @@ function extractYouTubeTranscript(tab, config) {
     // Create a formatted content string with the URL included separately
     const formattedContent = `URL: ${transcriptData.url}\nVideo ID: ${transcriptData.videoId || 'Not available'}\n\n${transcriptData.content}`;
     
-    openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
+    // Send to appropriate AI model based on settings
+    if (config.aiModel === 'perplexity') {
+      openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
+    } else {
+      // Default to Google AI Studio
+      openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
+    }
   });
 }
 
@@ -287,6 +299,65 @@ function openGoogleAIStudio(prompt, content, title) {
         }
       });
     }, 1000); // Give the page 1 second to load
+  });
+}
+
+// Open Perplexity with the content
+function openPerplexity(prompt, content, title) {
+  console.log('Opening Perplexity with prompt and content');
+  
+  // Clean up the content formatting
+  const cleanedContent = cleanupContentFormatting(content);
+  
+  // Format the prompt for Perplexity - create a cleaner format without quotes around content
+  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+
+  console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
+  
+  // Store the prompt in local storage for the content script to pick up
+  chrome.storage.local.set({
+    pendingPerplexityPrompt: formattedPrompt,
+    pendingPerplexityTitle: title
+  }, function() {
+    console.log('Prompt stored in local storage for Perplexity');
+    
+    // Open Perplexity in a new tab - moved inside the callback to ensure storage is set first
+    chrome.tabs.create({ url: 'https://www.perplexity.ai/' }, (newTab) => {
+      console.log('New tab created for Perplexity, tab ID:', newTab.id);
+      
+      // Send a message to the content script with a shorter initial delay
+      setTimeout(() => {
+        console.log('Sending message to Perplexity content script');
+        // We'll try multiple times with increasing delays to ensure the message is delivered
+        sendMessageWithRetry(newTab.id, {
+          action: 'insertPrompt',
+          prompt: formattedPrompt,
+          title: title
+        });
+      }, 1000); // Reduced initial delay to 1 second
+    });
+  });
+}
+
+// Function to send a message with retry logic
+function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
+  chrome.tabs.sendMessage(tabId, message, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn(`Attempt ${attempt}: Error sending message:`, chrome.runtime.lastError);
+      
+      if (attempt < maxAttempts) {
+        // Use shorter retry times for earlier attempts
+        const retryTime = attempt === 1 ? 500 : attempt * 1000; // 500ms for first retry, then 2s, 3s, etc.
+        console.log(`Retrying in ${retryTime}ms...`);
+        setTimeout(() => {
+          sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts);
+        }, retryTime);
+      } else {
+        console.error('Failed to send message after multiple attempts');
+      }
+    } else {
+      console.log('Response from content script:', response);
+    }
   });
 }
 

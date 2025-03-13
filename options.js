@@ -5,13 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
     copyFormat: 'plain',
     ytWidget: 'visible',
     thumbButton: 'visible',
-    webButton: 'visible'
+    webButton: 'visible',
+    aiModel: 'google-ai-studio'  // Add default AI model
   }, (items) => {
     document.querySelector(`input[name="theme"][value="${items.theme}"]`).checked = true;
     document.querySelector(`input[name="copy-format"][value="${items.copyFormat}"]`).checked = true;
     document.querySelector(`input[name="yt-widget"][value="${items.ytWidget}"]`).checked = true;
     document.querySelector(`input[name="thumb-button"][value="${items.thumbButton}"]`).checked = true;
     document.querySelector(`input[name="web-button"][value="${items.webButton}"]`).checked = true;
+    document.querySelector(`input[name="ai-model"][value="${items.aiModel}"]`).checked = true;  // Load AI model selection
     
     // Apply theme
     applyTheme(items.theme);
@@ -34,13 +36,15 @@ function saveOptions() {
   const ytWidget = document.querySelector('input[name="yt-widget"]:checked').value;
   const thumbButton = document.querySelector('input[name="thumb-button"]:checked').value;
   const webButton = document.querySelector('input[name="web-button"]:checked').value;
+  const aiModel = document.querySelector('input[name="ai-model"]:checked').value;  // Get AI model selection
 
   chrome.storage.sync.set({
     theme,
     copyFormat,
     ytWidget,
     thumbButton,
-    webButton
+    webButton,
+    aiModel  // Save AI model selection
   }, () => {
     const status = document.getElementById('status');
     status.textContent = 'Settings saved.';

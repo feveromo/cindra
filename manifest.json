@@ -14,6 +14,8 @@
     "https://www.youtube.com/*",
     "https://www.perplexity.ai/*",
     "https://perplexity.ai/*",
+    "https://grok.com/*",
+    "https://www.grok.com/*",
     "*://*/*"
   ],
   "action": {
@@ -49,6 +51,14 @@
         "*://perplexity.ai/*"
       ],
       "js": ["perplexity_content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://www.grok.com/*",
+        "*://grok.com/*"
+      ],
+      "js": ["grok_content.js"],
       "run_at": "document_idle"
     }
   ]

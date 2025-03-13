@@ -70,6 +70,8 @@ function extractPageContent(tab, config) {
     // Send to appropriate AI model based on settings
     if (config.aiModel === 'perplexity') {
       openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
+    } else if (config.aiModel === 'grok') {
+      openGrok(config.summaryPrompt, formattedContent, pageData.title);
     } else {
       // Default to Google AI Studio
       openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
@@ -149,6 +151,8 @@ function extractYouTubeTranscript(tab, config) {
     // Send to appropriate AI model based on settings
     if (config.aiModel === 'perplexity') {
       openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
+    } else if (config.aiModel === 'grok') {
+      openGrok(config.summaryPrompt, formattedContent, transcriptData.title);
     } else {
       // Default to Google AI Studio
       openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
@@ -335,6 +339,43 @@ function openPerplexity(prompt, content, title) {
           title: title
         });
       }, 1000); // Reduced initial delay to 1 second
+    });
+  });
+}
+
+// Open Grok with the content
+function openGrok(prompt, content, title) {
+  console.log('Opening Grok with prompt and content');
+  
+  // Clean up the content formatting
+  const cleanedContent = cleanupContentFormatting(content);
+  
+  // Format the prompt for Grok - simple format similar to Perplexity
+  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+
+  console.log('Formatted prompt length for Grok:', formattedPrompt.length);
+  
+  // Store the prompt in local storage for the content script to pick up
+  chrome.storage.local.set({
+    pendingGrokPrompt: formattedPrompt,
+    pendingGrokTitle: title
+  }, function() {
+    console.log('Prompt stored in local storage for Grok');
+    
+    // Open Grok in a new tab
+    chrome.tabs.create({ url: 'https://grok.com/' }, (newTab) => {
+      console.log('New tab created for Grok, tab ID:', newTab.id);
+      
+      // Send a message to the content script after a delay to ensure it's loaded
+      setTimeout(() => {
+        console.log('Sending message to Grok content script');
+        // We'll try multiple times with increasing delays to ensure the message is delivered
+        sendMessageWithRetry(newTab.id, {
+          action: 'insertPrompt',
+          prompt: formattedPrompt,
+          title: title
+        });
+      }, 1000);
     });
   });
 }

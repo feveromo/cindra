@@ -229,6 +229,9 @@ function insertPromptAndSubmit(prompt, title) {
             promptSubmitted = true;
             isSubmitting = false;
             
+            // Clear the pending prompt to prevent resubmission when tab is reopened
+            chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle']);
+            
             console.log('Prompt submitted to Perplexity');
           })
           .catch(error => {
@@ -277,6 +280,9 @@ function insertPromptAndSubmit(prompt, title) {
           
           // Mark as submitted
           promptSubmitted = true;
+          
+          // Clear the pending prompt to prevent resubmission when tab is reopened
+          chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle']);
         }
       } catch (e) {
         console.error('Enter key fallback failed:', e);
@@ -293,13 +299,21 @@ function checkForPendingPrompts() {
   
   console.log('Checking for pending prompts for Perplexity');
   
-  chrome.storage.local.get(['pendingPerplexityPrompt', 'pendingPerplexityTitle'], function(result) {
+  chrome.storage.local.get(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp'], function(result) {
     if (result.pendingPerplexityPrompt) {
-      console.log('Found pending prompt for Perplexity, inserting');
-      insertPromptAndSubmit(result.pendingPerplexityPrompt, result.pendingPerplexityTitle);
+      // Check if the prompt is fresh (created within the last 2 minutes)
+      const currentTime = Date.now();
+      const promptTime = result.perplexityPromptTimestamp || 0;
+      const twoMinutesInMs = 2 * 60 * 1000;
       
-      // Clear the stored prompt after attempting to insert it
-      chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle']);
+      if (currentTime - promptTime < twoMinutesInMs) {
+        console.log('Found fresh pending prompt for Perplexity, inserting');
+        insertPromptAndSubmit(result.pendingPerplexityPrompt, result.pendingPerplexityTitle);
+      } else {
+        console.log('Found stale pending prompt for Perplexity, ignoring');
+        // Clear old prompts to prevent future resubmissions
+        chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp']);
+      }
     }
   });
 }

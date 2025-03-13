@@ -278,7 +278,8 @@ function openGoogleAIStudio(prompt, content, title) {
   // Store the prompt in local storage for the content script to pick up
   chrome.storage.local.set({
     pendingPrompt: formattedPrompt,
-    pendingTitle: title
+    pendingTitle: title,
+    promptTimestamp: Date.now()
   }, function() {
     console.log('Prompt stored in local storage');
   });
@@ -321,7 +322,8 @@ function openPerplexity(prompt, content, title) {
   // Store the prompt in local storage for the content script to pick up
   chrome.storage.local.set({
     pendingPerplexityPrompt: formattedPrompt,
-    pendingPerplexityTitle: title
+    pendingPerplexityTitle: title,
+    perplexityPromptTimestamp: Date.now()
   }, function() {
     console.log('Prompt stored in local storage for Perplexity');
     
@@ -358,7 +360,8 @@ function openGrok(prompt, content, title) {
   // Store the prompt in local storage for the content script to pick up
   chrome.storage.local.set({
     pendingGrokPrompt: formattedPrompt,
-    pendingGrokTitle: title
+    pendingGrokTitle: title,
+    grokPromptTimestamp: Date.now()
   }, function() {
     console.log('Prompt stored in local storage for Grok');
     

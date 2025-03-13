@@ -210,6 +210,9 @@ function insertPromptAndSubmit(prompt, title) {
       // Mark as submitted to prevent duplicate submissions
       promptSubmitted = true;
       
+      // Clear the pending prompt to prevent resubmission when tab is reopened
+      chrome.storage.local.remove(['pendingPrompt', 'pendingTitle']);
+      
       // Allow small window before checking if we actually managed to submit
       return new Promise(resolve => setTimeout(() => {
         // If we're generating a response, all good
@@ -328,6 +331,9 @@ function insertPromptAndSubmit(prompt, title) {
             // Mark as submitted
             promptSubmitted = true;
             
+            // Clear the pending prompt to prevent resubmission when tab is reopened
+            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle']);
+            
             showNotification('💡 Content inserted. You may need to press Ctrl+Enter to start the summary generation.', 8000);
           }, 100);
         }
@@ -343,13 +349,21 @@ setTimeout(() => {
   if (window.location.pathname.includes('/prompts/new_chat')) {
     console.log('New chat page detected, checking for pending prompts');
     
-    chrome.storage.local.get(['pendingPrompt', 'pendingTitle'], function(result) {
+    chrome.storage.local.get(['pendingPrompt', 'pendingTitle', 'promptTimestamp'], function(result) {
       if (result.pendingPrompt) {
-        console.log('Found pending prompt, inserting');
-        insertPromptAndSubmit(result.pendingPrompt, result.pendingTitle);
+        // Check if the prompt is fresh (created within the last 2 minutes)
+        const currentTime = Date.now();
+        const promptTime = result.promptTimestamp || 0;
+        const twoMinutesInMs = 2 * 60 * 1000;
         
-        // Clear the stored prompt after attempting to insert it
-        chrome.storage.local.remove(['pendingPrompt', 'pendingTitle']);
+        if (currentTime - promptTime < twoMinutesInMs) {
+          console.log('Found fresh pending prompt, inserting');
+          insertPromptAndSubmit(result.pendingPrompt, result.pendingTitle);
+        } else {
+          console.log('Found stale pending prompt, ignoring');
+          // Clear old prompts to prevent future resubmissions
+          chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+        }
       }
     });
   }

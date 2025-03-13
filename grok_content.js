@@ -148,6 +148,9 @@ function insertPromptAndSubmit(prompt, title) {
       promptSubmitted = true;
       isSubmitting = false;
       
+      // Clear the pending prompt to prevent resubmission when tab is reopened
+      chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle']);
+      
       console.log('Prompt submitted to Grok');
     })
     .catch(error => {
@@ -184,6 +187,9 @@ function insertPromptAndSubmit(prompt, title) {
           // Mark as submitted
           promptSubmitted = true;
           
+          // Clear the pending prompt to prevent resubmission when tab is reopened
+          chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle']);
+          
           showNotification('💡 Content submitted with alternative method');
         } else {
           showNotification('⚠️ Could not find input field. Please submit manually.', 10000);
@@ -204,13 +210,21 @@ function checkForPendingPrompts() {
   
   console.log('Checking for pending prompts for Grok');
   
-  chrome.storage.local.get(['pendingGrokPrompt', 'pendingGrokTitle'], function(result) {
+  chrome.storage.local.get(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp'], function(result) {
     if (result.pendingGrokPrompt) {
-      console.log('Found pending prompt for Grok, inserting');
-      insertPromptAndSubmit(result.pendingGrokPrompt, result.pendingGrokTitle);
+      // Check if the prompt is fresh (created within the last 2 minutes)
+      const currentTime = Date.now();
+      const promptTime = result.grokPromptTimestamp || 0;
+      const twoMinutesInMs = 2 * 60 * 1000;
       
-      // Clear the stored prompt after attempting to insert it
-      chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle']);
+      if (currentTime - promptTime < twoMinutesInMs) {
+        console.log('Found fresh pending prompt for Grok, inserting');
+        insertPromptAndSubmit(result.pendingGrokPrompt, result.pendingGrokTitle);
+      } else {
+        console.log('Found stale pending prompt for Grok, ignoring');
+        // Clear old prompts to prevent future resubmissions
+        chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp']);
+      }
     }
   });
 }

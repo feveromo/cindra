@@ -3,15 +3,13 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.sync.get({
     theme: 'auto',
     copyFormat: 'plain',
-    ytWidget: 'visible',
-    webButton: 'visible',
-    aiModel: 'google-ai-studio'  // Add default AI model
+    floatingButton: 'visible',
+    aiModel: 'google-ai-studio'
   }, (items) => {
     document.querySelector(`input[name="theme"][value="${items.theme}"]`).checked = true;
     document.querySelector(`input[name="copy-format"][value="${items.copyFormat}"]`).checked = true;
-    document.querySelector(`input[name="yt-widget"][value="${items.ytWidget}"]`).checked = true;
-    document.querySelector(`input[name="web-button"][value="${items.webButton}"]`).checked = true;
-    document.querySelector(`input[name="ai-model"][value="${items.aiModel}"]`).checked = true;  // Load AI model selection
+    document.querySelector(`input[name="floating-button"][value="${items.floatingButton}"]`).checked = true;
+    document.querySelector(`input[name="ai-model"][value="${items.aiModel}"]`).checked = true;
     
     // Apply theme
     applyTheme(items.theme);
@@ -31,16 +29,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function saveOptions() {
   const theme = document.querySelector('input[name="theme"]:checked').value;
   const copyFormat = document.querySelector('input[name="copy-format"]:checked').value;
-  const ytWidget = document.querySelector('input[name="yt-widget"]:checked').value;
-  const webButton = document.querySelector('input[name="web-button"]:checked').value;
-  const aiModel = document.querySelector('input[name="ai-model"]:checked').value;  // Get AI model selection
+  const floatingButton = document.querySelector('input[name="floating-button"]:checked').value;
+  const aiModel = document.querySelector('input[name="ai-model"]:checked').value;
 
   chrome.storage.sync.set({
     theme,
     copyFormat,
-    ytWidget,
-    webButton,
-    aiModel  // Save AI model selection
+    floatingButton,
+    aiModel
   }, () => {
     const status = document.getElementById('status');
     status.textContent = 'Settings saved.';

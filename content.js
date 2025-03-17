@@ -82,100 +82,13 @@ function triggerSummarize() {
 
 // Initialize UI elements based on settings
 chrome.storage.sync.get({
-  ytWidget: 'visible',
-  webButton: 'visible'
+  floatingButton: 'visible'
 }, (settings) => {
-  // Add YouTube-specific elements if on YouTube
-  if (window.location.href.includes('youtube.com')) {
-    // Listen for messages from background script
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message.action === 'transcriptStatus') {
-        // Remove any existing loading notification
-        const loadingNotification = document.querySelector('.yt-summary-notification');
-        if (loadingNotification) {
-          loadingNotification.remove();
-        }
-        
-        // Show the new status
-        showNotification(message.status, message.isLoading);
-      }
-    });
-
-    if (settings.ytWidget === 'visible') {
-      addYouTubeWidgets();
-    }
-  }
-  
   // Add floating button if enabled (for all sites)
-  if (settings.webButton === 'visible') {
+  if (settings.floatingButton === 'visible') {
     addWebPageButton();
   }
 });
-
-// Add summary widgets to YouTube video page
-function addYouTubeWidgets() {
-  // Wait for YouTube elements to load
-  const observer = new MutationObserver((mutations) => {
-    if (document.querySelector('#above-the-fold')) {
-      addVideoPageButton();
-      observer.disconnect();
-    }
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
-
-// Add summary button on YouTube video page
-function addVideoPageButton() {
-  // Don't add if button already exists
-  if (document.querySelector('.yt-summary-button')) {
-    return;
-  }
-  
-  const aboveTheFold = document.querySelector('#above-the-fold');
-  if (!aboveTheFold) return;
-  
-  const buttonContainer = document.createElement('div');
-  buttonContainer.className = 'yt-summary-button';
-  buttonContainer.style.cssText = `
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-  `;
-  
-  const summaryButton = document.createElement('button');
-  summaryButton.textContent = '🤖 Summarize Video';
-  summaryButton.style.cssText = `
-    background-color: #f0f0f0;
-    border: none;
-    border-radius: 18px;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: background-color 0.2s;
-  `;
-  
-  summaryButton.addEventListener('mouseover', () => {
-    summaryButton.style.backgroundColor = '#e0e0e0';
-  });
-  
-  summaryButton.addEventListener('mouseout', () => {
-    summaryButton.style.backgroundColor = '#f0f0f0';
-  });
-  
-  summaryButton.addEventListener('click', () => {
-    triggerSummarize();
-  });
-  
-  buttonContainer.appendChild(summaryButton);
-  aboveTheFold.appendChild(buttonContainer);
-}
 
 // Add summary button on regular web pages and PDFs
 function addWebPageButton() {
@@ -304,11 +217,6 @@ function addWebPageButton() {
   
   floatingButton.appendChild(tooltip);
   
-  // Check if button should be hidden
-  chrome.storage.sync.get({ webButtonHidden: false }, (settings) => {
-    if (!settings.webButtonHidden) {
-      // Add to page only if not hidden
-      document.body.appendChild(floatingButton);
-    }
-  });
+  // Add to page
+  document.body.appendChild(floatingButton);
 } 

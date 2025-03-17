@@ -22,9 +22,11 @@
     "https://www.youtube.com/*",
     "https://www.perplexity.ai/*",
     "https://perplexity.ai/*",
-    "https://grok.x.ai/*",
-    "https://www.grok.x.ai/*",
     "https://claude.ai/*",
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.com/*",
+    "https://grok.com/*",
     "*://*/*"
   ],
   "icons": {
@@ -46,16 +48,20 @@
       "js": ["ai_studio_content.js"]
     },
     {
-      "matches": ["*://www.perplexity.ai/*", "*://perplexity.ai/*"],
+      "matches": ["*://perplexity.ai/*"],
       "js": ["perplexity_content.js"]
     },
     {
-      "matches": ["*://grok.x.ai/*", "*://grok.com/*", "*://www.grok.x.ai/*"],
+      "matches": ["*://grok.com/*"],
       "js": ["grok_content.js"]
     },
     {
       "matches": ["*://claude.ai/*"],
       "js": ["claude_content.js"]
+    },
+    {
+      "matches": ["*://chat.openai.com/*", "*://chatgpt.com/*", "*://chat.com/*"],
+      "js": ["chatgpt_content.js"]
     }
   ],
   "web_accessible_resources": [

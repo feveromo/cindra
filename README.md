@@ -10,12 +10,9 @@ A Chrome extension that helps you summarize YouTube videos, webpages, and PDFs u
 - ⌨️ Keyboard shortcut (Ctrl+X+X) for quick summarization
 - 🎛️ Customizable prompt for tailored summaries
 - 🎨 Light/Dark mode support
-- 🔌 Google AI Studio integration
+- 🔌 ChatGPT, Grok, Perplexity, Claude, Google AI Studio integration
 
 ## Installation
-
-### From Chrome Web Store (Coming Soon)
-The extension will be available in the Chrome Web Store soon.
 
 ### From Source
 1. Download this repository by clicking the green "Code" button and selecting "Download ZIP"
@@ -35,7 +32,7 @@ The extension will be available in the Chrome Web Store soon.
 1. Navigate to a YouTube video, webpage, or PDF
 2. Click on the extension icon in the toolbar
 3. Click "Summarize Current Page" or use the keyboard shortcut (Ctrl+X+X)
-4. The extension will extract content and open Google AI Studio with the content ready for summarization
+4. The extension will extract content and open chosen model with the content ready for summarization
 5. The summary will be generated based on your custom prompt
 
 ### Customizing Prompts
@@ -50,25 +47,25 @@ Access the settings page by clicking the "Settings" button in the extension popu
 
 - Theme (Auto/Light/Dark)
 - Copy format (Plain Text/Markdown)
-- Visibility of UI elements (YouTube Summary Widget, Summary Button on Video Thumbnail, Summary Button on Website & PDF)
+- Visibility of floating summary button
 
 ## Technical Details
 
 This extension works by:
 1. Extracting content from the current page (text from webpages, transcripts from YouTube videos)
 2. Combining the content with your custom prompt
-3. Opening Google AI Studio and automatically filling in the prompt
-4. Submitting the prompt to generate a summary
+3. Opening chosen model page and automatically filling in the prompt
+4. Submitting the prompt to generate the summary
 
 ## Limitations
 
-- YouTube transcripts are only available if the video creator has added them
+- Only auto-generated and official YouTube transcripts are available 
 - Content extraction may not work perfectly on all websites
 - Very long content may be truncated due to AI model token limits
 
 ## Privacy
 
-This extension does not collect any data. All content is processed locally and sent directly to Google AI Studio in your browser.
+The extension itself does not collect any data. All content is processed locally, then sent directly to the chosen models in your browser.
 
 ## Contributing
 

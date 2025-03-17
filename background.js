@@ -68,15 +68,21 @@ function extractPageContent(tab, config) {
     const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
     
     // Send to appropriate AI model based on settings
-    if (config.aiModel === 'perplexity') {
-      openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
-    } else if (config.aiModel === 'grok') {
-      openGrok(config.summaryPrompt, formattedContent, pageData.title);
-    } else if (config.aiModel === 'claude') {
-      openClaude(config.summaryPrompt, formattedContent, pageData.title);
-    } else {
-      // Default to Google AI Studio
-      openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
+    switch (config.aiModel) {
+      case 'perplexity':
+        openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
+        break;
+      case 'grok':
+        openGrok(config.summaryPrompt, formattedContent, pageData.title);
+        break;
+      case 'claude':
+        openClaude(config.summaryPrompt, formattedContent, pageData.title);
+        break;
+      case 'chatgpt':
+        openChatGPT(config.summaryPrompt, formattedContent, pageData.title);
+        break;
+      default:
+        openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
     }
   });
 }
@@ -193,15 +199,21 @@ function extractYouTubeTranscript(tab, config) {
     const formattedContent = `URL: ${transcriptData.url}\nVideo ID: ${transcriptData.videoId || 'Not available'}\n\n${transcriptData.content}`;
     
     // Send to appropriate AI model based on settings
-    if (config.aiModel === 'perplexity') {
-      openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
-    } else if (config.aiModel === 'grok') {
-      openGrok(config.summaryPrompt, formattedContent, transcriptData.title);
-    } else if (config.aiModel === 'claude') {
-      openClaude(config.summaryPrompt, formattedContent, transcriptData.title);
-    } else {
-      // Default to Google AI Studio
-      openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
+    switch (config.aiModel) {
+      case 'perplexity':
+        openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
+        break;
+      case 'grok':
+        openGrok(config.summaryPrompt, formattedContent, transcriptData.title);
+        break;
+      case 'claude':
+        openClaude(config.summaryPrompt, formattedContent, transcriptData.title);
+        break;
+      case 'chatgpt':
+        openChatGPT(config.summaryPrompt, formattedContent, transcriptData.title);
+        break;
+      default:
+        openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
     }
     
     // Final status message that fades away after 5 seconds
@@ -1002,10 +1014,10 @@ function openGoogleAIStudio(prompt, content, title) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
-  // Format with requested tags - ensure URLs are untouched with minimal line spacing
+  // Format with XML tags
   const formattedPrompt = `<Task>${prompt}</Task>
 <ContentTitle>${title}</ContentTitle>
-<Transcript>${cleanedContent}</Transcript>`;
+<Content>${cleanedContent}</Content>`;
 
   console.log('Formatted prompt length:', formattedPrompt.length);
   
@@ -1066,8 +1078,10 @@ function openPerplexity(prompt, content, title) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
-  // Format the prompt for Perplexity - create a cleaner format without quotes around content
-  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+  // Format with XML tags
+  const formattedPrompt = `<Task>${prompt}</Task>
+<ContentTitle>${title}</ContentTitle>
+<Content>${cleanedContent}</Content>`;
 
   console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
   
@@ -1104,8 +1118,10 @@ function openGrok(prompt, content, title) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
-  // Format the prompt for Grok - simple format similar to Perplexity
-  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+  // Format with XML tags
+  const formattedPrompt = `<Task>${prompt}</Task>
+<ContentTitle>${title}</ContentTitle>
+<Content>${cleanedContent}</Content>`;
 
   console.log('Formatted prompt length for Grok:', formattedPrompt.length);
   
@@ -1142,8 +1158,10 @@ function openClaude(prompt, content, title) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
-  // Format the prompt for Claude
-  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+  // Format with XML tags
+  const formattedPrompt = `<Task>${prompt}</Task>
+<ContentTitle>${title}</ContentTitle>
+<Content>${cleanedContent}</Content>`;
 
   console.log('Formatted prompt length for Claude:', formattedPrompt.length);
   
@@ -1365,4 +1383,44 @@ function openErrorTab(message) {
       }
     });
   }
+}
+
+function openChatGPT(prompt, content, title) {
+  // Clean up the content formatting
+  const cleanedContent = cleanupContentFormatting(content);
+  
+  // Format with XML tags
+  const formattedPrompt = `<Task>${prompt}</Task>
+<ContentTitle>${title}</ContentTitle>
+<Content>${cleanedContent}</Content>`;
+
+  // Store the prompt and title temporarily
+  chrome.storage.local.set({
+    pendingChatGPTPrompt: formattedPrompt,
+    pendingChatGPTTitle: title,
+    chatgptPromptTimestamp: Date.now()
+  }, () => {
+    // Open ChatGPT in a new tab
+    chrome.tabs.create({
+      url: 'https://chat.openai.com/',
+      active: true
+    }, (tab) => {
+      // Set up a retry mechanism to ensure the content script is ready
+      const sendMessageWithRetry = () => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'insertPrompt',
+          prompt: formattedPrompt,
+          title: title
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            // If the content script isn't ready yet, retry after a delay
+            setTimeout(sendMessageWithRetry, 1000);
+          }
+        });
+      };
+      
+      // Start trying to send the message
+      setTimeout(sendMessageWithRetry, 1000);
+    });
+  });
 } 

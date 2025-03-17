@@ -24,6 +24,7 @@
     "https://perplexity.ai/*",
     "https://grok.x.ai/*",
     "https://www.grok.x.ai/*",
+    "https://claude.ai/*",
     "*://*/*"
   ],
   "icons": {
@@ -51,6 +52,10 @@
     {
       "matches": ["*://grok.x.ai/*", "*://grok.com/*", "*://www.grok.x.ai/*"],
       "js": ["grok_content.js"]
+    },
+    {
+      "matches": ["*://claude.ai/*"],
+      "js": ["claude_content.js"]
     }
   ],
   "web_accessible_resources": [

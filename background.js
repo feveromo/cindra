@@ -72,6 +72,8 @@ function extractPageContent(tab, config) {
       openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
     } else if (config.aiModel === 'grok') {
       openGrok(config.summaryPrompt, formattedContent, pageData.title);
+    } else if (config.aiModel === 'claude') {
+      openClaude(config.summaryPrompt, formattedContent, pageData.title);
     } else {
       // Default to Google AI Studio
       openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
@@ -195,6 +197,8 @@ function extractYouTubeTranscript(tab, config) {
       openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
     } else if (config.aiModel === 'grok') {
       openGrok(config.summaryPrompt, formattedContent, transcriptData.title);
+    } else if (config.aiModel === 'claude') {
+      openClaude(config.summaryPrompt, formattedContent, transcriptData.title);
     } else {
       // Default to Google AI Studio
       openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
@@ -1120,6 +1124,44 @@ function openGrok(prompt, content, title) {
       // Send a message to the content script after a delay to ensure it's loaded
       setTimeout(() => {
         console.log('Sending message to Grok content script');
+        // We'll try multiple times with increasing delays to ensure the message is delivered
+        sendMessageWithRetry(newTab.id, {
+          action: 'insertPrompt',
+          prompt: formattedPrompt,
+          title: title
+        });
+      }, 1000);
+    });
+  });
+}
+
+// Open Claude with the content
+function openClaude(prompt, content, title) {
+  console.log('Opening Claude with prompt and content');
+  
+  // Clean up the content formatting
+  const cleanedContent = cleanupContentFormatting(content);
+  
+  // Format the prompt for Claude
+  const formattedPrompt = `${prompt}\n\nTitle: ${title}\n\n${cleanedContent}`;
+
+  console.log('Formatted prompt length for Claude:', formattedPrompt.length);
+  
+  // Store the prompt in local storage for the content script to pick up
+  chrome.storage.local.set({
+    pendingClaudePrompt: formattedPrompt,
+    pendingClaudeTitle: title,
+    claudePromptTimestamp: Date.now()
+  }, function() {
+    console.log('Prompt stored in local storage for Claude');
+    
+    // Open Claude in a new tab
+    chrome.tabs.create({ url: 'https://claude.ai/new' }, (newTab) => {
+      console.log('New tab created for Claude, tab ID:', newTab.id);
+      
+      // Send a message to the content script after a delay
+      setTimeout(() => {
+        console.log('Sending message to Claude content script');
         // We'll try multiple times with increasing delays to ensure the message is delivered
         sendMessageWithRetry(newTab.id, {
           action: 'insertPrompt',

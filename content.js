@@ -262,8 +262,8 @@ function addWebPageButton() {
     background-color: #4285f4;
     color: white;
     border-radius: 50%;
-    width: 56px;
-    height: 56px;
+    width: 42px;
+    height: 42px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     display: flex;
     align-items: center;
@@ -276,7 +276,7 @@ function addWebPageButton() {
   // Button icon
   const buttonIcon = document.createElement('div');
   buttonIcon.innerHTML = '🤖';
-  buttonIcon.style.fontSize = '24px';
+  buttonIcon.style.fontSize = '20px';
   
   // Close button
   const closeButton = document.createElement('div');

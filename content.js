@@ -278,17 +278,68 @@ function addWebPageButton() {
   buttonIcon.innerHTML = '🤖';
   buttonIcon.style.fontSize = '24px';
   
+  // Close button
+  const closeButton = document.createElement('div');
+  closeButton.style.cssText = `
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background-color: #202124;
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10000;
+    padding: 2px;
+    margin: -2px;
+  `;
+  closeButton.textContent = '×';
+  
+  closeButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    floatingButton.remove();
+  });
+  
+  closeButton.addEventListener('mouseover', (e) => {
+    e.stopPropagation();
+    closeButton.style.backgroundColor = '#3c4043';
+    closeButton.style.opacity = '1';
+  });
+  
+  closeButton.addEventListener('mouseout', (e) => {
+    e.stopPropagation();
+    closeButton.style.backgroundColor = '#202124';
+    // Only hide if the main button isn't being hovered
+    if (!floatingButton.matches(':hover')) {
+      closeButton.style.opacity = '0';
+    }
+  });
+  
   floatingButton.appendChild(buttonIcon);
+  floatingButton.appendChild(closeButton);
   
   // Hover effect
   floatingButton.addEventListener('mouseover', () => {
     floatingButton.style.transform = 'scale(1.1)';
     floatingButton.style.backgroundColor = '#3367d6';
+    closeButton.style.opacity = '1';
   });
   
   floatingButton.addEventListener('mouseout', () => {
     floatingButton.style.transform = 'scale(1.0)';
     floatingButton.style.backgroundColor = '#4285f4';
+    // Only hide if the close button isn't being hovered
+    if (!closeButton.matches(':hover')) {
+      closeButton.style.opacity = '0';
+    }
   });
   
   // Click handler
@@ -324,6 +375,11 @@ function addWebPageButton() {
   
   floatingButton.appendChild(tooltip);
   
-  // Add to page
-  document.body.appendChild(floatingButton);
+  // Check if button should be hidden
+  chrome.storage.sync.get({ webButtonHidden: false }, (settings) => {
+    if (!settings.webButtonHidden) {
+      // Add to page only if not hidden
+      document.body.appendChild(floatingButton);
+    }
+  });
 } 

@@ -37,12 +37,20 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://www.youtube.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"]
     },
     {
       "matches": ["*://aistudio.google.com/*"],
       "js": ["ai_studio_content.js"]
+    },
+    {
+      "matches": ["*://www.perplexity.ai/*", "*://perplexity.ai/*"],
+      "js": ["perplexity_content.js"]
+    },
+    {
+      "matches": ["*://grok.x.ai/*", "*://grok.com/*", "*://www.grok.x.ai/*"],
+      "js": ["grok_content.js"]
     }
   ],
   "web_accessible_resources": [

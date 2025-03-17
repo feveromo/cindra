@@ -65,11 +65,21 @@ document.addEventListener('keyup', (e) => {
 // Trigger the summarize action
 function triggerSummarize() {
   // Show notification first
-  showNotification('Extracting transcript...', true);
+  showNotification('Preparing to summarize...', true);
   
-  chrome.runtime.sendMessage({
-    action: 'summarize',
-    url: window.location.href
+  // Get settings just like the popup does
+  chrome.storage.sync.get({
+    summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
+    contentOption: 'entire-content',
+    aiModel: 'google-ai-studio'
+  }, (settings) => {
+    chrome.runtime.sendMessage({
+      action: 'summarize',
+      url: window.location.href,
+      summaryPrompt: settings.summaryPrompt,
+      contentOption: settings.contentOption,
+      aiModel: settings.aiModel
+    });
   });
 }
 

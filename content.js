@@ -64,9 +64,6 @@ document.addEventListener('keyup', (e) => {
 
 // Trigger the summarize action
 function triggerSummarize() {
-  // Show notification first
-  showNotification('Preparing to summarize...', true);
-  
   // Get settings just like the popup does
   chrome.storage.sync.get({
     summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
@@ -81,79 +78,6 @@ function triggerSummarize() {
       aiModel: settings.aiModel
     });
   });
-}
-
-// Show a notification to the user
-function showNotification(message, isLoading = false) {
-  // Remove any existing notification
-  const existingNotification = document.querySelector('.yt-summary-notification');
-  if (existingNotification) {
-    existingNotification.remove();
-  }
-  
-  // Create notification element
-  const notification = document.createElement('div');
-  notification.className = 'yt-summary-notification';
-  notification.style.cssText = `
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    background-color: #323232;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 4px;
-    z-index: 9999;
-    font-family: 'YouTube Sans', 'Roboto', sans-serif;
-    font-size: 14px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    display: flex;
-    align-items: center;
-    transition: opacity 0.3s ease-in-out;
-  `;
-  
-  // If loading, add a spinner
-  if (isLoading) {
-    const spinner = document.createElement('div');
-    spinner.className = 'yt-summary-spinner';
-    spinner.style.cssText = `
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: white;
-      animation: yt-summary-spin 1s linear infinite;
-      margin-right: 12px;
-    `;
-    
-    // Add the animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes yt-summary-spin {
-        to { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    notification.appendChild(spinner);
-  }
-  
-  // Add message
-  const messageElement = document.createElement('span');
-  messageElement.textContent = message;
-  notification.appendChild(messageElement);
-  
-  // Add to page
-  document.body.appendChild(notification);
-  
-  // Remove after 5 seconds if not a loading notification
-  if (!isLoading) {
-    setTimeout(() => {
-      notification.style.opacity = '0';
-      setTimeout(() => notification.remove(), 300);
-    }, 5000);
-  }
-  
-  return notification;
 }
 
 // Add YouTube UI elements if settings allow and we're on YouTube

@@ -1,41 +1,6 @@
 // Content script specifically for Google AI Studio
 console.log('AI Studio content script loaded');
 
-// Setup notification system without intrusive alerts
-function showNotification(message, duration = 5000) {
-  // Create or get notification container
-  let container = document.getElementById('summary-extension-notification');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'summary-extension-notification';
-    container.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background-color: rgba(66, 133, 244, 0.9);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 4px;
-      font-family: 'Google Sans', sans-serif;
-      font-size: 14px;
-      z-index: 10000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      transition: opacity 0.3s;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
-
-  // Set message and show
-  container.textContent = message;
-  container.style.opacity = '1';
-  
-  // Auto-hide after duration
-  setTimeout(() => {
-    container.style.opacity = '0';
-  }, duration);
-}
-
 // Flag to track whether we've already submitted the prompt
 let promptSubmitted = false;
 // Flag to track if we're currently in the submission process
@@ -125,7 +90,6 @@ function insertPromptAndSubmit(prompt, title) {
   isSubmitting = true;
   
   console.log('Attempting to insert prompt into AI Studio');
-  showNotification('💡 Inserting content...');
   
   // Try to find the textarea and submit button using multiple selectors
   const textareaSelectors = [
@@ -195,8 +159,6 @@ function insertPromptAndSubmit(prompt, title) {
         document.title = `Summary: ${title} - Google AI Studio`;
       }
       
-      showNotification('💡 Content inserted, preparing to submit...');
-      
       // Give the UI time to update
       return new Promise(resolve => setTimeout(() => resolve(textarea), 1000));
     })
@@ -235,7 +197,6 @@ function insertPromptAndSubmit(prompt, title) {
       
       return findAndClickButton().then(buttonClicked => {
         if (buttonClicked) {
-          showNotification('💡 Prompt sent to AI, generating response...');
           console.log('Run button clicked');
           promptSubmitted = true;
         } else {
@@ -257,8 +218,6 @@ function insertPromptAndSubmit(prompt, title) {
           textarea.focus();
           textarea.dispatchEvent(enterEvent);
           console.log('Ctrl+Enter shortcut sent');
-          
-          showNotification('💡 Using keyboard shortcut to submit...');
           
           // Give a slight delay to check if it worked
           return new Promise(resolve => 
@@ -338,7 +297,6 @@ function insertPromptAndSubmit(prompt, title) {
             chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
           } else {
             console.log('Submission failed even with injected script');
-            showNotification('⚠️ Please press Ctrl+Enter to submit manually', 8000);
           }
         }, 1000);
       }
@@ -351,9 +309,6 @@ function insertPromptAndSubmit(prompt, title) {
         isSubmitting = false;
         return;
       }
-      
-      // Show error notification
-      showNotification('⚠️ Unable to automatically submit. Please press Ctrl+Enter to run.', 8000);
     })
     .finally(() => {
       // Always reset submission flag when done

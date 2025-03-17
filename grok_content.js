@@ -1,41 +1,6 @@
 // Content script specifically for Grok.com
 console.log('Grok content script loaded');
 
-// Setup notification system without intrusive alerts
-function showNotification(message, duration = 5000) {
-  // Create or get notification container
-  let container = document.getElementById('summary-extension-notification');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'summary-extension-notification';
-    container.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background-color: rgba(66, 133, 244, 0.9);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 4px;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px;
-      z-index: 10000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      transition: opacity 0.3s;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
-
-  // Set message and show
-  container.textContent = message;
-  container.style.opacity = '1';
-  
-  // Auto-hide after duration
-  setTimeout(() => {
-    container.style.opacity = '0';
-  }, duration);
-}
-
 // Flag to track whether we've already submitted the prompt
 let promptSubmitted = false;
 // Flag to track if we're currently in the submission process
@@ -109,7 +74,6 @@ function insertPromptAndSubmit(prompt, title) {
   isSubmitting = true;
   
   console.log('Attempting to insert prompt into Grok');
-  showNotification('💡 Inserting content...');
 
   // Try to find the textarea for input
   waitForElement('textarea[dir="auto"]')
@@ -127,7 +91,6 @@ function insertPromptAndSubmit(prompt, title) {
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
       textarea.dispatchEvent(new Event('change', { bubbles: true }));
       
-      showNotification('💡 Content inserted, waiting for submit button...');
       console.log('Content inserted, content length:', textarea.value.length);
       
       // Give the UI a moment to update
@@ -138,7 +101,6 @@ function insertPromptAndSubmit(prompt, title) {
       return waitForElement('button[type="submit"]:not([disabled])');
     })
     .then(submitButton => {
-      showNotification('💡 Submit button found, sending to Grok...');
       console.log('Submit button found, clicking:', submitButton);
       
       // Click the submit button
@@ -158,7 +120,6 @@ function insertPromptAndSubmit(prompt, title) {
       isSubmitting = false;
       
       console.error('Error in insertPromptAndSubmit:', error.message);
-      showNotification('⚠️ Could not submit automatically. Trying alternative method...');
       
       // Try alternative method - Enter key
       try {
@@ -190,13 +151,13 @@ function insertPromptAndSubmit(prompt, title) {
           // Clear the pending prompt to prevent resubmission when tab is reopened
           chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle']);
           
-          showNotification('💡 Content submitted with alternative method');
+          console.log('Prompt submitted with alternative method');
         } else {
-          showNotification('⚠️ Could not find input field. Please submit manually.', 10000);
+          console.error('Could not find input field. Please submit manually.');
         }
       } catch (e) {
         console.error('Alternative method failed:', e);
-        showNotification('⚠️ All submission methods failed. Please submit manually.', 10000);
+        console.error('All submission methods failed. Please submit manually.');
       }
     });
 }

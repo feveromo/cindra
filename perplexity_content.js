@@ -1,41 +1,6 @@
 // Content script specifically for Perplexity.ai
 console.log('Perplexity content script loaded');
 
-// Setup notification system without intrusive alerts
-function showNotification(message, duration = 5000) {
-  // Create or get notification container
-  let container = document.getElementById('summary-extension-notification');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'summary-extension-notification';
-    container.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background-color: rgba(66, 133, 244, 0.9);
-      color: white;
-      padding: 10px 20px;
-      border-radius: 4px;
-      font-family: 'Arial', sans-serif;
-      font-size: 14px;
-      z-index: 10000;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-      transition: opacity 0.3s;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
-
-  // Set message and show
-  container.textContent = message;
-  container.style.opacity = '1';
-  
-  // Auto-hide after duration
-  setTimeout(() => {
-    container.style.opacity = '0';
-  }, duration);
-}
-
 // Flag to track whether we've already submitted the prompt
 let promptSubmitted = false;
 // Flag to track if we're currently in the submission process
@@ -188,7 +153,6 @@ function insertPromptAndSubmit(prompt, title) {
   isSubmitting = true;
   
   console.log('Attempting to insert prompt into Perplexity');
-  showNotification('💡 Inserting content...');
 
   // Try to find the input area immediately
   findInputArea()
@@ -208,7 +172,6 @@ function insertPromptAndSubmit(prompt, title) {
       // Focus again to ensure the content is recognized
       inputArea.focus();
       
-      showNotification('💡 Content inserted, waiting for submit button...');
       console.log('Content inserted, content length:', inputArea.value.length);
       
       // Give the UI a moment to update - we'll reduce the wait time since we know it works
@@ -219,7 +182,6 @@ function insertPromptAndSubmit(prompt, title) {
       const checkForButton = (attempts = 0, maxAttempts = 10) => {
         return findSubmitButton()
           .then(submitButton => {
-            showNotification('💡 Submit button found, sending to Perplexity...');
             console.log('Submit button found, clicking:', submitButton);
             
             // Click the submit button
@@ -251,7 +213,6 @@ function insertPromptAndSubmit(prompt, title) {
       isSubmitting = false;
       
       console.error('Error in insertPromptAndSubmit:', error.message);
-      showNotification('⚠️ Could not submit automatically. Please press Enter or click the submit button.', 10000);
       
       // Let's try simulating Enter for textarea
       try {

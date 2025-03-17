@@ -80,35 +80,37 @@ function triggerSummarize() {
   });
 }
 
-// Add YouTube UI elements if settings allow and we're on YouTube
-if (window.location.href.includes('youtube.com')) {
-  // Listen for messages from background script
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.action === 'transcriptStatus') {
-      // Remove any existing loading notification
-      const loadingNotification = document.querySelector('.yt-summary-notification');
-      if (loadingNotification) {
-        loadingNotification.remove();
+// Initialize UI elements based on settings
+chrome.storage.sync.get({
+  ytWidget: 'visible',
+  webButton: 'visible'
+}, (settings) => {
+  // Add YouTube-specific elements if on YouTube
+  if (window.location.href.includes('youtube.com')) {
+    // Listen for messages from background script
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.action === 'transcriptStatus') {
+        // Remove any existing loading notification
+        const loadingNotification = document.querySelector('.yt-summary-notification');
+        if (loadingNotification) {
+          loadingNotification.remove();
+        }
+        
+        // Show the new status
+        showNotification(message.status, message.isLoading);
       }
-      
-      // Show the new status
-      showNotification(message.status, message.isLoading);
-    }
-  });
+    });
 
-  chrome.storage.sync.get({
-    ytWidget: 'visible',
-    thumbButton: 'visible'
-  }, (settings) => {
     if (settings.ytWidget === 'visible') {
       addYouTubeWidgets();
     }
-    
-    if (settings.thumbButton === 'visible') {
-      addThumbnailButtons();
-    }
-  });
-}
+  }
+  
+  // Add floating button if enabled (for all sites)
+  if (settings.webButton === 'visible') {
+    addWebPageButton();
+  }
+});
 
 // Add summary widgets to YouTube video page
 function addYouTubeWidgets() {
@@ -173,79 +175,6 @@ function addVideoPageButton() {
   
   buttonContainer.appendChild(summaryButton);
   aboveTheFold.appendChild(buttonContainer);
-}
-
-// Add summary buttons to video thumbnails
-function addThumbnailButtons() {
-  // Initialize observer for thumbnail grids
-  const observer = new MutationObserver((mutations) => {
-    const thumbnails = document.querySelectorAll('ytd-thumbnail:not(.yt-summary-processed)');
-    
-    thumbnails.forEach(thumbnail => {
-      thumbnail.classList.add('yt-summary-processed');
-      
-      const thumbnailOverlay = document.createElement('div');
-      thumbnailOverlay.className = 'yt-summary-thumbnail-button';
-      thumbnailOverlay.style.cssText = `
-        position: absolute;
-        bottom: 4px;
-        right: 4px;
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        border-radius: 4px;
-        padding: 4px 8px;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        z-index: 10;
-        display: none;
-      `;
-      
-      thumbnailOverlay.textContent = '🤖 Summarize';
-      
-      thumbnail.addEventListener('mouseenter', () => {
-        thumbnailOverlay.style.display = 'block';
-      });
-      
-      thumbnail.addEventListener('mouseleave', () => {
-        thumbnailOverlay.style.display = 'none';
-      });
-      
-      thumbnailOverlay.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Get the video URL
-        const videoLink = thumbnail.closest('a');
-        if (videoLink && videoLink.href) {
-          chrome.runtime.sendMessage({
-            action: 'summarize',
-            url: videoLink.href
-          });
-        }
-      });
-      
-      // Add overlay to thumbnail
-      thumbnail.appendChild(thumbnailOverlay);
-    });
-  });
-  
-  // Start observing
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
-
-// Handle website and PDF button if settings allow
-if (!window.location.href.includes('youtube.com')) {
-  chrome.storage.sync.get({
-    webButton: 'visible'
-  }, (settings) => {
-    if (settings.webButton === 'visible') {
-      addWebPageButton();
-    }
-  });
 }
 
 // Add summary button on regular web pages and PDFs

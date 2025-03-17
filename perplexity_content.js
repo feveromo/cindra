@@ -8,7 +8,9 @@ let isSubmitting = false;
 
 // Function to check if the page is ready (main content loaded)
 function isPageReady() {
-  return !!document.querySelector('textarea[placeholder="Ask anything..."]');
+  return document.querySelector('textarea[placeholder="Ask anything..."]') !== null ||
+         document.querySelector('.rounded-3xl textarea') !== null ||
+         document.querySelector('.grid-rows-1fr-auto textarea') !== null;
 }
 
 // Listen for messages from the background script
@@ -109,11 +111,14 @@ function findInputArea() {
   // List of selectors to try, in order of preference, based on the actual Perplexity HTML
   const selectors = [
     'textarea[placeholder="Ask anything..."]',
+    '.rounded-3xl textarea',
     'textarea.resize-none',
     'textarea[autofocus]',
-    'textarea',
-    '.rounded-3xl textarea',
-    'div.rounded-md textarea'
+    'div.rounded-md textarea',
+    // Add more specific selectors based on the new HTML structure
+    '.grid-rows-1fr-auto textarea',
+    '.col-start-1.col-end-4 textarea',
+    'textarea.overflow-auto'
   ];
   
   return waitForElement(selectors);
@@ -127,10 +132,12 @@ function findSubmitButton() {
   const selectors = [
     'button[aria-label="Submit"]:not([disabled])',
     'button:not([disabled]).bg-super',
-    'button:not([disabled]).dark\\:bg-superDark',
-    'div.ml-sm > button:not([disabled])',
     'button:not([disabled]) svg path[d="M5 12l14 0"]',
-    'button:not([disabled]) svg path[d="M13 18l6 -6"]'
+    'button:not([disabled]) svg path[d="M13 18l6 -6"]',
+    // Add more specific selectors based on the new HTML structure
+    '.ml-sm button:not([disabled])',
+    'button:not([disabled]) .tabler-icon-arrow-right',
+    'button[type="button"]:not([disabled]) svg.tabler-icon-arrow-right'
   ];
   
   return waitForElement(selectors);

@@ -1,12 +1,26 @@
-// Listen for keyboard shortcut events
-document.addEventListener('keydown', handleShortcut);
-
 // Track key states for Ctrl+X+X shortcut
 let ctrlPressed = false;
 let xPressed = false;
 let lastKeyDownTime = 0;
 
+// Listen for keyboard shortcut events
+try {
+  document.addEventListener('keydown', handleShortcut);
+} catch (error) {
+  if (error.message.includes('Extension context invalidated')) {
+    console.log('Extension context was invalidated, removing event listener');
+    document.removeEventListener('keydown', handleShortcut);
+  }
+}
+
 function handleShortcut(e) {
+  // Check if extension context is still valid
+  if (chrome.runtime.id === undefined) {
+    console.log('Extension context invalid, removing event listener');
+    document.removeEventListener('keydown', handleShortcut);
+    return;
+  }
+
   const currentTime = Date.now();
   
   // Check for Ctrl key
@@ -28,7 +42,14 @@ function handleShortcut(e) {
     // Second X press (within 500ms of first X)
     if (xPressed && (currentTime - lastKeyDownTime) < 500) {
       e.preventDefault();
-      triggerSummarize();
+      try {
+        triggerSummarize();
+      } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+          console.log('Extension context invalid during summarize, removing listener');
+          document.removeEventListener('keydown', handleShortcut);
+        }
+      }
       
       // Reset state
       resetKeyState();
@@ -64,20 +85,32 @@ document.addEventListener('keyup', (e) => {
 
 // Trigger the summarize action
 function triggerSummarize() {
+  // Check extension context before proceeding
+  if (chrome.runtime.id === undefined) {
+    console.log('Extension context invalid, cannot trigger summarize');
+    return;
+  }
+
   // Get settings just like the popup does
-  chrome.storage.sync.get({
-    summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
-    contentOption: 'entire-content',
-    aiModel: 'google-ai-studio'
-  }, (settings) => {
-    chrome.runtime.sendMessage({
-      action: 'summarize',
-      url: window.location.href,
-      summaryPrompt: settings.summaryPrompt,
-      contentOption: settings.contentOption,
-      aiModel: settings.aiModel
+  try {
+    chrome.storage.sync.get({
+      summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
+      contentOption: 'entire-content',
+      aiModel: 'google-ai-studio'
+    }, (settings) => {
+      chrome.runtime.sendMessage({
+        action: 'summarize',
+        url: window.location.href,
+        summaryPrompt: settings.summaryPrompt,
+        contentOption: settings.contentOption,
+        aiModel: settings.aiModel
+      });
     });
-  });
+  } catch (error) {
+    if (error.message.includes('Extension context invalidated')) {
+      console.log('Extension context invalid during settings retrieval');
+    }
+  }
 }
 
 // Initialize UI elements based on settings

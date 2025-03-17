@@ -21,11 +21,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Reset the flag when receiving a new prompt
     promptSubmitted = false;
     
-    insertPromptAndSubmit(message.prompt, message.title);
+    // Format the prompt to preserve XML tags
+    const formattedPrompt = formatPromptForClaude(message.prompt);
+    insertPromptAndSubmit(formattedPrompt, message.title);
     sendResponse({ status: 'Processing prompt' });
     return true;
   }
 });
+
+// Function to format prompt for Claude
+function formatPromptForClaude(prompt) {
+  // Extract XML parts
+  const taskMatch = prompt.match(/<Task>(.*?)<\/Task>/s);
+  const titleMatch = prompt.match(/<ContentTitle>(.*?)<\/ContentTitle>/s);
+  const contentMatch = prompt.match(/<Content>(.*?)<\/Content>/s);
+  
+  if (!taskMatch || !titleMatch || !contentMatch) {
+    return prompt; // Return original if no XML tags found
+  }
+  
+  const task = taskMatch[1].trim();
+  const title = titleMatch[1].trim();
+  const content = contentMatch[1].trim();
+  
+  // Format in a way that Claude can understand better
+  return `Task: ${task}
+
+Title: ${title}
+
+Content to analyze:
+----------------
+${content}
+----------------
+
+Please provide your analysis following the task instructions above.`;
+}
 
 // Function to wait for an element to appear in the DOM
 function waitForElement(selector, timeout = 10000) {
@@ -76,7 +106,11 @@ function insertPromptAndSubmit(prompt, title) {
   console.log('Attempting to insert prompt into Claude');
 
   // Try to find the editor div
-  waitForElement('div[contenteditable="true"].ProseMirror')
+  waitForElement([
+    'div[contenteditable="true"].ProseMirror',
+    'div[contenteditable="true"]#prompt-textarea',
+    'div[contenteditable="true"].w-full'
+  ])
     .then(editor => {
       console.log('Editor found:', editor);
       
@@ -98,7 +132,12 @@ function insertPromptAndSubmit(prompt, title) {
     })
     .then(editor => {
       // Look for the submit button
-      return waitForElement('button[aria-label="Send Message"]');
+      return waitForElement([
+        'button[aria-label="Send Message"]',
+        'button[type="submit"]',
+        'button.absolute.right-2',
+        'button.absolute.right-1\\.5'
+      ]);
     })
     .then(submitButton => {
       console.log('Submit button found, clicking:', submitButton);
@@ -124,7 +163,7 @@ function insertPromptAndSubmit(prompt, title) {
       // Try alternative method - Enter key
       try {
         console.log('Trying Enter key method');
-        const editor = document.querySelector('div[contenteditable="true"].ProseMirror');
+        const editor = document.querySelector('div[contenteditable="true"]');
         
         if (editor) {
           // Make sure content is set
@@ -180,7 +219,8 @@ function checkForPendingPrompts() {
       
       if (currentTime - promptTime < twoMinutesInMs) {
         console.log('Found fresh pending prompt for Claude, inserting');
-        insertPromptAndSubmit(result.pendingClaudePrompt, result.pendingClaudeTitle);
+        const formattedPrompt = formatPromptForClaude(result.pendingClaudePrompt);
+        insertPromptAndSubmit(formattedPrompt, result.pendingClaudeTitle);
       } else {
         console.log('Found stale pending prompt for Claude, ignoring');
         // Clear old prompts to prevent future resubmissions

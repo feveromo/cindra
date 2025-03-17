@@ -21,11 +21,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Reset the flag when receiving a new prompt
     promptSubmitted = false;
     
-    insertPromptAndSubmit(message.prompt, message.title);
+    // Format the prompt to preserve XML tags
+    const formattedPrompt = formatPromptForChatGPT(message.prompt);
+    insertPromptAndSubmit(formattedPrompt, message.title);
     sendResponse({ status: 'Processing prompt' });
     return true;
   }
 });
+
+// Function to format prompt for ChatGPT
+function formatPromptForChatGPT(prompt) {
+  // Extract XML parts
+  const taskMatch = prompt.match(/<Task>(.*?)<\/Task>/s);
+  const titleMatch = prompt.match(/<ContentTitle>(.*?)<\/ContentTitle>/s);
+  const contentMatch = prompt.match(/<Content>(.*?)<\/Content>/s);
+  
+  if (!taskMatch || !titleMatch || !contentMatch) {
+    return prompt; // Return original if no XML tags found
+  }
+  
+  const task = taskMatch[1].trim();
+  const title = titleMatch[1].trim();
+  const content = contentMatch[1].trim();
+  
+  // Format in a way that ChatGPT can understand better
+  return `Task: ${task}
+
+Title: ${title}
+
+Content to analyze:
+----------------
+${content}
+----------------
+
+Please provide your analysis following the task instructions above.`;
+}
 
 // Function to wait for an element to appear in the DOM
 function waitForElement(selector, timeout = 10000) {
@@ -108,8 +138,14 @@ function insertPromptAndSubmit(prompt, title) {
   
   console.log('Attempting to insert prompt into ChatGPT');
 
-  // Try to find the textarea
-  waitForElement('#prompt-textarea')
+  // Try to find the textarea with multiple selectors
+  waitForElement([
+    '#prompt-textarea',
+    'textarea[data-id="root"]',
+    'textarea.w-full',
+    'div[contenteditable="true"]#prompt-textarea',
+    'div[contenteditable="true"].w-full'
+  ])
     .then(textarea => {
       console.log('Textarea found:', textarea);
       
@@ -150,7 +186,9 @@ function insertPromptAndSubmit(prompt, title) {
         'button[data-testid="send-button"]:not([disabled])',
         'button[type="submit"]:not([disabled])',
         'button.text-white:not([disabled])',
-        'button.bg-black:not([disabled])'
+        'button.bg-black:not([disabled])',
+        'button.absolute.right-2:not([disabled])',
+        'button.absolute.right-1\\.5:not([disabled])'
       ]);
     })
     .then(submitButton => {
@@ -177,11 +215,17 @@ function insertPromptAndSubmit(prompt, title) {
       // Try alternative method - Enter key
       try {
         console.log('Trying Enter key method');
-        const textarea = document.querySelector('#prompt-textarea');
+        const textarea = document.querySelector('#prompt-textarea') || 
+                        document.querySelector('textarea[data-id="root"]') ||
+                        document.querySelector('div[contenteditable="true"]');
         
         if (textarea) {
           // Make sure content is set
-          textarea.value = prompt;
+          if (textarea.getAttribute('contenteditable') === 'true') {
+            textarea.innerHTML = prompt;
+          } else {
+            textarea.value = prompt;
+          }
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
           
           // Focus and simulate Enter
@@ -233,7 +277,8 @@ function checkForPendingPrompts() {
       
       if (currentTime - promptTime < twoMinutesInMs) {
         console.log('Found fresh pending prompt for ChatGPT, inserting');
-        insertPromptAndSubmit(result.pendingChatGPTPrompt, result.pendingChatGPTTitle);
+        const formattedPrompt = formatPromptForChatGPT(result.pendingChatGPTPrompt);
+        insertPromptAndSubmit(formattedPrompt, result.pendingChatGPTTitle);
       } else {
         console.log('Found stale pending prompt for ChatGPT, ignoring');
         // Clear old prompts to prevent future resubmissions

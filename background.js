@@ -1019,55 +1019,139 @@ function openGoogleAIStudio(prompt, content, title) {
 <ContentTitle>${title}</ContentTitle>
 <Content>${cleanedContent}</Content>`;
 
-  console.log('Formatted prompt length:', formattedPrompt.length);
+  console.log('Formatted prompt length for Google AI Studio:', formattedPrompt.length);
   
-  // Store the prompt in local storage for the content script to pick up
+  // Store the prompt in local storage first
   chrome.storage.local.set({
-    pendingPrompt: formattedPrompt,
-    pendingTitle: title,
-    promptTimestamp: Date.now()
-  }, function() {
-    console.log('Prompt stored in local storage');
-    
-    // Open Google AI Studio
-    chrome.tabs.create({ url: 'https://aistudio.google.com/app/prompts/new_chat' }, (newTab) => {
+    pendingAIStudioPrompt: formattedPrompt,
+    pendingAIStudioTitle: title,
+    aiStudioPromptTimestamp: Date.now()
+  }, () => {
+    // Then open Google AI Studio in a new tab
+    chrome.tabs.create({ url: 'https://aistudio.google.com/app/prompts/new_chat' }, async (newTab) => {
       console.log('New tab created for Google AI Studio, tab ID:', newTab.id);
       
-      // Implement retry mechanism with increasing delays
-      let attempts = 0;
-      const maxAttempts = 10;
-      const sendMessageWithRetry = () => {
-        if (attempts >= maxAttempts) {
-          console.error('Failed to send message to content script after maximum attempts');
-          return;
+      // Wait a moment before first attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to send the message
+      const success = await sendMessageWithRetry(newTab.id, {
+        action: 'insertPrompt',
+        prompt: formattedPrompt,
+        title: title
+      }).catch(error => {
+        console.error('Error in message sending:', error);
+        return false;
+      });
+      
+      if (!success) {
+        console.log('Message will be handled by content script when it loads');
+      }
+    });
+  });
+}
+
+// Function to send a message with retry logic
+function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
+  return new Promise((resolve, reject) => {
+    // First check if the tab still exists
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        // Tab doesn't exist anymore
+        resolve(false);
+        return;
+      }
+
+      // Check if we can inject the content script
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => {
+          // This will run in the context of the tab
+          return true;
         }
-        
-        attempts++;
-        const delay = Math.min(500 * attempts, 5000); // Start with 500ms, max 5s
-        
-        setTimeout(() => {
-          chrome.tabs.sendMessage(newTab.id, {
-            action: 'insertPrompt',
-            prompt: formattedPrompt,
-            title: title
-          }, (response) => {
+      }).then(() => {
+        // Now try to send the message
+        try {
+          chrome.tabs.sendMessage(tabId, message, (response) => {
             if (chrome.runtime.lastError) {
-              console.warn(`Attempt ${attempts}: Error sending message:`, chrome.runtime.lastError);
-              // Only retry if we haven't reached max attempts
-              if (attempts < maxAttempts) {
-                console.log(`Retrying in ${delay}ms...`);
-                sendMessageWithRetry();
+              // Don't log the error for the first few attempts as this is expected
+              if (attempt > 2) {
+                console.log(`Attempt ${attempt}: Content script not ready yet...`);
+              }
+              
+              if (attempt < maxAttempts) {
+                // Use exponential backoff with a max of 5 seconds
+                const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
+                setTimeout(() => {
+                  sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts)
+                    .then(resolve)
+                    .catch(reject);
+                }, retryTime);
+              } else {
+                // Only show info on final attempt
+                console.log('Content script not ready after maximum attempts');
+                resolve(false);
               }
             } else {
-              console.log('Response from content script:', response);
+              if (response) {
+                console.log('Response from content script:', response);
+              }
+              resolve(true);
             }
           });
-        }, delay);
-      };
-      
-      // Start the retry process after a short initial delay
-      setTimeout(sendMessageWithRetry, 1000);
+        } catch (e) {
+          if (attempt < maxAttempts) {
+            const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
+            setTimeout(() => {
+              sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts)
+                .then(resolve)
+                .catch(reject);
+            }, retryTime);
+          } else {
+            resolve(false);
+          }
+        }
+      }).catch(() => {
+        // If we can't inject script, resolve false
+        resolve(false);
+      });
     });
+  });
+}
+
+// Function to ensure content script is loaded
+async function ensureContentScriptLoaded(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: () => {
+        // Check if our content script functions exist
+        return typeof isPageReady === 'function' && 
+               typeof insertPromptAndSubmit === 'function';
+      }
+    });
+    return true;
+  } catch (error) {
+    console.log('Content script not loaded, will retry');
+    return false;
+  }
+}
+
+// Function to wait for tab to be ready
+function waitForTab(tabId) {
+  return new Promise((resolve) => {
+    function checkTab() {
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError || !tab) {
+          setTimeout(checkTab, 100);
+        } else if (tab.status === 'complete') {
+          resolve(tab);
+        } else {
+          setTimeout(checkTab, 100);
+        }
+      });
+    }
+    checkTab();
   });
 }
 
@@ -1085,29 +1169,42 @@ function openPerplexity(prompt, content, title) {
 
   console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
   
-  // Store the prompt in local storage for the content script to pick up
+  // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingPerplexityPrompt: formattedPrompt,
     pendingPerplexityTitle: title,
     perplexityPromptTimestamp: Date.now()
-  }, function() {
-    console.log('Prompt stored in local storage for Perplexity');
+  }, async () => {
+    // Then open Perplexity in a new tab
+    const newTab = await chrome.tabs.create({ url: 'https://www.perplexity.ai/' });
+    console.log('New tab created for Perplexity, tab ID:', newTab.id);
     
-    // Open Perplexity in a new tab - moved inside the callback to ensure storage is set first
-    chrome.tabs.create({ url: 'https://www.perplexity.ai/' }, (newTab) => {
-      console.log('New tab created for Perplexity, tab ID:', newTab.id);
-      
-      // Send a message to the content script with a shorter initial delay
-      setTimeout(() => {
-        console.log('Sending message to Perplexity content script');
-        // We'll try multiple times with increasing delays to ensure the message is delivered
-        sendMessageWithRetry(newTab.id, {
-          action: 'insertPrompt',
-          prompt: formattedPrompt,
-          title: title
-        });
-      }, 1000); // Reduced initial delay to 1 second
-    });
+    // Wait for the tab to be fully loaded
+    await waitForTab(newTab.id);
+    
+    // Wait a moment to ensure content script initialization
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Ensure content script is loaded
+    let isLoaded = await ensureContentScriptLoaded(newTab.id);
+    let attempts = 0;
+    
+    while (!isLoaded && attempts < 5) {
+      await new Promise(resolve => setTimeout(resolve, Math.min(Math.pow(2, attempts) * 500, 5000)));
+      isLoaded = await ensureContentScriptLoaded(newTab.id);
+      attempts++;
+    }
+    
+    // Try to send the message
+    const success = await sendMessageWithRetry(newTab.id, {
+      action: 'insertPrompt',
+      prompt: formattedPrompt,
+      title: title
+    }).catch(() => false);
+    
+    if (!success) {
+      console.log('Message will be handled by content script when it loads');
+    }
   });
 }
 
@@ -1125,28 +1222,32 @@ function openGrok(prompt, content, title) {
 
   console.log('Formatted prompt length for Grok:', formattedPrompt.length);
   
-  // Store the prompt in local storage for the content script to pick up
+  // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingGrokPrompt: formattedPrompt,
     pendingGrokTitle: title,
     grokPromptTimestamp: Date.now()
-  }, function() {
-    console.log('Prompt stored in local storage for Grok');
-    
-    // Open Grok in a new tab
-    chrome.tabs.create({ url: 'https://grok.com/' }, (newTab) => {
+  }, () => {
+    // Then open Grok in a new tab
+    chrome.tabs.create({ url: 'https://grok.com/' }, async (newTab) => {
       console.log('New tab created for Grok, tab ID:', newTab.id);
       
-      // Send a message to the content script after a delay to ensure it's loaded
-      setTimeout(() => {
-        console.log('Sending message to Grok content script');
-        // We'll try multiple times with increasing delays to ensure the message is delivered
-        sendMessageWithRetry(newTab.id, {
-          action: 'insertPrompt',
-          prompt: formattedPrompt,
-          title: title
-        });
-      }, 1000);
+      // Wait a moment before first attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to send the message
+      const success = await sendMessageWithRetry(newTab.id, {
+        action: 'insertPrompt',
+        prompt: formattedPrompt,
+        title: title
+      }).catch(error => {
+        console.error('Error in message sending:', error);
+        return false;
+      });
+      
+      if (!success) {
+        console.log('Message will be handled by content script when it loads');
+      }
     });
   });
 }
@@ -1165,51 +1266,33 @@ function openClaude(prompt, content, title) {
 
   console.log('Formatted prompt length for Claude:', formattedPrompt.length);
   
-  // Store the prompt in local storage for the content script to pick up
+  // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingClaudePrompt: formattedPrompt,
     pendingClaudeTitle: title,
     claudePromptTimestamp: Date.now()
-  }, function() {
-    console.log('Prompt stored in local storage for Claude');
-    
-    // Open Claude in a new tab
-    chrome.tabs.create({ url: 'https://claude.ai/new' }, (newTab) => {
+  }, () => {
+    // Then open Claude in a new tab
+    chrome.tabs.create({ url: 'https://claude.ai/' }, async (newTab) => {
       console.log('New tab created for Claude, tab ID:', newTab.id);
       
-      // Send a message to the content script after a delay
-      setTimeout(() => {
-        console.log('Sending message to Claude content script');
-        // We'll try multiple times with increasing delays to ensure the message is delivered
-        sendMessageWithRetry(newTab.id, {
-          action: 'insertPrompt',
-          prompt: formattedPrompt,
-          title: title
-        });
-      }, 1000);
-    });
-  });
-}
-
-// Function to send a message with retry logic
-function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
-  chrome.tabs.sendMessage(tabId, message, (response) => {
-    if (chrome.runtime.lastError) {
-      console.warn(`Attempt ${attempt}: Error sending message:`, chrome.runtime.lastError);
+      // Wait a moment before first attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      if (attempt < maxAttempts) {
-        // Use shorter retry times for earlier attempts
-        const retryTime = attempt === 1 ? 500 : attempt * 1000; // 500ms for first retry, then 2s, 3s, etc.
-        console.log(`Retrying in ${retryTime}ms...`);
-        setTimeout(() => {
-          sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts);
-        }, retryTime);
-      } else {
-        console.error('Failed to send message after multiple attempts');
+      // Try to send the message
+      const success = await sendMessageWithRetry(newTab.id, {
+        action: 'insertPrompt',
+        prompt: formattedPrompt,
+        title: title
+      }).catch(error => {
+        console.error('Error in message sending:', error);
+        return false;
+      });
+      
+      if (!success) {
+        console.log('Message will be handled by content script when it loads');
       }
-    } else {
-      console.log('Response from content script:', response);
-    }
+    });
   });
 }
 

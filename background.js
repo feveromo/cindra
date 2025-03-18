@@ -29,21 +29,57 @@ function handleSummarize(tab, options = {}) {
     // Merge with options passed in (if any)
     const config = { ...settings, ...options };
     
-    // Check if it's a PDF
+    // Check if we have a cached transcript for this video
+    if (tab.url.includes('youtube.com/watch')) {
+      const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
+      const cacheKey = `transcript_${videoId}`;
+      
+      // Try to get cached transcript first
+      chrome.storage.local.get([cacheKey], (result) => {
+        if (result[cacheKey]) {
+          // We have a cached transcript, use it directly
+          const transcriptData = result[cacheKey];
+          const formattedContent = `URL: ${tab.url}\nVideo ID: ${videoId || 'Not available'}\n\n${transcriptData.content}`;
+          
+          // Send directly to the selected AI model
+          sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, transcriptData.title);
+          return;
+        }
+        
+        // No cached transcript, extract it normally
+        extractYouTubeTranscript(tab, config);
+      });
+      return;
+    }
+    
+    // Handle PDF and regular webpages as before
     if (tab.url.toLowerCase().endsWith('.pdf')) {
       handlePdfExtraction(tab, config);
       return;
     }
     
-    // Check if it's YouTube
-    if (tab.url.includes('youtube.com/watch')) {
-      extractYouTubeTranscript(tab, config);
-      return;
-    }
-    
-    // Otherwise, extract content from regular webpage
     extractPageContent(tab, config);
   });
+}
+
+// Function to send content to selected AI model
+function sendToSelectedModel(model, prompt, content, title) {
+  switch (model) {
+    case 'perplexity':
+      openPerplexity(prompt, content, title);
+      break;
+    case 'grok':
+      openGrok(prompt, content, title);
+      break;
+    case 'claude':
+      openClaude(prompt, content, title);
+      break;
+    case 'chatgpt':
+      openChatGPT(prompt, content, title);
+      break;
+    default:
+      openGoogleAIStudio(prompt, content, title);
+  }
 }
 
 // Extract content from regular webpage
@@ -68,22 +104,7 @@ function extractPageContent(tab, config) {
     const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
     
     // Send to appropriate AI model based on settings
-    switch (config.aiModel) {
-      case 'perplexity':
-        openPerplexity(config.summaryPrompt, formattedContent, pageData.title);
-        break;
-      case 'grok':
-        openGrok(config.summaryPrompt, formattedContent, pageData.title);
-        break;
-      case 'claude':
-        openClaude(config.summaryPrompt, formattedContent, pageData.title);
-        break;
-      case 'chatgpt':
-        openChatGPT(config.summaryPrompt, formattedContent, pageData.title);
-        break;
-      default:
-        openGoogleAIStudio(config.summaryPrompt, formattedContent, pageData.title);
-    }
+    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title);
   });
 }
 
@@ -144,6 +165,10 @@ function extractYouTubeTranscript(tab, config) {
     isLoading: true
   });
 
+  // Extract video ID
+  const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
+  const cacheKey = `transcript_${videoId}`;
+
   // Send message to youtube_content.js to extract transcript
   chrome.tabs.sendMessage(tab.id, {
     action: 'extractTranscript'
@@ -169,7 +194,7 @@ function extractYouTubeTranscript(tab, config) {
     const transcriptData = {
       title: tab.title.replace(' - YouTube', ''),
       url: tab.url,
-      videoId: new URLSearchParams(new URL(tab.url).search).get('v'),
+      videoId: videoId,
       content: response.transcript
     };
     
@@ -185,6 +210,11 @@ function extractYouTubeTranscript(tab, config) {
       return;
     }
     
+    // Cache the transcript
+    chrome.storage.local.set({
+      [cacheKey]: transcriptData
+    });
+    
     // Send success status
     chrome.tabs.sendMessage(tab.id, {
       action: 'transcriptStatus',
@@ -195,25 +225,10 @@ function extractYouTubeTranscript(tab, config) {
     // Create a formatted content string with the URL included separately
     const formattedContent = `URL: ${transcriptData.url}\nVideo ID: ${transcriptData.videoId || 'Not available'}\n\n${transcriptData.content}`;
     
-    // Send to appropriate AI model based on settings
-    switch (config.aiModel) {
-      case 'perplexity':
-        openPerplexity(config.summaryPrompt, formattedContent, transcriptData.title);
-        break;
-      case 'grok':
-        openGrok(config.summaryPrompt, formattedContent, transcriptData.title);
-        break;
-      case 'claude':
-        openClaude(config.summaryPrompt, formattedContent, transcriptData.title);
-        break;
-      case 'chatgpt':
-        openChatGPT(config.summaryPrompt, formattedContent, transcriptData.title);
-        break;
-      default:
-        openGoogleAIStudio(config.summaryPrompt, formattedContent, transcriptData.title);
-    }
+    // Send to appropriate AI model
+    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, transcriptData.title);
     
-    // Final status message that fades away after 5 seconds
+    // Final status message
     setTimeout(() => {
       chrome.tabs.sendMessage(tab.id, {
         action: 'transcriptStatus',
@@ -239,9 +254,17 @@ function openGoogleAIStudio(prompt, content, title) {
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>${prompt}</Task>
-<ContentTitle>${title}</ContentTitle>
-<Content>${cleanedContent}</Content>`;
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
 
   console.log('Formatted prompt length for Google AI Studio:', formattedPrompt.length);
   
@@ -405,9 +428,17 @@ function openPerplexity(prompt, content, title) {
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>${prompt}</Task>
-<ContentTitle>${title}</ContentTitle>
-<Content>${cleanedContent}</Content>`;
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
 
   console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
   
@@ -458,9 +489,17 @@ function openGrok(prompt, content, title) {
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>${prompt}</Task>
-<ContentTitle>${title}</ContentTitle>
-<Content>${cleanedContent}</Content>`;
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
 
   console.log('Formatted prompt length for Grok:', formattedPrompt.length);
   
@@ -502,9 +541,17 @@ function openClaude(prompt, content, title) {
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>${prompt}</Task>
-<ContentTitle>${title}</ContentTitle>
-<Content>${cleanedContent}</Content>`;
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
 
   console.log('Formatted prompt length for Claude:', formattedPrompt.length);
   
@@ -715,9 +762,17 @@ function openChatGPT(prompt, content, title) {
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>${prompt}</Task>
-<ContentTitle>${title}</ContentTitle>
-<Content>${cleanedContent}</Content>`;
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
 
   // Store the prompt and title temporarily
   chrome.storage.local.set({

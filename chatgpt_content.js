@@ -31,30 +31,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Function to format prompt for ChatGPT
 function formatPromptForChatGPT(prompt) {
-  // Extract XML parts
-  const taskMatch = prompt.match(/<Task>(.*?)<\/Task>/s);
-  const titleMatch = prompt.match(/<ContentTitle>(.*?)<\/ContentTitle>/s);
-  const contentMatch = prompt.match(/<Content>(.*?)<\/Content>/s);
-  
-  if (!taskMatch || !titleMatch || !contentMatch) {
-    return prompt; // Return original if no XML tags found
-  }
-  
-  const task = taskMatch[1].trim();
-  const title = titleMatch[1].trim();
-  const content = contentMatch[1].trim();
-  
-  // Format in a way that ChatGPT can understand better
-  return `Task: ${task}
-
-Title: ${title}
-
-Content to analyze:
-----------------
-${content}
-----------------
-
-Please provide your analysis following the task instructions above.`;
+  // Return the prompt as-is to preserve XML tags
+  return prompt;
 }
 
 // Function to wait for an element to appear in the DOM
@@ -155,8 +133,16 @@ function insertPromptAndSubmit(prompt, title) {
         textarea.innerHTML = '';
         textarea.focus();
         
-        // Set the new content for contenteditable
-        textarea.innerHTML = prompt;
+        // Create a pre element to preserve formatting
+        const pre = document.createElement('pre');
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.wordBreak = 'break-word';
+        pre.style.margin = '0';
+        
+        // Create a text node to preserve XML tags
+        const textNode = document.createTextNode(prompt);
+        pre.appendChild(textNode);
+        textarea.appendChild(pre);
         
         // Create and dispatch input event
         const inputEvent = new InputEvent('input', {

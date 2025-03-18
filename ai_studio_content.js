@@ -11,15 +11,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in AI Studio content script:', message);
   
   if (message.action === 'insertPrompt') {
-    // If we're already submitting, don't start another submission
-    if (isSubmitting || promptSubmitted || isGeneratingResponse()) {
-      console.log('Already submitting or submitted, ignoring duplicate request');
-      sendResponse({ status: 'Already submitting' });
-      return true;
-    }
-    
-    // Reset the flag when receiving a new prompt
+    // Reset flags for each new request
+    isSubmitting = false;
     promptSubmitted = false;
+    
     insertPromptAndSubmit(message.prompt, message.title);
     sendResponse({ status: 'Attempting to insert prompt' });
     return true;

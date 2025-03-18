@@ -10,15 +10,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in YouTube content script:', message);
   
   if (message.action === 'extractTranscript') {
-    // If we're already extracting or have extracted, don't start again
-    if (isExtracting || hasExtracted) {
-      console.log('Already extracting or submitted, ignoring duplicate request');
-      sendResponse({ success: false, error: 'Already processing transcript' });
-      return true;
-    }
-    
-    // Reset flags
-    isExtracting = true;
+    // Reset flags for each new request
+    isExtracting = false;
     hasExtracted = false;
     
     // Extract transcript

@@ -857,14 +857,52 @@ function extractTranscriptFromApiResponse(data) {
             }
             
             if (segments.length > 0) {
-              let transcriptText = 'Transcript:\n';
+              let transcriptText = 'Transcript:\n\n';
+              let currentParagraph = '';
+              let lastEndTime = -1;
+              let paragraphStartTime = -1;
+              
               for (const segment of segments) {
-                const startSec = Math.floor(segment.startTime);
+                // Start a new paragraph if this segment is more than 4 seconds after the last one
+                // or if we've accumulated enough text (roughly a sentence)
+                if (paragraphStartTime === -1) {
+                  paragraphStartTime = segment.startTime;
+                }
+                
+                if (lastEndTime !== -1 && segment.startTime - lastEndTime > 4 || 
+                   (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
+                  // Format timestamp
+                  const startSec = Math.floor(paragraphStartTime);
+                  const minutes = Math.floor(startSec / 60);
+                  const seconds = startSec % 60;
+                  const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                  
+                  // Add the completed paragraph with its timestamp
+                  transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+                  
+                  // Start a new paragraph
+                  currentParagraph = segment.text;
+                  paragraphStartTime = segment.startTime;
+                } else {
+                  // Add space if the paragraph already has content
+                  if (currentParagraph.length > 0) {
+                    currentParagraph += ' ';
+                  }
+                  currentParagraph += segment.text;
+                }
+                
+                lastEndTime = segment.startTime;
+              }
+              
+              // Add the last paragraph if it exists
+              if (currentParagraph.length > 0) {
+                const startSec = Math.floor(paragraphStartTime);
                 const minutes = Math.floor(startSec / 60);
                 const seconds = startSec % 60;
                 const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                transcriptText += `[${timestamp}] ${segment.text}\n`;
+                transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
               }
+              
               return transcriptText;
             }
           }
@@ -879,7 +917,10 @@ function extractTranscriptFromApiResponse(data) {
 
 // Helper function to format transcript from cue groups
 function formatTranscriptFromCueGroups(cueGroups) {
-  let transcriptText = 'Transcript:\n';
+  let transcriptText = 'Transcript:\n\n';
+  let currentParagraph = '';
+  let lastEndTime = -1;
+  let paragraphStartTime = -1;
   
   for (const cueGroup of cueGroups) {
     if (cueGroup.transcriptCueGroupRenderer) {
@@ -890,17 +931,49 @@ function formatTranscriptFromCueGroups(cueGroups) {
             const text = cue.transcriptCueRenderer.cue?.simpleText || '';
             const startMs = parseInt(cue.transcriptCueRenderer.startOffsetMs || '0');
             const startSec = Math.floor(startMs / 1000);
-            const minutes = Math.floor(startSec / 60);
-            const seconds = startSec % 60;
-            const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
             
             if (text) {
-              transcriptText += `[${timestamp}] ${text}\n`;
+              // Start a new paragraph if this cue is more than 4 seconds after the last one
+              // or if we've accumulated enough text (roughly a sentence)
+              if (paragraphStartTime === -1) {
+                paragraphStartTime = startSec;
+              }
+              
+              if (lastEndTime !== -1 && startSec - lastEndTime > 4 || 
+                 (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
+                // Format timestamp as minutes:seconds
+                const minutes = Math.floor(paragraphStartTime / 60);
+                const seconds = paragraphStartTime % 60;
+                const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Add the completed paragraph with its timestamp
+                transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+                
+                // Start a new paragraph
+                currentParagraph = text;
+                paragraphStartTime = startSec;
+              } else {
+                // Add space if the paragraph already has content
+                if (currentParagraph.length > 0) {
+                  currentParagraph += ' ';
+                }
+                currentParagraph += text;
+              }
+              
+              lastEndTime = startSec;
             }
           }
         }
       }
     }
+  }
+  
+  // Add the last paragraph if it exists
+  if (currentParagraph.length > 0) {
+    const minutes = Math.floor(paragraphStartTime / 60);
+    const seconds = paragraphStartTime % 60;
+    const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
   }
   
   return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
@@ -937,18 +1010,53 @@ function parseTranscriptXml(xmlText) {
       return null;
     }
     
-    let transcriptText = 'Transcript:\n';
+    let transcriptText = 'Transcript:\n\n';
+    let currentParagraph = '';
+    let lastEndTime = -1;
+    let paragraphStartTime = -1;
     
     for (let i = 0; i < textElements.length; i++) {
       const text = textElements[i].textContent.trim();
       if (text) {
         const startTime = parseFloat(textElements[i].getAttribute('start') || '0');
-        const minutes = Math.floor(startTime / 60);
-        const seconds = Math.floor(startTime % 60);
-        const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
-        transcriptText += `[${timestamp}] ${text}\n`;
+        // Start a new paragraph if this element is more than 4 seconds after the last one
+        // or if we've accumulated enough text (roughly a sentence)
+        if (paragraphStartTime === -1) {
+          paragraphStartTime = startTime;
+        }
+        
+        if (lastEndTime !== -1 && startTime - lastEndTime > 4 || 
+           (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
+          // Format timestamp
+          const minutes = Math.floor(paragraphStartTime / 60);
+          const seconds = Math.floor(paragraphStartTime % 60);
+          const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          
+          // Add the completed paragraph with its timestamp
+          transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+          
+          // Start a new paragraph
+          currentParagraph = text;
+          paragraphStartTime = startTime;
+        } else {
+          // Add space if the paragraph already has content
+          if (currentParagraph.length > 0) {
+            currentParagraph += ' ';
+          }
+          currentParagraph += text;
+        }
+        
+        lastEndTime = startTime;
       }
+    }
+    
+    // Add the last paragraph if it exists
+    if (currentParagraph.length > 0) {
+      const minutes = Math.floor(paragraphStartTime / 60);
+      const seconds = Math.floor(paragraphStartTime % 60);
+      const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
     }
     
     return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
@@ -1007,7 +1115,10 @@ function getExistingTranscriptFromDOM() {
       return null;
     }
     
-    let transcriptText = 'Transcript:\n';
+    let transcriptText = 'Transcript:\n\n';
+    let currentParagraph = '';
+    let lastTimestamp = '';
+    let paragraphTimestamp = '';
     
     // Try different approaches to extract the text and timestamps
     if (transcriptPanel.querySelector('ytd-transcript-segment-renderer')) {
@@ -1017,7 +1128,26 @@ function getExistingTranscriptFromDOM() {
         const text = item.querySelector('.segment-text, .cue-text, .text, .subtitle-text')?.textContent?.trim() || '';
         
         if (text) {
-          transcriptText += timestamp ? `[${timestamp}] ${text}\n` : `${text}\n`;
+          // Start a new paragraph if we reached a sentence end or if 
+          // this is the first segment we're processing
+          if (paragraphTimestamp === '') {
+            paragraphTimestamp = timestamp;
+          }
+          
+          if (currentParagraph.length > 0 && 
+             (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
+            transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n\n`;
+            currentParagraph = text;
+            paragraphTimestamp = timestamp;
+          } else {
+            // Add space if the paragraph already has content
+            if (currentParagraph.length > 0) {
+              currentParagraph += ' ';
+            }
+            currentParagraph += text;
+          }
+          
+          lastTimestamp = timestamp;
         }
       });
     } else {
@@ -1043,9 +1173,33 @@ function getExistingTranscriptFromDOM() {
         }
         
         if (text) {
-          transcriptText += timestamp ? `[${timestamp}] ${text}\n` : `${text}\n`;
+          // Start a new paragraph if we reached a sentence end or if 
+          // this is the first segment we're processing
+          if (paragraphTimestamp === '') {
+            paragraphTimestamp = timestamp;
+          }
+          
+          if (currentParagraph.length > 0 && 
+             (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
+            transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n\n`;
+            currentParagraph = text;
+            paragraphTimestamp = timestamp;
+          } else {
+            // Add space if the paragraph already has content
+            if (currentParagraph.length > 0) {
+              currentParagraph += ' ';
+            }
+            currentParagraph += text;
+          }
+          
+          lastTimestamp = timestamp;
         }
       });
+    }
+    
+    // Add the last paragraph if it exists
+    if (currentParagraph.length > 0) {
+      transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n`;
     }
     
     return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content

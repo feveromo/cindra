@@ -68,6 +68,11 @@
       "matches": ["*://www.youtube.com/*"],
       "js": ["youtube_content.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.reddit.com/*"],
+      "js": ["reddit_content.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

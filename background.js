@@ -29,7 +29,7 @@ function handleSummarize(tab, options = {}) {
     // Merge with options passed in (if any)
     const config = { ...settings, ...options };
     
-    // Check if we have a cached transcript for this video
+    // Check if it's a YouTube video page
     if (tab.url.includes('youtube.com/watch')) {
       const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
       const cacheKey = `transcript_${videoId}`;
@@ -49,6 +49,12 @@ function handleSummarize(tab, options = {}) {
         // No cached transcript, extract it normally
         extractYouTubeTranscript(tab, config);
       });
+      return;
+    }
+    
+    // Check if it's a Reddit page
+    if (tab.url.includes('reddit.com')) {
+      extractRedditContent(tab, config);
       return;
     }
     
@@ -105,6 +111,37 @@ function extractPageContent(tab, config) {
     
     // Send to appropriate AI model based on settings
     sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title);
+  });
+}
+
+// Extract Reddit content
+function extractRedditContent(tab, config) {
+  chrome.tabs.sendMessage(tab.id, {
+    action: 'extractRedditContent'
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Error sending message to Reddit content script:', chrome.runtime.lastError);
+      openErrorTab('Could not extract content from Reddit page.');
+      return;
+    }
+
+    if (!response || !response.success) {
+      openErrorTab(response?.error || 'Could not extract content from Reddit page.');
+      return;
+    }
+
+    const redditContent = response.content;
+
+    if (!redditContent || redditContent.trim() === '') {
+      openErrorTab('No content found on the Reddit page to summarize.');
+      return;
+    }
+
+    // Create a formatted content string with the URL and title
+    const formattedContent = `URL: ${tab.url}\nTitle: ${tab.title}\n\n${redditContent}`;
+
+    // Send to appropriate AI model
+    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, tab.title);
   });
 }
 

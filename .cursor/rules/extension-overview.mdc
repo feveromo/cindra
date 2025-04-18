@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Browser Extension Overview
+
+This project is a browser extension with the following key files:
+
+*   **manifest.json**: The manifest file that defines the extension's properties and permissions.
+*   **background.js**: Handles background tasks and events.
+*   **content.js**: Injected into web pages to interact with the DOM.
+*   **popup.html** and **popup.js**: Define the extension's popup UI and its logic.
+*   **options.html** and **options.js**: Define the extension's options page UI and its logic.
+
+It also includes content scripts for specific websites:
+
+*   **ai_studio_content.js**
+*   **chatgpt_content.js**
+*   **claude_content.js**
+*   **grok_content.js**
+*   **perplexity_content.js**
+*   **youtube_content.js**
+
+Other important files include:
+
+*   **styles.css**: Provides styling for the popup and options pages.
+*   **images/**: Contains images used by the extension.
+*   **README.md**: Provides a general description of the project.

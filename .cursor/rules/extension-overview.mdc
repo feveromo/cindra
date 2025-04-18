@@ -21,6 +21,7 @@ It also includes content scripts for specific websites:
 *   **grok_content.js**
 *   **perplexity_content.js**
 *   **youtube_content.js**
+*   **reddit_content.js**
 
 Other important files include:
 

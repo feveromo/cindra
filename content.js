@@ -15,7 +15,8 @@ try {
 
 function handleShortcut(e) {
   // Check if extension context is still valid
-  if (chrome.runtime.id === undefined) {
+  // Safely check if chrome.runtime exists before accessing its properties
+  if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
     console.log('Extension context invalid, removing event listener');
     document.removeEventListener('keydown', handleShortcut);
     return;
@@ -86,7 +87,8 @@ document.addEventListener('keyup', (e) => {
 // Trigger the summarize action
 function triggerSummarize() {
   // Check extension context before proceeding
-  if (chrome.runtime.id === undefined) {
+  // Safely check if chrome.runtime exists
+  if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
     console.log('Extension context invalid, cannot trigger summarize');
     return;
   }

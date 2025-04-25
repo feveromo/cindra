@@ -83,6 +83,9 @@ function sendToSelectedModel(model, prompt, content, title) {
     case 'chatgpt':
       openChatGPT(prompt, content, title);
       break;
+    case 'gemini':
+      openGemini(prompt, content, title);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title);
   }
@@ -601,6 +604,58 @@ ${cleanedContent}
     // Then open Claude in a new tab
     chrome.tabs.create({ url: 'https://claude.ai/' }, async (newTab) => {
       console.log('New tab created for Claude, tab ID:', newTab.id);
+      
+      // Wait a moment before first attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Try to send the message
+      const success = await sendMessageWithRetry(newTab.id, {
+        action: 'insertPrompt',
+        prompt: formattedPrompt,
+        title: title
+      }).catch(error => {
+        console.error('Error in message sending:', error);
+        return false;
+      });
+      
+      if (!success) {
+        console.log('Message will be handled by content script when it loads');
+      }
+    });
+  });
+}
+
+// Open Gemini with the content
+function openGemini(prompt, content, title) {
+  console.log('Opening Gemini with prompt and content');
+  
+  // Clean up the content formatting
+  const cleanedContent = cleanupContentFormatting(content);
+  
+  // Format with XML tags
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
+
+  console.log('Formatted prompt length for Gemini:', formattedPrompt.length);
+  
+  // Store the prompt in local storage first
+  chrome.storage.local.set({
+    pendingGeminiPrompt: formattedPrompt,
+    pendingGeminiTitle: title,
+    geminiPromptTimestamp: Date.now()
+  }, () => {
+    // Then open Gemini in a new tab
+    chrome.tabs.create({ url: 'https://gemini.google.com/app' }, async (newTab) => {
+      console.log('New tab created for Gemini, tab ID:', newTab.id);
       
       // Wait a moment before first attempt
       await new Promise(resolve => setTimeout(resolve, 1000));

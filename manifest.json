@@ -28,6 +28,7 @@
     "https://chatgpt.com/*",
     "https://chat.com/*",
     "https://grok.com/*",
+    "https://gemini.google.com/app/*",
     "*://*/*"
   ],
   "icons": {
@@ -63,6 +64,10 @@
     {
       "matches": ["*://chat.openai.com/*", "*://chatgpt.com/*", "*://chat.com/*"],
       "js": ["chatgpt_content.js"]
+    },
+    {
+      "matches": ["https://gemini.google.com/app/*"],
+      "js": ["gemini_content.js"]
     },
     {
       "matches": ["*://www.youtube.com/*"],

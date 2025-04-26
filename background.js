@@ -168,7 +168,7 @@ function getPageContent() {
     const mainElement = possibleMainElements[0];
     
     // Remove any extension UI elements first
-    const extensionElements = mainElement.querySelectorAll('.youtube-summary-ext, .yt-summary-widget, [data-extension="youtube-summary"]');
+    const extensionElements = mainElement.querySelectorAll('.cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
     extensionElements.forEach(el => {
       el.remove();
     });
@@ -180,7 +180,7 @@ function getPageContent() {
     const bodyClone = document.body.cloneNode(true);
     
     // Remove script, style, nav, footer, header, and extension-related elements
-    const elementsToRemove = bodyClone.querySelectorAll('script, style, nav, footer, header, .youtube-summary-ext, .yt-summary-widget, [data-extension="youtube-summary"]');
+    const elementsToRemove = bodyClone.querySelectorAll('script, style, nav, footer, header, .cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
     elementsToRemove.forEach(el => {
       el.remove();
     });
@@ -745,7 +745,7 @@ function openErrorTab(message) {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'images/icon128.png',
-        title: 'YouTube Summary Error',
+        title: 'Cindra Summary Error',
         message: message
       });
       return;
@@ -760,7 +760,7 @@ function openErrorTab(message) {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>YouTube Summary Error</title>
+        <title>Cindra Summary Error</title>
         <style>
           body {
             font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
@@ -838,7 +838,7 @@ function openErrorTab(message) {
               <h1 style="color: #d93025;">Error</h1>
               <p>${errorMsg}</p>
             </div>`;
-            document.title = 'YouTube Summary Error';
+            document.title = 'Cindra Summary Error';
           },
           args: [message]
         });

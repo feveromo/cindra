@@ -1,4 +1,4 @@
-# YouTube Summary Chrome Extension
+# Cindra Summary Chrome Extension
 
 A Chrome extension that helps you summarize YouTube videos and webpages using your choice of AI model. This extension extracts content from the current page and sends it to the selected AI platform for summarization.
 
@@ -9,6 +9,7 @@ A Chrome extension that helps you summarize YouTube videos and webpages using yo
 - ✂️ Adds a "Copy Transcript" button directly to YouTube video pages
 - 🔌 Supports multiple AI Models:
     - Google AI Studio
+    - Gemini
     - Perplexity
     - Claude
     - ChatGPT
@@ -74,16 +75,7 @@ This extension works by:
 
 - YouTube transcript extraction relies on the availability of captions (auto-generated or official). If no captions are found, extraction will fail.
 - Content extraction may not work perfectly on all website structures.
-- Very long content may be truncated due to AI model token limits
 
 ## Privacy
 
 The extension itself does not collect any data. All content is processed locally, then sent directly to the chosen models in your browser.
-
-## Contributing
-
-Contributions are welcome! Feel free to submit issues or pull requests.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Summary",
+  "name": "Cindra Summary",
   "version": "1.0.0",
-  "description": "Summarize YouTube videos, webpages, and PDFs using Google AI Studio or Perplexity",
+  "description": "Cindra — Summarize YouTube, Reddit, and webpages instantly using top AI models like GPT-4o, Claude, Gemini, and more!",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

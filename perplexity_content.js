@@ -39,7 +39,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Function to wait for the page to be ready
-function waitForPageReady(timeout = 10000) {
+function waitForPageReady(timeout = 20000) {
   if (isPageReady()) {
     return Promise.resolve();
   }

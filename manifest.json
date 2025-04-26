@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Cindra Summary",
   "version": "1.0.0",
-  "description": "Cindra — Summarize YouTube, Reddit, and webpages instantly using top AI models like GPT-4o, Claude, Gemini, and more!",
+  "description": "Summarize YouTube, Reddit, and webpages instantly using top AI models like GPT-4o, Claude, Gemini, and more!",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

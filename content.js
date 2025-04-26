@@ -136,24 +136,37 @@ function addWebPageButton() {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background-color: #4285f4;
-    color: white;
+    background-color: white;
+    color: #202124;
     border-radius: 50%;
     width: 42px;
     height: 42px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 9999;
-    transition: transform 0.2s, background-color 0.2s;
+    transition: transform 0.2s;
   `;
   
-  // Button icon
-  const buttonIcon = document.createElement('div');
-  buttonIcon.innerHTML = '🤖';
-  buttonIcon.style.fontSize = '20px';
+  // Button icon - Use Cindra logo
+  const buttonIcon = document.createElement('img');
+  try {
+    // Make sure images/icon48.png exists in your project
+    buttonIcon.src = chrome.runtime.getURL('images/icon48.png'); 
+  } catch (e) {
+    // Fallback if runtime is not available (e.g., during development hot-reloading)
+    buttonIcon.alt = 'Summarize'; 
+    console.warn("Could not get extension URL for icon. Is the extension loaded?");
+  }
+  buttonIcon.style.cssText = `
+    width: 24px;
+    height: 24px;
+    display: block;
+    position: relative;
+    top: -2px;
+  `;
   
   // Close button
   const closeButton = document.createElement('div');
@@ -206,13 +219,11 @@ function addWebPageButton() {
   // Hover effect
   floatingButton.addEventListener('mouseover', () => {
     floatingButton.style.transform = 'scale(1.1)';
-    floatingButton.style.backgroundColor = '#3367d6';
     closeButton.style.opacity = '1';
   });
   
   floatingButton.addEventListener('mouseout', () => {
     floatingButton.style.transform = 'scale(1.0)';
-    floatingButton.style.backgroundColor = '#4285f4';
     // Only hide if the close button isn't being hovered
     if (!closeButton.matches(':hover')) {
       closeButton.style.opacity = '0';

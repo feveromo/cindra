@@ -492,32 +492,8 @@ ${cleanedContent}
     const newTab = await chrome.tabs.create({ url: 'https://www.perplexity.ai/' });
     console.log('New tab created for Perplexity, tab ID:', newTab.id);
     
-    // Wait for the tab to be fully loaded
-    await waitForTab(newTab.id);
-    
-    // Wait a moment to ensure content script initialization
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Ensure content script is loaded
-    let isLoaded = await ensureContentScriptLoaded(newTab.id);
-    let attempts = 0;
-    
-    while (!isLoaded && attempts < 5) {
-      await new Promise(resolve => setTimeout(resolve, Math.min(Math.pow(2, attempts) * 500, 5000)));
-      isLoaded = await ensureContentScriptLoaded(newTab.id);
-      attempts++;
-    }
-    
-    // Try to send the message
-    const success = await sendMessageWithRetry(newTab.id, {
-      action: 'insertPrompt',
-      prompt: formattedPrompt,
-      title: title
-    }).catch(() => false);
-    
-    if (!success) {
-      console.log('Message will be handled by content script when it loads');
-    }
+    // No longer need to wait or send message here.
+    // The content script's checkForPendingPrompts will handle it.
   });
 }
 

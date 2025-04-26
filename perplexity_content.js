@@ -6,11 +6,45 @@ let promptSubmitted = false;
 // Flag to track if we're currently in the submission process
 let isSubmitting = false;
 
-// Function to check if the page is ready (main content loaded)
+// Function to check if the page is ready (input OR submit button loaded)
 function isPageReady() {
-  return document.querySelector('textarea[placeholder="Ask anything..."]') !== null ||
-         document.querySelector('.rounded-3xl textarea') !== null ||
-         document.querySelector('.grid-rows-1fr-auto textarea') !== null;
+  const inputSelectors = [
+    'textarea[placeholder="Ask anything..."]',
+    '.rounded-3xl textarea',
+    'textarea.resize-none',
+    'textarea[autofocus]',
+    'div.rounded-md textarea',
+    '.grid-rows-1fr-auto textarea',
+    '.col-start-1.col-end-4 textarea',
+    'textarea.overflow-auto'
+  ];
+  
+  // Submit button selectors (we check for *any* button, not just enabled)
+  const submitSelectors = [
+    'button[aria-label="Submit"]',
+    'button.bg-super',
+    'button svg path[d="M5 12l14 0"]',
+    'button svg path[d="M13 18l6 -6"]',
+    '.ml-sm button',
+    'button .tabler-icon-arrow-right',
+    'button[type="button"] svg.tabler-icon-arrow-right'
+  ];
+
+  // Check if any input area exists
+  for (const selector of inputSelectors) {
+    if (document.querySelector(selector)) {
+      return true; // Input found
+    }
+  }
+  
+  // Check if any submit button exists
+  for (const selector of submitSelectors) {
+    if (document.querySelector(selector)) {
+      return true; // Submit button found
+    }
+  }
+  
+  return false; // Neither input nor submit button found
 }
 
 // Listen for messages from the background script
@@ -262,19 +296,25 @@ function checkForPendingPrompts() {
   console.log('Checking for pending prompts for Perplexity');
   
   chrome.storage.local.get(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp'], function(result) {
-    if (result.pendingPerplexityPrompt) {
+    const pendingPrompt = result.pendingPerplexityPrompt;
+    const pendingTitle = result.pendingPerplexityTitle;
+    const promptTimestamp = result.perplexityPromptTimestamp || 0;
+
+    if (pendingPrompt) {
+      // Clear the prompt from storage IMMEDIATELY to prevent reprocessing
+      chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp']);
+      
       // Check if the prompt is fresh (created within the last 2 minutes)
       const currentTime = Date.now();
-      const promptTime = result.perplexityPromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
       
-      if (currentTime - promptTime < twoMinutesInMs) {
+      if (currentTime - promptTimestamp < twoMinutesInMs) {
         console.log('Found fresh pending prompt for Perplexity, inserting');
-        insertPromptAndSubmit(result.pendingPerplexityPrompt, result.pendingPerplexityTitle);
+        // Use the retrieved values directly
+        insertPromptAndSubmit(pendingPrompt, pendingTitle);
       } else {
         console.log('Found stale pending prompt for Perplexity, ignoring');
-        // Clear old prompts to prevent future resubmissions
-        chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp']);
+        // No need to remove again, already done above
       }
     }
   });

@@ -108,16 +108,13 @@ function insertPromptAndSubmit(prompt, title) {
       console.log('Content inserted, content length:', editor.textContent.length);
       
       // Give the UI a moment to update
-      return new Promise(resolve => setTimeout(() => resolve(editor), 500));
+      return editor;
     })
     .then(editor => {
-      // Look for the submit button
-      return waitForElement([
-        'button[aria-label="Send Message"]',
-        'button[type="submit"]',
-        'button.absolute.right-2',
-        'button.absolute.right-1\\.5'
-      ]);
+      // Look for the submit button (ensure it's enabled)
+      return waitForElement(
+        'button[aria-label="Send message"]:not(:disabled)'
+      );
     })
     .then(submitButton => {
       console.log('Submit button found, clicking:', submitButton);

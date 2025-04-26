@@ -58,26 +58,38 @@ function waitForElement(selector, timeout = 10000) {
 function insertTextIntoEditableDiv(div, text) {
   // Ensure the div is focused
   div.focus();
-  
-  // Clear existing content (if any)
-  div.innerHTML = ''; 
-  
-  // Insert the new text
-  // We might need to simulate typing for some complex editors
-  // Using execCommand as a fallback, might not work in all cases
-  try {
-    if (!document.execCommand('insertText', false, text)) {
-      // Fallback: directly set innerText or textContent if execCommand fails
-      div.textContent = text;
-    }
-  } catch (e) {
-      // If execCommand throws error (e.g., in non-designMode), use direct assignment
-      div.textContent = text;
+
+  // Target the inner paragraph element within the Quill editor
+  // Quill typically uses a <p> tag as the first child for content
+  let p = div.querySelector('p');
+
+  // If no <p> exists, create one (though usually one should be there)
+  if (!p) {
+    div.innerHTML = '<p><br></p>'; // Initialize with a paragraph and a line break
+    p = div.querySelector('p');
   }
 
-  // Dispatch input events to trigger any attached listeners
-  div.dispatchEvent(new Event('input', { bubbles: true }));
+  // Clear existing content of the paragraph
+  p.innerHTML = ''; 
+
+  // Insert the new text directly into the paragraph
+  p.innerText = text;
+
+  // Move the cursor to the end of the inserted text (optional but good practice)
+  const range = document.createRange();
+  const sel = window.getSelection();
+  range.selectNodeContents(p);
+  range.collapse(false); // Collapse to the end
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  // Dispatch input events to trigger any attached listeners on the editor div
+  div.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   div.dispatchEvent(new Event('change', { bubbles: true }));
+
+  // Also dispatch on the paragraph itself, just in case
+  p.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  p.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // Main function to handle inserting prompt and submitting

@@ -8,23 +8,23 @@ alwaysApply: true
 This project is a browser extension with the following key files:
 
 *   **[manifest.json](mdc:manifest.json)**: The manifest file that defines the extension's properties and permissions.
-*   **[background.js](mdc:background.js)**: Handles background tasks and events.
-*   **[content.js](mdc:content.js)**: Injected into web pages to interact with the DOM.
-*   **[popup.html](mdc:popup.html)** and **[popup.js](mdc:popup.js)**: Define the extension's popup UI and its logic.
-*   **[options.html](mdc:options.html)** and **[options.js](mdc:options.js)**: Define the extension's options page UI and its logic.
+*   **[background/background.js](mdc:background/background.js)**: Handles background tasks and events.
+*   **[content_scripts/content.js](mdc:content_scripts/content.js)**: A general content script injected into web pages.
+*   **[ui/popup/popup.html](mdc:ui/popup/popup.html)** and **[ui/popup/popup.js](mdc:ui/popup/popup.js)**: Define the extension's popup UI and its logic.
+*   **[ui/options/options.html](mdc:ui/options/options.html)** and **[ui/options/options.js](mdc:ui/options/options.js)**: Define the extension's options page UI and its logic.
 
-It also includes content scripts for specific websites:
+It also includes content scripts for specific websites located in the `content_scripts/` directory:
 
-*   **[ai_studio_content.js](mdc:ai_studio_content.js)**
-*   **[chatgpt_content.js](mdc:chatgpt_content.js)**
-*   **[claude_content.js](mdc:claude_content.js)**
-*   **[grok_content.js](mdc:grok_content.js)**
-*   **[perplexity_content.js](mdc:perplexity_content.js)**
-*   **[youtube_content.js](mdc:youtube_content.js)**
-*   **[reddit_content.js](mdc:reddit_content.js)**
+*   **[content_scripts/ai_studio_content.js](mdc:content_scripts/ai_studio_content.js)**
+*   **[content_scripts/chatgpt_content.js](mdc:content_scripts/chatgpt_content.js)**
+*   **[content_scripts/claude_content.js](mdc:content_scripts/claude_content.js)**
+*   **[content_scripts/gemini_content.js](mdc:content_scripts/gemini_content.js)**
+*   **[content_scripts/grok_content.js](mdc:content_scripts/grok_content.js)**
+*   **[content_scripts/perplexity_content.js](mdc:content_scripts/perplexity_content.js)**
+*   **[content_scripts/youtube_content.js](mdc:content_scripts/youtube_content.js)**
+*   **[content_scripts/reddit_content.js](mdc:content_scripts/reddit_content.js)**
 
 Other important files include:
 
-*   **[styles.css](mdc:styles.css)**: Provides styling for the popup and options pages.
-*   **images/**: Contains images used by the extension. (Note: Directories can't be linked directly in rules)
-*   **[README.md](mdc:README.md)**: Provides a general description of the project.
+*   **[ui/options/options.css](mdc:ui/options/options.css)**: Provides styling for the options page.
+*   **images/**: Contains images used by the extension.

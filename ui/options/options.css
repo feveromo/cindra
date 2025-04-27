@@ -27,12 +27,20 @@ body {
   background-color: var(--background-color);
   color: var(--text-color);
   transition: all 0.3s ease;
-  padding: 20px;
+  padding: 20px 20px 10px 20px;
+  font-size: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .container {
   max-width: 960px;
   margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
 }
 
 .header {
@@ -64,7 +72,7 @@ h1 {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   width: 100%;
   max-width: 1100px;
@@ -72,7 +80,7 @@ h1 {
 }
 
 .settings-section {
-  padding: 16px;
+  padding: 20px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -87,8 +95,8 @@ h2 {
 
 .setting-item {
   display: flex;
-  margin-bottom: 4px;
-  padding-bottom: 4px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -120,11 +128,6 @@ h2 {
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
-  background-color: var(--hover-color);
-}
-
-.radio-container:hover {
-  background-color: var(--border-color);
 }
 
 .radio-label {
@@ -169,7 +172,7 @@ h2 {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 4px;
 }
 
 .primary-btn {
@@ -196,6 +199,12 @@ h2 {
   text-align: center;
   font-size: 14px;
   color: #5f6368;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.footer p {
+  margin-bottom: 0;
 }
 
 .range-container {

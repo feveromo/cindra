@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // Add class to body for specific styling
+  document.body.classList.add('popup-body');
+
   // Load saved settings
   chrome.storage.sync.get({
     aiModel: 'google-ai-studio',

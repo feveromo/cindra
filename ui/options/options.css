@@ -31,7 +31,7 @@ body {
 }
 
 .container {
-  max-width: 800px;
+  max-width: 960px;
   margin: 0 auto;
 }
 
@@ -65,10 +65,14 @@ h1 {
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
 }
 
 .settings-section {
-  padding: 20px;
+  padding: 16px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -83,8 +87,8 @@ h2 {
 
 .setting-item {
   display: flex;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -95,22 +99,25 @@ h2 {
 }
 
 .setting-label {
-  width: 200px;
+  width: 130px;
   padding-right: 16px;
   font-weight: 500;
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding-top: 6px;
 }
 
 .setting-controls {
   flex-grow: 1;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .radio-container {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
   background-color: var(--hover-color);
@@ -221,4 +228,11 @@ h2 {
 
 :root[data-theme="dark"] .setting-hint {
   display: none;
+}
+
+/* Target the controls specifically for the AI Model section */
+.settings-section:first-of-type .setting-item:first-of-type .setting-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 } 

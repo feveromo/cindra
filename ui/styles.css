@@ -30,7 +30,6 @@ body {
 }
 
 .container {
-  width: 350px;
   padding: 16px;
 }
 
@@ -159,4 +158,9 @@ textarea {
 
 #options-btn:hover {
   background-color: var(--hover-color);
+}
+
+/* Restore fixed width specifically for popup */
+.popup-body .container {
+  width: 350px;
 } 

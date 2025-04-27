@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Summarize YouTube, Reddit, and webpages instantly using top AI models like GPT-4o, Claude, Gemini, and more!",
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "ui/popup/popup.html",
     "default_icon": {
       "16": "images/icon16.png",
       "48": "images/icon48.png",
@@ -36,47 +36,47 @@
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
-  "options_page": "options.html",
+  "options_page": "ui/options/options.html",
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background/background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": ["content_scripts/content.js"]
     },
     {
       "matches": ["*://aistudio.google.com/*"],
-      "js": ["ai_studio_content.js"]
+      "js": ["content_scripts/ai_studio_content.js"]
     },
     {
       "matches": ["*://*.perplexity.ai/*"],
-      "js": ["perplexity_content.js"]
+      "js": ["content_scripts/perplexity_content.js"]
     },
     {
       "matches": ["*://grok.com/*"],
-      "js": ["grok_content.js"]
+      "js": ["content_scripts/grok_content.js"]
     },
     {
       "matches": ["*://claude.ai/*"],
-      "js": ["claude_content.js"]
+      "js": ["content_scripts/claude_content.js"]
     },
     {
       "matches": ["*://chat.openai.com/*", "*://chatgpt.com/*", "*://chat.com/*"],
-      "js": ["chatgpt_content.js"]
+      "js": ["content_scripts/chatgpt_content.js"]
     },
     {
       "matches": ["https://gemini.google.com/app/*"],
-      "js": ["gemini_content.js"]
+      "js": ["content_scripts/gemini_content.js"]
     },
     {
       "matches": ["*://www.youtube.com/*"],
-      "js": ["youtube_content.js"],
+      "js": ["content_scripts/youtube_content.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["*://*.reddit.com/*"],
-      "js": ["reddit_content.js"],
+      "js": ["content_scripts/reddit_content.js"],
       "run_at": "document_idle"
     }
   ],

@@ -6,9 +6,10 @@ let promptSubmitted = false;
 // Flag to track if we're currently in the submission process
 let isSubmitting = false;
 
-// Function to check if the page is ready (input OR submit button loaded)
+// Function to check if the page is ready (main content loaded)
 function isPageReady() {
-  const inputSelectors = [
+  // Use a broader set of selectors, similar to findInputArea
+  const selectors = [
     'textarea[placeholder="Ask anything..."]',
     '.rounded-3xl textarea',
     'textarea.resize-none',
@@ -18,33 +19,12 @@ function isPageReady() {
     '.col-start-1.col-end-4 textarea',
     'textarea.overflow-auto'
   ];
-  
-  // Submit button selectors (we check for *any* button, not just enabled)
-  const submitSelectors = [
-    'button[aria-label="Submit"]',
-    'button.bg-super',
-    'button svg path[d="M5 12l14 0"]',
-    'button svg path[d="M13 18l6 -6"]',
-    '.ml-sm button',
-    'button .tabler-icon-arrow-right',
-    'button[type="button"] svg.tabler-icon-arrow-right'
-  ];
-
-  // Check if any input area exists
-  for (const selector of inputSelectors) {
+  for (const selector of selectors) {
     if (document.querySelector(selector)) {
-      return true; // Input found
+      return true; // Found one of the potential input areas
     }
   }
-  
-  // Check if any submit button exists
-  for (const selector of submitSelectors) {
-    if (document.querySelector(selector)) {
-      return true; // Submit button found
-    }
-  }
-  
-  return false; // Neither input nor submit button found
+  return false; // None of the input areas were found
 }
 
 // Listen for messages from the background script
@@ -52,9 +32,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in Perplexity content script:', message);
   
   if (message.action === 'insertPrompt') {
-    // Reset flags for each new request
-    isSubmitting = false;
-    promptSubmitted = false;
+    // If already submitting, log and ignore the message to prevent duplicates
+    if (isSubmitting || promptSubmitted) {
+      console.log('Submission already in progress or completed, ignoring message listener trigger.');
+      sendResponse({ status: 'Submission already handled' });
+      return true;
+    }
+
+    // DO NOT reset flags here, respect the current state
+    // isSubmitting = false; 
+    // promptSubmitted = false;
     
     // If page is ready, process immediately, otherwise wait for it
     if (isPageReady()) {
@@ -73,7 +60,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Function to wait for the page to be ready
-function waitForPageReady(timeout = 20000) {
+function waitForPageReady(timeout = 10000) {
   if (isPageReady()) {
     return Promise.resolve();
   }
@@ -185,6 +172,7 @@ function insertPromptAndSubmit(prompt, title) {
   }
   
   // Set flag that we're in the submission process
+  console.log('Setting isSubmitting = true');
   isSubmitting = true;
   
   console.log('Attempting to insert prompt into Perplexity');
@@ -192,51 +180,61 @@ function insertPromptAndSubmit(prompt, title) {
   // Try to find the input area immediately
   findInputArea()
     .then(inputArea => {
-      console.log('Input area found:', inputArea);
+      console.log('[SUCCESS] Input area found:', inputArea);
       
       // Focus the input area
+      console.log('Focusing input area...');
       inputArea.focus();
       
       // For textarea, we set the value directly
+      console.log('Setting input area value...');
       inputArea.value = prompt;
-      
+      console.log('Input area value set to:', inputArea.value.substring(0, 100) + '...'); // Log first 100 chars
+
       // Dispatch events to trigger UI updates for textarea
+      console.log('Dispatching input/change events...');
       inputArea.dispatchEvent(new Event('input', { bubbles: true }));
       inputArea.dispatchEvent(new Event('change', { bubbles: true }));
       
       // Focus again to ensure the content is recognized
+      console.log('Refocusing input area...');
       inputArea.focus();
       
-      console.log('Content inserted, content length:', inputArea.value.length);
+      console.log('Content insertion steps complete. Waiting before finding button...');
       
-      // Give the UI a moment to update - we'll reduce the wait time since we know it works
-      return new Promise(resolve => setTimeout(() => resolve(), 500));
+      // Give the UI a moment to update
+      return new Promise(resolve => setTimeout(() => resolve(inputArea), 500)); // Pass inputArea for potential use
     })
-    .then(() => {
-      // Look for the enabled submit button - keep checking for a while if not found immediately
+    .then((inputArea) => { // Receive inputArea if needed
+      // Look for the enabled submit button
+      console.log('Looking for submit button...');
       const checkForButton = (attempts = 0, maxAttempts = 10) => {
         return findSubmitButton()
           .then(submitButton => {
-            console.log('Submit button found, clicking:', submitButton);
+            console.log('[SUCCESS] Submit button found, clicking:', submitButton);
             
             // Click the submit button
             submitButton.click();
             
             // Mark as submitted
+            console.log('Setting promptSubmitted = true, isSubmitting = false after click');
             promptSubmitted = true;
             isSubmitting = false;
             
-            // Clear the pending prompt to prevent resubmission when tab is reopened
+            // Clear the pending prompt
+            console.log('Clearing pending prompt from storage after successful submission.');
             chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle']);
             
-            console.log('Prompt submitted to Perplexity');
+            console.log('Prompt submitted to Perplexity successfully.');
           })
           .catch(error => {
+            console.log(`Submit button not found on attempt ${attempts + 1}/${maxAttempts}.`);
             if (attempts < maxAttempts) {
-              console.log(`Button not found yet, attempt ${attempts + 1}/${maxAttempts}...`);
-              return new Promise(resolve => setTimeout(() => resolve(checkForButton(attempts + 1, maxAttempts)), 300)); // Reduced retry interval
+              return new Promise(resolve => setTimeout(() => resolve(checkForButton(attempts + 1, maxAttempts)), 300));
             } else {
-              throw error;
+              console.error('[FAIL] Submit button not found after multiple attempts.');
+              // Pass the original input area to the catch block if needed
+              throw new Error('Submit button timeout'); 
             }
           });
       };
@@ -244,24 +242,28 @@ function insertPromptAndSubmit(prompt, title) {
       return checkForButton();
     })
     .catch(error => {
-      // Reset the submission flag
+      console.error('[ERROR] Caught error in insertPromptAndSubmit main chain:', error.message);
+      // Reset the submission flag regardless of fallback outcome
+      console.log('Setting isSubmitting = false in main catch block.');
       isSubmitting = false;
       
-      console.error('Error in insertPromptAndSubmit:', error.message);
-      
-      // Let's try simulating Enter for textarea
+      // Fallback: Try simulating Enter for textarea
+      console.log('Attempting Enter key fallback...');
       try {
-        console.log('Trying Enter key method');
-        const inputArea = document.querySelector('textarea') || 
-                          document.querySelector('textarea[placeholder="Ask anything..."]');
+        // Reuse the input area if passed, otherwise query again
+        const potentialInputArea = document.querySelector('textarea') || 
+                                 document.querySelector('textarea[placeholder="Ask anything..."]');
         
-        if (inputArea) {
-          // Make sure content is set
-          inputArea.value = prompt;
-          inputArea.dispatchEvent(new Event('input', { bubbles: true }));
+        if (potentialInputArea) {
+          console.log('[FALLBACK] Found input area for fallback:', potentialInputArea);
+          // Ensure content is set (might have failed before)
+          console.log('[FALLBACK] Setting input area value...');
+          potentialInputArea.value = prompt;
+          potentialInputArea.dispatchEvent(new Event('input', { bubbles: true }));
           
           // Focus and simulate Enter
-          inputArea.focus();
+          console.log('[FALLBACK] Focusing and simulating Enter key...');
+          potentialInputArea.focus();
           const enterEvent = new KeyboardEvent('keydown', {
             key: 'Enter',
             code: 'Enter',
@@ -271,24 +273,38 @@ function insertPromptAndSubmit(prompt, title) {
             cancelable: true
           });
           
-          inputArea.dispatchEvent(enterEvent);
-          console.log('Enter key simulated');
+          potentialInputArea.dispatchEvent(enterEvent);
+          console.log('[FALLBACK SUCCESS] Enter key simulated.');
           
-          // Mark as submitted
+          // Mark as submitted and reset flags
+          console.log('[FALLBACK] Setting promptSubmitted = true, isSubmitting = false after fallback success');
           promptSubmitted = true;
+          isSubmitting = false; // Ensure reset here
           
-          // Clear the pending prompt to prevent resubmission when tab is reopened
+          // Clear the pending prompt
+          console.log('[FALLBACK] Clearing pending prompt from storage after fallback success.');
           chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle']);
+        } else {
+          console.error('[FALLBACK FAIL] Could not find input area for fallback.');
+          // Ensure flag is reset
+          isSubmitting = false;
         }
       } catch (e) {
-        console.error('Enter key fallback failed:', e);
+        console.error('[FALLBACK FAIL] Error during Enter key fallback:', e);
+        // Ensure flag is reset
+        isSubmitting = false;
       }
     });
 }
 
 // Auto-check for pending prompts when the page loads
 function checkForPendingPrompts() {
-  // Only check if not already submitting
+  // Reset flags at the beginning of the check to ensure a clean state for this page load
+  console.log('Resetting isSubmitting and promptSubmitted flags in checkForPendingPrompts');
+  isSubmitting = false;
+  promptSubmitted = false;
+  
+  // Only check if not already submitting (redundant now but safe)
   if (isSubmitting || promptSubmitted) {
     return;
   }
@@ -296,26 +312,34 @@ function checkForPendingPrompts() {
   console.log('Checking for pending prompts for Perplexity');
   
   chrome.storage.local.get(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp'], function(result) {
-    const pendingPrompt = result.pendingPerplexityPrompt;
-    const pendingTitle = result.pendingPerplexityTitle;
-    const promptTimestamp = result.perplexityPromptTimestamp || 0;
-
-    if (pendingPrompt) {
-      // Clear the prompt from storage IMMEDIATELY to prevent reprocessing
-      chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp']);
-      
+    if (result.pendingPerplexityPrompt) {
       // Check if the prompt is fresh (created within the last 2 minutes)
       const currentTime = Date.now();
+      const promptTime = result.perplexityPromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
       
-      if (currentTime - promptTimestamp < twoMinutesInMs) {
-        console.log('Found fresh pending prompt for Perplexity, inserting');
-        // Use the retrieved values directly
-        insertPromptAndSubmit(pendingPrompt, pendingTitle);
+      if (currentTime - promptTime < twoMinutesInMs) {
+        console.log('Found fresh pending prompt for Perplexity, processing...');
+        const promptToProcess = result.pendingPerplexityPrompt;
+        const titleToProcess = result.pendingPerplexityTitle;
+        
+        // Set flags immediately before clearing storage and submitting
+        isSubmitting = true;
+        
+        // Clear the prompt from storage BEFORE attempting to submit
+        chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp'], () => {
+          console.log('Cleared pending prompt from storage before processing.');
+          // Now attempt to submit
+          insertPromptAndSubmit(promptToProcess, titleToProcess);
+          // Note: isSubmitting and promptSubmitted are reset inside insertPromptAndSubmit upon completion/error
+        });
       } else {
-        console.log('Found stale pending prompt for Perplexity, ignoring');
-        // No need to remove again, already done above
+        console.log('Found stale pending prompt for Perplexity, ignoring and clearing.');
+        // Clear old prompts to prevent future resubmissions
+        chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp']);
       }
+    } else {
+      // console.log('No pending Perplexity prompt found.'); // Optional: less verbose logging
     }
   });
 }

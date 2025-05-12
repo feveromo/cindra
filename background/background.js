@@ -86,6 +86,9 @@ function sendToSelectedModel(model, prompt, content, title) {
     case 'gemini':
       openGemini(prompt, content, title);
       break;
+    case 'google-learning':
+      openGoogleLearning(prompt, content, title);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title);
   }
@@ -869,6 +872,54 @@ ${cleanedContent}
       
       // Start trying to send the message
       setTimeout(sendMessageWithRetry, 1000);
+    });
+  });
+}
+
+// Function to open Google Learning and pass prompt
+function openGoogleLearning(prompt, content, title) {
+  const cleanedContent = cleanupContentFormatting(content);
+  const combinedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
+  const targetUrl = 'https://learning.google.com/experiments/learn-about'; // Ensure no trailing slash for consistency with manifest match
+
+  // Store the prompt for the content script to pick up
+  chrome.storage.local.set({
+    pendingGoogleLearningPrompt: combinedPrompt,
+    googleLearningPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingGoogleLearningPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for Google Learning.');
+      return;
+    }
+    console.log('Google Learning prompt stored. Searching for existing tab or creating new one.');
+
+    // Check if a Google Learning tab is already open
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // Tab exists, update it and focus
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, (updatedTab) => {
+          // Ensure the tab is fully loaded before trying to send a message
+          // The content script will pick up from storage on load
+          console.log('Focused existing Google Learning tab:', updatedTab.id);
+        });
+      } else {
+        // No tab exists, create a new one
+        chrome.tabs.create({ url: targetUrl }, (newTab) => {
+          console.log('Created new Google Learning tab:', newTab.id);
+          // Content script will pick up from storage on load
+        });
+      }
     });
   });
 } 

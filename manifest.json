@@ -78,6 +78,10 @@
       "matches": ["*://*.reddit.com/*"],
       "js": ["content_scripts/reddit_content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://learning.google.com/experiments/learn-about*"],
+      "js": ["content_scripts/google_learning_content.js"]
     }
   ],
   "web_accessible_resources": [

@@ -104,12 +104,87 @@ function robustClick(element) {
   console.log('Robust click events dispatched on:', element);
 }
 
+// Function to find the send button specifically
+function findSendButton() {
+  const spans = document.querySelectorAll('span');
+  console.log(`Found ${spans.length} span elements on the page`);
+  
+  for (const span of spans) {
+    const text = span.textContent.trim();
+    const fontFamily = span.style.fontFamily;
+    const cursor = span.style.cursor;
+    
+    console.log(`Span text: "${text}", fontFamily: "${fontFamily}", cursor: "${cursor}"`);
+    
+    if (text === 'send' && 
+        fontFamily && 
+        fontFamily.includes('Google Symbols') &&
+        cursor === 'pointer') {
+      console.log('Found matching send button:', span);
+      return span;
+    }
+  }
+  
+  // Fallback: look for any span with "send" text that's clickable
+  for (const span of spans) {
+    const text = span.textContent.trim();
+    if (text === 'send' && (span.style.cursor === 'pointer' || span.onclick || span.getAttribute('role') === 'button')) {
+      console.log('Found fallback send button:', span);
+      return span;
+    }
+  }
+  
+  console.log('No matching send button found');
+  return null;
+}
+
+// Function to wait for the send button with a more specific approach
+function waitForSendButton(timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    const intervalTime = 100;
+    let elapsedTime = 0;
+
+    const interval = setInterval(() => {
+      const sendButton = findSendButton();
+      
+      if (sendButton) {
+        clearInterval(interval);
+        resolve(sendButton);
+      } else {
+        elapsedTime += intervalTime;
+        if (elapsedTime >= timeout) {
+          clearInterval(interval);
+          reject(new Error(`Send button not found after ${timeout}ms`));
+        }
+      }
+    }, intervalTime);
+  });
+}
+
 // Main function to handle inserting prompt and submitting
 async function insertPromptAndSubmit(prompt) {
   try {
     console.log('Looking for input field for Google Learning...');
-    const inputSelector = 'textarea[placeholder="Type or share a file to start..."]';
-    const inputField = await waitForElement(inputSelector);
+    
+    // Debug: Log all textareas on the page
+    const allTextareas = document.querySelectorAll('textarea');
+    console.log(`Found ${allTextareas.length} textarea elements on the page`);
+    allTextareas.forEach((textarea, index) => {
+      console.log(`Textarea ${index}: placeholder="${textarea.placeholder}", aria-label="${textarea.getAttribute('aria-label')}"`);
+    });
+    
+    // Updated selector to match the current interface
+    const inputSelector = 'textarea[placeholder="Ask Learn About"]';
+    let inputField;
+    
+    try {
+      inputField = await waitForElement(inputSelector);
+    } catch (error) {
+      console.log('Input field not found by placeholder, trying aria-label...');
+      const fallbackSelector = 'textarea[aria-label*="Ask"], textarea[aria-label*="Learn"]';
+      inputField = await waitForElement(fallbackSelector);
+    }
+    
     console.log('Input field found:', inputField);
 
     insertTextIntoTextarea(inputField, prompt);
@@ -118,9 +193,8 @@ async function insertPromptAndSubmit(prompt) {
     await new Promise(resolve => setTimeout(resolve, 750)); // Slightly increased delay
 
     console.log('Looking for send button for Google Learning...');
-    // Refined selector: div.K o_84 o_82 o_79 span.N o_89 o_90 o_79 with text "send"
-    const sendButtonSelector = 'div.K.o_84.o_82.o_79 span.N.o_89.o_90.o_79';
-    const sendButton = await waitForElement(sendButtonSelector, 'send');
+    // Use the specific send button finder
+    const sendButton = await waitForSendButton();
     console.log('Send button found and enabled:', sendButton);
 
     robustClick(sendButton); // Use robust click

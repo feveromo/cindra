@@ -29,6 +29,7 @@
     "https://chat.com/*",
     "https://grok.com/*",
     "https://gemini.google.com/app/*",
+    "https://chat.deepseek.com/*",
     "*://*/*"
   ],
   "icons": {
@@ -82,6 +83,10 @@
     {
       "matches": ["https://learning.google.com/experiments/learn-about*"],
       "js": ["content_scripts/google_learning_content.js"]
+    },
+    {
+      "matches": ["https://chat.deepseek.com/*"],
+      "js": ["content_scripts/deepseek_content.js"]
     }
   ],
   "web_accessible_resources": [

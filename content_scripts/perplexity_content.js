@@ -8,16 +8,15 @@ let isSubmitting = false;
 
 // Function to check if the page is ready (main content loaded)
 function isPageReady() {
-  // Use a broader set of selectors, similar to findInputArea
+  // Check for the new contenteditable input field
   const selectors = [
+    '#ask-input',
+    'div[contenteditable="true"][role="textbox"]',
+    'div[data-lexical-editor="true"]',
+    // Fallback selectors for old UI
     'textarea[placeholder="Ask anything..."]',
     '.rounded-3xl textarea',
-    'textarea.resize-none',
-    'textarea[autofocus]',
-    'div.rounded-md textarea',
-    '.grid-rows-1fr-auto textarea',
-    '.col-start-1.col-end-4 textarea',
-    'textarea.overflow-auto'
+    'textarea.resize-none'
   ];
   for (const selector of selectors) {
     if (document.querySelector(selector)) {
@@ -123,17 +122,13 @@ function waitForElement(selectors, timeout = 10000) {
 function findInputArea() {
   console.log('Trying to find Perplexity input area...');
   
-  // List of selectors to try, in order of preference, based on the actual Perplexity HTML
+  // List of selectors to try, in order of preference. The new UI uses a contenteditable div.
   const selectors = [
-    'textarea[placeholder="Ask anything..."]',
-    '.rounded-3xl textarea',
-    'textarea.resize-none',
-    'textarea[autofocus]',
-    'div.rounded-md textarea',
-    // Add more specific selectors based on the new HTML structure
-    '.grid-rows-1fr-auto textarea',
-    '.col-start-1.col-end-4 textarea',
-    'textarea.overflow-auto'
+    '#ask-input', // Specific ID for the contenteditable div
+    'div[contenteditable="true"][role="textbox"]', // More generic selector for the new input
+    'div[data-lexical-editor="true"]', // Another specific attribute of the new input
+    'textarea[placeholder="Ask anything..."]', // Fallback for old UI
+    'textarea.resize-none', // Fallback for old UI
   ];
   
   return waitForElement(selectors);
@@ -143,22 +138,132 @@ function findInputArea() {
 function findSubmitButton() {
   console.log('Trying to find Perplexity submit button...');
   
-  // List of selectors to try, in order of preference, based on the actual Perplexity HTML
-  const selectors = [
-    'button[aria-label="Submit"]:not([disabled])',
-    'button:not([disabled]).bg-super',
-    'button:not([disabled]) svg path[d="M5 12l14 0"]',
-    'button:not([disabled]) svg path[d="M13 18l6 -6"]',
-    // Add more specific selectors based on the new HTML structure
-    '.ml-sm button:not([disabled])',
-    'button:not([disabled]) .tabler-icon-arrow-right',
-    'button[type="button"]:not([disabled]) svg.tabler-icon-arrow-right'
-  ];
+  // Debug: Log all buttons on the page to understand the structure
+  const allButtons = document.querySelectorAll('button');
+  console.log(`Found ${allButtons.length} buttons on the page:`);
+  allButtons.forEach((btn, index) => {
+    console.log(`Button ${index}:`, {
+      text: btn.textContent?.trim(),
+      ariaLabel: btn.getAttribute('aria-label'),
+      dataTestId: btn.getAttribute('data-testid'),
+      className: btn.className,
+      disabled: btn.disabled,
+      type: btn.getAttribute('type')
+    });
+  });
   
-  return waitForElement(selectors);
+  // First, try to find the submit button specifically by data-testid
+  const submitButton = document.querySelector('button[data-testid="submit-button"]');
+  if (submitButton && !submitButton.disabled) {
+    console.log('Found submit button by data-testid');
+    return Promise.resolve(submitButton);
+  }
+  
+  // If no submit button found, look for buttons with "Submit" aria-label (but not "Voice mode")
+  const submitButtons = document.querySelectorAll('button[aria-label="Submit"]');
+  for (const button of submitButtons) {
+    if (!button.disabled && button.getAttribute('aria-label') === 'Submit') {
+      console.log('Found submit button by aria-label="Submit"');
+      return Promise.resolve(button);
+    }
+  }
+  
+  // Look for buttons with arrow-right icon (submit button) but avoid voice button
+  const arrowButtons = document.querySelectorAll('button svg.tabler-icon-arrow-right');
+  for (const svg of arrowButtons) {
+    const button = svg.closest('button');
+    if (button && !button.disabled && button.getAttribute('aria-label') !== 'Voice mode') {
+      console.log('Found submit button by arrow icon (not voice)');
+      return Promise.resolve(button);
+    }
+  }
+  
+  // Fallback: look for any button with bg-super class that's not the voice button
+  const superButtons = document.querySelectorAll('button.bg-super');
+  for (const button of superButtons) {
+    if (!button.disabled && button.getAttribute('aria-label') !== 'Voice mode') {
+      console.log('Found submit button by bg-super class (not voice)');
+      return Promise.resolve(button);
+    }
+  }
+  
+  // If still not found, wait for the submit button to appear
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const timeout = 10000; // 10 seconds
+    
+    const checkInterval = setInterval(() => {
+      // Check for submit button by data-testid first
+      const submitButton = document.querySelector('button[data-testid="submit-button"]');
+      if (submitButton && !submitButton.disabled) {
+        clearInterval(checkInterval);
+        console.log('Found submit button by data-testid (waited)');
+        resolve(submitButton);
+        return;
+      }
+      
+      // Check for submit button by aria-label
+      const submitButtons = document.querySelectorAll('button[aria-label="Submit"]');
+      for (const button of submitButtons) {
+        if (!button.disabled && button.getAttribute('aria-label') === 'Submit') {
+          clearInterval(checkInterval);
+          console.log('Found submit button by aria-label (waited)');
+          resolve(button);
+          return;
+        }
+      }
+      
+      // Check for arrow button that's not voice
+      const arrowButtons = document.querySelectorAll('button svg.tabler-icon-arrow-right');
+      for (const svg of arrowButtons) {
+        const button = svg.closest('button');
+        if (button && !button.disabled && button.getAttribute('aria-label') !== 'Voice mode') {
+          clearInterval(checkInterval);
+          console.log('Found submit button by arrow icon (waited)');
+          resolve(button);
+          return;
+        }
+      }
+      
+      if (Date.now() - startTime > timeout) {
+        clearInterval(checkInterval);
+        reject(new Error('Submit button not found within timeout'));
+      }
+    }, 200); // Check every 200ms
+  });
 }
 
-// Function to insert prompt into the textarea and submit
+// Function to insert text into a contenteditable div
+function insertTextIntoContentEditable(element, text) {
+  console.log('Inserting text into contenteditable element:', element);
+  
+  // Focus the element first
+  element.focus();
+  
+  // Clear any existing content
+  element.innerHTML = '';
+  
+  // Use execCommand to insert text (works well with rich text editors)
+  document.execCommand('insertText', false, text);
+  
+  // If execCommand doesn't work, try direct textContent
+  if (!element.textContent || element.textContent.trim() === '') {
+    element.textContent = text;
+  }
+  
+  // Dispatch events to trigger UI updates
+  element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+  
+  // Focus again to ensure the content is recognized
+  element.focus();
+  
+  // Verify the content was set
+  console.log('Text content after insertion:', element.textContent);
+  console.log('InnerHTML after insertion:', element.innerHTML);
+}
+
+// Function to insert prompt into the input area and submit
 function insertPromptAndSubmit(prompt, title) {
   if (!prompt) {
     console.warn('Received empty prompt, not inserting');
@@ -186,16 +291,23 @@ function insertPromptAndSubmit(prompt, title) {
       console.log('Focusing input area...');
       inputArea.focus();
       
-      // For textarea, we set the value directly
+      // Check if it's a textarea or a contenteditable div and set value accordingly
       console.log('Setting input area value...');
-      inputArea.value = prompt;
-      console.log('Input area value set to:', inputArea.value.substring(0, 100) + '...'); // Log first 100 chars
-
-      // Dispatch events to trigger UI updates for textarea
-      console.log('Dispatching input/change events...');
-      inputArea.dispatchEvent(new Event('input', { bubbles: true }));
-      inputArea.dispatchEvent(new Event('change', { bubbles: true }));
+      if (inputArea.tagName === 'TEXTAREA') {
+        // Handle textarea (old UI)
+        inputArea.value = prompt;
+        inputArea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        inputArea.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        // Handle contenteditable div (new UI)
+        console.log('Input area is contenteditable, using insertTextIntoContentEditable');
+        console.log('Prompt to insert:', prompt);
+        insertTextIntoContentEditable(inputArea, prompt);
+      }
       
+      console.log('Input area value set to:', (inputArea.value || inputArea.textContent || inputArea.innerText).substring(0, 100) + '...');
+      console.log('Input area innerHTML:', inputArea.innerHTML.substring(0, 100) + '...');
+
       // Focus again to ensure the content is recognized
       console.log('Refocusing input area...');
       inputArea.focus();
@@ -203,12 +315,12 @@ function insertPromptAndSubmit(prompt, title) {
       console.log('Content insertion steps complete. Waiting before finding button...');
       
       // Give the UI a moment to update
-      return new Promise(resolve => setTimeout(() => resolve(inputArea), 500)); // Pass inputArea for potential use
+      return new Promise(resolve => setTimeout(() => resolve(inputArea), 2000)); // Increased delay for new UI to show submit button
     })
     .then((inputArea) => { // Receive inputArea if needed
       // Look for the enabled submit button
       console.log('Looking for submit button...');
-      const checkForButton = (attempts = 0, maxAttempts = 10) => {
+      const checkForButton = (attempts = 0, maxAttempts = 15) => {
         return findSubmitButton()
           .then(submitButton => {
             console.log('[SUCCESS] Submit button found, clicking:', submitButton);
@@ -230,7 +342,7 @@ function insertPromptAndSubmit(prompt, title) {
           .catch(error => {
             console.log(`Submit button not found on attempt ${attempts + 1}/${maxAttempts}.`);
             if (attempts < maxAttempts) {
-              return new Promise(resolve => setTimeout(() => resolve(checkForButton(attempts + 1, maxAttempts)), 300));
+              return new Promise(resolve => setTimeout(() => resolve(checkForButton(attempts + 1, maxAttempts)), 500)); // Increased delay
             } else {
               console.error('[FAIL] Submit button not found after multiple attempts.');
               // Pass the original input area to the catch block if needed
@@ -247,19 +359,24 @@ function insertPromptAndSubmit(prompt, title) {
       console.log('Setting isSubmitting = false in main catch block.');
       isSubmitting = false;
       
-      // Fallback: Try simulating Enter for textarea
+      // Fallback: Try simulating Enter for contenteditable
       console.log('Attempting Enter key fallback...');
       try {
         // Reuse the input area if passed, otherwise query again
-        const potentialInputArea = document.querySelector('textarea') || 
+        const potentialInputArea = document.querySelector('#ask-input') || 
+                                 document.querySelector('div[contenteditable="true"]') ||
                                  document.querySelector('textarea[placeholder="Ask anything..."]');
         
         if (potentialInputArea) {
           console.log('[FALLBACK] Found input area for fallback:', potentialInputArea);
           // Ensure content is set (might have failed before)
           console.log('[FALLBACK] Setting input area value...');
-          potentialInputArea.value = prompt;
-          potentialInputArea.dispatchEvent(new Event('input', { bubbles: true }));
+          if (potentialInputArea.tagName === 'TEXTAREA') {
+            potentialInputArea.value = prompt;
+            potentialInputArea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          } else {
+            insertTextIntoContentEditable(potentialInputArea, prompt);
+          }
           
           // Focus and simulate Enter
           console.log('[FALLBACK] Focusing and simulating Enter key...');
@@ -323,8 +440,7 @@ function checkForPendingPrompts() {
         const promptToProcess = result.pendingPerplexityPrompt;
         const titleToProcess = result.pendingPerplexityTitle;
         
-        // Set flags immediately before clearing storage and submitting
-        isSubmitting = true;
+        // DO NOT set flags here; insertPromptAndSubmit will handle it.
         
         // Clear the prompt from storage BEFORE attempting to submit
         chrome.storage.local.remove(['pendingPerplexityPrompt', 'pendingPerplexityTitle', 'perplexityPromptTimestamp'], () => {
@@ -361,4 +477,4 @@ if (isPageReady()) {
     clearInterval(readyCheckInterval);
     checkForPendingPrompts();
   }, 2000);
-} 
+}

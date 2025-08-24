@@ -89,6 +89,9 @@ function sendToSelectedModel(model, prompt, content, title) {
     case 'google-learning':
       openGoogleLearning(prompt, content, title);
       break;
+    case 'deepseek':
+      openDeepseek(prompt, content, title);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title);
   }
@@ -923,3 +926,45 @@ ${cleanedContent}
     });
   });
 } 
+
+// Open DeepSeek with the content
+function openDeepseek(prompt, content, title) {
+  console.log('Opening DeepSeek with prompt and content');
+  const cleanedContent = cleanupContentFormatting(content);
+  const formattedPrompt = `<Task>\n${prompt}\n</Task>\n\n<ContentTitle>\n${title || 'N/A'}\n</ContentTitle>\n\n<Content>\n${cleanedContent}\n</Content>`;
+  const targetUrl = 'https://chat.deepseek.com/';
+
+  chrome.storage.local.set({
+    pendingDeepseekPrompt: formattedPrompt,
+    pendingDeepseekTitle: title,
+    deepseekPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingDeepseekPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for DeepSeek.');
+      return;
+    }
+    console.log('DeepSeek prompt stored. Searching for existing tab or creating new one.');
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
+          console.log('Focused existing DeepSeek tab');
+        });
+      } else {
+        chrome.tabs.create({ url: targetUrl }, async (newTab) => {
+          console.log('Created new DeepSeek tab:', newTab.id);
+          // Try to send message once the tab is (likely) ready; content script will also pick up from storage
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const success = await sendMessageWithRetry(newTab.id, {
+            action: 'insertPrompt',
+            prompt: formattedPrompt,
+            title: title
+          }).catch(() => false);
+          if (!success) {
+            console.log('DeepSeek message will be handled by content script on load');
+          }
+        });
+      }
+    });
+  });
+}

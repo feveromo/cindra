@@ -5,10 +5,8 @@ A powerful browser extension that helps you summarize web content using various 
 ## Features
 
 - **Multi-AI Support**: Works with ChatGPT, Claude, Gemini, Grok, Perplexity, Google AI Studio, and more
-- **Easy Content Selection**: Select any text on a webpage to summarize
 - **Custom Prompts**: Use your own custom prompts for different types of summaries
 - **Clean Interface**: Simple popup interface for quick access
-- **Cross-Platform**: Works on Chrome, Firefox, and other Chromium-based browsers
 
 ## Supported AI Services
 
@@ -35,9 +33,8 @@ A powerful browser extension that helps you summarize web content using various 
 
 2. Open your browser and navigate to the extensions page:
    - **Chrome**: `chrome://extensions/`
-   - **Firefox**: `about:addons`
 
-3. Enable "Developer mode" (Chrome) or "Debug Add-ons" (Firefox)
+3. Enable "Developer mode" (Chrome)
 
 4. Click "Load unpacked" (Chrome)
 
@@ -45,19 +42,19 @@ A powerful browser extension that helps you summarize web content using various 
 
 ## Usage
 
-1. **Select Text**: Highlight any text on a webpage that you want to summarize
-2. **Open Extension**: Click the Cindra Summary extension icon in your browser toolbar
-3. **Choose AI Model**: Select your preferred AI service from the dropdown
-4. **Customize Prompt** (Optional): Modify the default prompt to suit your needs
-5. **Generate Summary**: Click "Summarize" to open the selected AI service with your content
+1. **Open Extension**: Click the Cindra Summary extension icon in your browser toolbar
+2. **Choose AI Model**: Select your preferred AI service from the dropdown
+3. **Customize Prompt** (Optional): Modify the default prompt to suit your needs
+4. **Generate Summary**: Click "Summarize Current Page" or, more conveniently, use the keyboard shortcut (CTRL + X + X) to open the selected AI service with your content and prompt.
 
 ## Configuration
 
 ### Setting Default AI Model
 
-1. Right-click the extension icon and select "Options"
+1. Left-click the extension icon in the toolbar
 2. Choose your preferred AI model from the available options
-3. Your selection will be saved and used as the default
+3. Configure your custom summarization prompt
+4. Your selection will be saved and used as the default
 
 ### Custom Prompts
 

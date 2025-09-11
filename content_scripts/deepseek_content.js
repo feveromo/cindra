@@ -87,23 +87,26 @@ async function insertPromptAndSubmit(prompt) {
     console.log('DeepSeek: Starting prompt insertion');
     
     // Wait for the textarea to be available
-    const textarea = await waitForElement('textarea#chat-input');
+    const textarea = await waitForElement('textarea[placeholder="Message DeepSeek"]');
     console.log('DeepSeek: Found textarea');
     
     // Insert the prompt into the textarea
     insertTextIntoTextarea(textarea, prompt);
     console.log('DeepSeek: Inserted text into textarea');
-    
-    // Wait a bit for the UI to update and enable the submit button
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Look for the submit button (the one that's not disabled)
-    const submitButton = await waitForElement('div[role="button"][aria-disabled="false"]');
-    console.log('DeepSeek: Found enabled submit button');
-    
-    // Click the submit button
+
+    // Wait for the UI to update and enable the submit button
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Wait for the submit button to become enabled after text insertion
+    const submitButton = await waitForElement('div.bf38813a div[role="button"][aria-disabled="false"]._7436101', 3000);
+    console.log('DeepSeek: Found enabled send button');
+
     robustClick(submitButton);
-    console.log('DeepSeek: Clicked submit button');
+
+    // Simple backup click after a short delay
+    setTimeout(() => {
+      submitButton.click();
+    }, 200);
     
     // Clear the stored prompt to prevent reprocessing
     chrome.storage.local.remove(['pendingDeepseekPrompt', 'deepseekPromptTimestamp'], () => {

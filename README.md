@@ -18,8 +18,9 @@ A powerful browser extension that helps you summarize web content using various 
 - **Google AI Studio** (aistudio.google.com)
 - **DeepSeek** (deepseek.com)
 - **Google Learning** (learning.google.com)
-- **YouTube** (youtube.com)
-- **Reddit** (reddit.com)
+- **GLM** (chat.z.ai)
+- **Kimi** (kimi.com)
+
 
 ## Installation
 

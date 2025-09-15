@@ -31,6 +31,7 @@
     "https://gemini.google.com/app/*",
     "https://chat.deepseek.com/*",
     "https://chat.z.ai/*",
+    "https://www.kimi.com/*",
     "*://*/*"
   ],
   "icons": {
@@ -92,6 +93,10 @@
     {
       "matches": ["https://chat.z.ai/*"],
       "js": ["content_scripts/glm_content.js"]
+    },
+    {
+      "matches": ["https://www.kimi.com/*"],
+      "js": ["content_scripts/kimi_content.js"]
     }
   ],
   "web_accessible_resources": [

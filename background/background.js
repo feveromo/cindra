@@ -95,6 +95,9 @@ function sendToSelectedModel(model, prompt, content, title) {
     case 'glm':
       openGLM(prompt, content, title);
       break;
+    case 'kimi':
+      openKimi(prompt, content, title);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title);
   }
@@ -1011,6 +1014,52 @@ ${cleanedContent}
         // No tab exists, create a new one
         chrome.tabs.create({ url: targetUrl }, (newTab) => {
           console.log('Created new GLM tab:', newTab.id);
+          // Content script will pick up from storage on load
+        });
+      }
+    });
+  });
+}
+
+// Open Kimi with the content
+function openKimi(prompt, content, title) {
+  console.log('Opening Kimi with prompt and content');
+  const cleanedContent = cleanupContentFormatting(content);
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
+  const targetUrl = 'https://www.kimi.com/';
+
+  chrome.storage.local.set({
+    pendingKimiPrompt: formattedPrompt,
+    kimiPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingKimiPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for Kimi.');
+      return;
+    }
+    console.log('Kimi prompt stored. Searching for existing tab or creating new one.');
+    
+    // Check if a Kimi tab is already open
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // Tab exists, update it and focus
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
+          console.log('Focused existing Kimi tab');
+        });
+      } else {
+        // No tab exists, create a new one
+        chrome.tabs.create({ url: targetUrl }, (newTab) => {
+          console.log('Created new Kimi tab:', newTab.id);
           // Content script will pick up from storage on load
         });
       }

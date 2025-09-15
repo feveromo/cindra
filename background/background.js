@@ -92,6 +92,9 @@ function sendToSelectedModel(model, prompt, content, title) {
     case 'deepseek':
       openDeepseek(prompt, content, title);
       break;
+    case 'glm':
+      openGLM(prompt, content, title);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title);
   }
@@ -963,6 +966,52 @@ function openDeepseek(prompt, content, title) {
           if (!success) {
             console.log('DeepSeek message will be handled by content script on load');
           }
+        });
+      }
+    });
+  });
+}
+
+// Open GLM (Z.AI) with the content
+function openGLM(prompt, content, title) {
+  console.log('Opening GLM (Z.AI) with prompt and content');
+  const cleanedContent = cleanupContentFormatting(content);
+  const formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>
+
+<Content>
+${cleanedContent}
+</Content>`;
+  const targetUrl = 'https://chat.z.ai/';
+
+  chrome.storage.local.set({
+    pendingGLMPrompt: formattedPrompt,
+    glmPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingGLMPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for GLM.');
+      return;
+    }
+    console.log('GLM prompt stored. Searching for existing tab or creating new one.');
+    
+    // Check if a GLM tab is already open
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // Tab exists, update it and focus
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
+          console.log('Focused existing GLM tab');
+        });
+      } else {
+        // No tab exists, create a new one
+        chrome.tabs.create({ url: targetUrl }, (newTab) => {
+          console.log('Created new GLM tab:', newTab.id);
+          // Content script will pick up from storage on load
         });
       }
     });

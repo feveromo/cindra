@@ -267,7 +267,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!transcriptData || !transcriptData.content) {
           throw new Error('Could not extract transcript. Please ensure the video has captions available.');
         }
-        sendResponse({ success: true, transcript: transcriptData.content });
+        sendResponse({ 
+          success: true, 
+          transcript: transcriptData.content,
+          channelName: transcriptData.channelName,
+          description: transcriptData.description
+        });
         hasExtracted = true;
       })
       .catch(error => {
@@ -282,6 +287,102 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Helper function to remove timestamps from transcript text
+function removeTimestamps(text) {
+  if (!text) return text;
+  
+  // Remove timestamps in various formats:
+  // [0:00], [00:00], [0:00:00], [00:00:00]
+  // Also remove standalone timestamps like 0:00, 00:00, etc.
+  return text
+    .replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g, '') // Remove [0:00] or [0:00:00] format
+    .replace(/\s+/g, ' ') // Clean up extra spaces
+    .trim();
+}
+
+// Helper function to extract channel name from DOM
+function getChannelName() {
+  try {
+    // Try multiple selectors for channel name (most specific first)
+    const selectors = [
+      // New specific selectors based on actual YouTube DOM structure
+      'ytd-video-owner-renderer #channel-name #text a',
+      '#owner ytd-channel-name yt-formatted-string a',
+      'ytd-video-owner-renderer ytd-channel-name a',
+      '#upload-info ytd-channel-name a',
+      'ytd-channel-name #text a',
+      'ytd-channel-name yt-formatted-string a'
+    ];
+    
+    for (const selector of selectors) {
+      const channelElement = document.querySelector(selector);
+      if (channelElement && channelElement.textContent) {
+        return channelElement.textContent.trim();
+      }
+    }
+    
+    // Scoped fallback: only search within video metadata sections
+    const scopeSelectors = ['#owner', 'ytd-video-owner-renderer', '#above-the-fold'];
+    for (const scopeSelector of scopeSelectors) {
+      const scope = document.querySelector(scopeSelector);
+      if (scope) {
+        const channelLinks = scope.querySelectorAll('a[href*="/@"]');
+        for (const link of channelLinks) {
+          const text = link.textContent.trim();
+          if (text && text.length > 0 && text.length < 100) { // Sanity check
+            return text;
+          }
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting channel name:', error);
+    return null;
+  }
+}
+
+// Helper function to extract video description from DOM
+function getVideoDescription() {
+  try {
+    // Try multiple selectors for description
+    const selectors = [
+      'ytd-text-inline-expander#description-inline-expander yt-attributed-string',
+      '#description-inline-expander yt-attributed-string',
+      'ytd-watch-metadata #description yt-attributed-string',
+      '#description yt-formatted-string'
+    ];
+    
+    for (const selector of selectors) {
+      const descElement = document.querySelector(selector);
+      if (descElement && descElement.textContent) {
+        let description = descElement.textContent.trim();
+        // Clean up the description - remove excessive whitespace
+        description = description.replace(/\s+/g, ' ').trim();
+        if (description.length > 0) {
+          return description;
+        }
+      }
+    }
+    
+    // Fallback: try expanded description section
+    const expandedDesc = document.querySelector('#description-inner #expanded yt-attributed-string');
+    if (expandedDesc && expandedDesc.textContent) {
+      let description = expandedDesc.textContent.trim();
+      description = description.replace(/\s+/g, ' ').trim();
+      if (description.length > 0) {
+        return description;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting video description:', error);
+    return null;
+  }
+}
+
 // Function to get YouTube transcript
 function getYouTubeTranscript() {
   return new Promise(async (resolve) => {
@@ -291,16 +392,24 @@ function getYouTubeTranscript() {
       const url = window.location.href;
       const videoId = new URLSearchParams(window.location.search).get('v');
       
+      // Extract channel name and description
+      const channelName = getChannelName();
+      const videoDescription = getVideoDescription();
+      
       if (!videoId) {
         resolve({
           title,
           url,
+          channelName,
+          description: videoDescription,
           content: 'Could not find video ID. This doesn\'t appear to be a valid YouTube video.'
         });
         return;
       }
       
       console.log('Attempting to extract transcript for video:', videoId);
+      console.log('Channel:', channelName);
+      console.log('Description length:', videoDescription ? videoDescription.length : 0);
       
       // Setup faster extraction with timeout
       const extractionTimeout = 8000; // 8 seconds timeout for the entire process
@@ -493,6 +602,8 @@ function getYouTubeTranscript() {
               title,
               url,
               videoId,
+              channelName,
+              description: videoDescription,
               content: result.content
             });
           } else {
@@ -508,6 +619,8 @@ function getYouTubeTranscript() {
                   title,
                   url,
                   videoId,
+                  channelName,
+                  description: videoDescription,
                   content: result.content
                 });
               } else {
@@ -516,6 +629,8 @@ function getYouTubeTranscript() {
                   title,
                   url,
                   videoId,
+                  channelName,
+                  description: videoDescription,
                   content: 'Could not extract transcript automatically. This video may not have captions available.\n\n' +
                            'To access the transcript manually:\n' +
                            '1. Look for the "..." or "More actions" button below the video\n' +
@@ -533,6 +648,8 @@ function getYouTubeTranscript() {
       resolve({
         title: document.title,
         url: window.location.href,
+        channelName: getChannelName(),
+        description: getVideoDescription(),
         content: `Error extracting transcript: ${error.message}. Please check if this video has captions available.`
       });
     }
@@ -713,11 +830,10 @@ async function getTranscriptContent(videoId, captionTracks) {
                 if (event.segs && event.tStartMs !== undefined) {
                   const text = event.segs.map(seg => seg.utf8).join(' ').trim();
                   if (text) {
-                    const startSec = Math.floor(event.tStartMs / 1000);
-                    const minutes = Math.floor(startSec / 60);
-                    const seconds = startSec % 60;
-                    const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    formattedText += `[${timestamp}] ${text}\n`;
+                    const cleanText = removeTimestamps(text);
+                    if (cleanText) {
+                      formattedText += `${cleanText}\n`;
+                    }
                   }
                 }
               }
@@ -788,11 +904,10 @@ async function getTranscriptContent(videoId, captionTracks) {
                       if (event.segs && event.tStartMs !== undefined) {
                         const text = event.segs.map(seg => seg.utf8).join(' ').trim();
                         if (text) {
-                          const startSec = Math.floor(event.tStartMs / 1000);
-                          const minutes = Math.floor(startSec / 60);
-                          const seconds = startSec % 60;
-                          const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                          formattedText += `[${timestamp}] ${text}\n`;
+                          const cleanText = removeTimestamps(text);
+                          if (cleanText) {
+                            formattedText += `${cleanText}\n`;
+                          }
                         }
                       }
                     }
@@ -860,35 +975,26 @@ function extractTranscriptFromApiResponse(data) {
               let transcriptText = 'Transcript:\n\n';
               let currentParagraph = '';
               let lastEndTime = -1;
-              let paragraphStartTime = -1;
               
               for (const segment of segments) {
+                const cleanText = removeTimestamps(segment.text);
+                if (!cleanText) continue;
+                
                 // Start a new paragraph if this segment is more than 4 seconds after the last one
                 // or if we've accumulated enough text (roughly a sentence)
-                if (paragraphStartTime === -1) {
-                  paragraphStartTime = segment.startTime;
-                }
-                
                 if (lastEndTime !== -1 && segment.startTime - lastEndTime > 4 || 
                    (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-                  // Format timestamp
-                  const startSec = Math.floor(paragraphStartTime);
-                  const minutes = Math.floor(startSec / 60);
-                  const seconds = startSec % 60;
-                  const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                  
-                  // Add the completed paragraph with its timestamp
-                  transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+                  // Add the completed paragraph
+                  transcriptText += `${currentParagraph.trim()}\n\n`;
                   
                   // Start a new paragraph
-                  currentParagraph = segment.text;
-                  paragraphStartTime = segment.startTime;
+                  currentParagraph = cleanText;
                 } else {
                   // Add space if the paragraph already has content
                   if (currentParagraph.length > 0) {
                     currentParagraph += ' ';
                   }
-                  currentParagraph += segment.text;
+                  currentParagraph += cleanText;
                 }
                 
                 lastEndTime = segment.startTime;
@@ -896,11 +1002,7 @@ function extractTranscriptFromApiResponse(data) {
               
               // Add the last paragraph if it exists
               if (currentParagraph.length > 0) {
-                const startSec = Math.floor(paragraphStartTime);
-                const minutes = Math.floor(startSec / 60);
-                const seconds = startSec % 60;
-                const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
+                transcriptText += `${currentParagraph.trim()}\n`;
               }
               
               return transcriptText;
@@ -920,7 +1022,6 @@ function formatTranscriptFromCueGroups(cueGroups) {
   let transcriptText = 'Transcript:\n\n';
   let currentParagraph = '';
   let lastEndTime = -1;
-  let paragraphStartTime = -1;
   
   for (const cueGroup of cueGroups) {
     if (cueGroup.transcriptCueGroupRenderer) {
@@ -933,31 +1034,24 @@ function formatTranscriptFromCueGroups(cueGroups) {
             const startSec = Math.floor(startMs / 1000);
             
             if (text) {
+              const cleanText = removeTimestamps(text);
+              if (!cleanText) continue;
+              
               // Start a new paragraph if this cue is more than 4 seconds after the last one
               // or if we've accumulated enough text (roughly a sentence)
-              if (paragraphStartTime === -1) {
-                paragraphStartTime = startSec;
-              }
-              
               if (lastEndTime !== -1 && startSec - lastEndTime > 4 || 
                  (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-                // Format timestamp as minutes:seconds
-                const minutes = Math.floor(paragraphStartTime / 60);
-                const seconds = paragraphStartTime % 60;
-                const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
-                // Add the completed paragraph with its timestamp
-                transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+                // Add the completed paragraph
+                transcriptText += `${currentParagraph.trim()}\n\n`;
                 
                 // Start a new paragraph
-                currentParagraph = text;
-                paragraphStartTime = startSec;
+                currentParagraph = cleanText;
               } else {
                 // Add space if the paragraph already has content
                 if (currentParagraph.length > 0) {
                   currentParagraph += ' ';
                 }
-                currentParagraph += text;
+                currentParagraph += cleanText;
               }
               
               lastEndTime = startSec;
@@ -970,10 +1064,7 @@ function formatTranscriptFromCueGroups(cueGroups) {
   
   // Add the last paragraph if it exists
   if (currentParagraph.length > 0) {
-    const minutes = Math.floor(paragraphStartTime / 60);
-    const seconds = paragraphStartTime % 60;
-    const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
+    transcriptText += `${currentParagraph.trim()}\n`;
   }
   
   return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
@@ -1013,38 +1104,30 @@ function parseTranscriptXml(xmlText) {
     let transcriptText = 'Transcript:\n\n';
     let currentParagraph = '';
     let lastEndTime = -1;
-    let paragraphStartTime = -1;
     
     for (let i = 0; i < textElements.length; i++) {
       const text = textElements[i].textContent.trim();
       if (text) {
+        const cleanText = removeTimestamps(text);
+        if (!cleanText) continue;
+        
         const startTime = parseFloat(textElements[i].getAttribute('start') || '0');
         
         // Start a new paragraph if this element is more than 4 seconds after the last one
         // or if we've accumulated enough text (roughly a sentence)
-        if (paragraphStartTime === -1) {
-          paragraphStartTime = startTime;
-        }
-        
         if (lastEndTime !== -1 && startTime - lastEndTime > 4 || 
            (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-          // Format timestamp
-          const minutes = Math.floor(paragraphStartTime / 60);
-          const seconds = Math.floor(paragraphStartTime % 60);
-          const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-          
-          // Add the completed paragraph with its timestamp
-          transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n\n`;
+          // Add the completed paragraph
+          transcriptText += `${currentParagraph.trim()}\n\n`;
           
           // Start a new paragraph
-          currentParagraph = text;
-          paragraphStartTime = startTime;
+          currentParagraph = cleanText;
         } else {
           // Add space if the paragraph already has content
           if (currentParagraph.length > 0) {
             currentParagraph += ' ';
           }
-          currentParagraph += text;
+          currentParagraph += cleanText;
         }
         
         lastEndTime = startTime;
@@ -1053,10 +1136,7 @@ function parseTranscriptXml(xmlText) {
     
     // Add the last paragraph if it exists
     if (currentParagraph.length > 0) {
-      const minutes = Math.floor(paragraphStartTime / 60);
-      const seconds = Math.floor(paragraphStartTime % 60);
-      const timestamp = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      transcriptText += `[${timestamp}] ${currentParagraph.trim()}\n`;
+      transcriptText += `${currentParagraph.trim()}\n`;
     }
     
     return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
@@ -1117,89 +1197,75 @@ function getExistingTranscriptFromDOM() {
     
     let transcriptText = 'Transcript:\n\n';
     let currentParagraph = '';
-    let lastTimestamp = '';
-    let paragraphTimestamp = '';
     
     // Try different approaches to extract the text and timestamps
     if (transcriptPanel.querySelector('ytd-transcript-segment-renderer')) {
       // Modern YouTube structure
       Array.from(segments).forEach(item => {
-        const timestamp = item.querySelector('.segment-timestamp, .cue-timestamp, .timestamp')?.textContent?.trim() || '';
         const text = item.querySelector('.segment-text, .cue-text, .text, .subtitle-text')?.textContent?.trim() || '';
         
         if (text) {
+          const cleanText = removeTimestamps(text);
+          if (!cleanText) return;
+          
           // Start a new paragraph if we reached a sentence end or if 
           // this is the first segment we're processing
-          if (paragraphTimestamp === '') {
-            paragraphTimestamp = timestamp;
-          }
-          
           if (currentParagraph.length > 0 && 
              (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
-            transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n\n`;
-            currentParagraph = text;
-            paragraphTimestamp = timestamp;
+            transcriptText += `${currentParagraph.trim()}\n\n`;
+            currentParagraph = cleanText;
           } else {
             // Add space if the paragraph already has content
             if (currentParagraph.length > 0) {
               currentParagraph += ' ';
             }
-            currentParagraph += text;
+            currentParagraph += cleanText;
           }
-          
-          lastTimestamp = timestamp;
         }
       });
     } else {
       // Alternative structure
       Array.from(segments).forEach(item => {
-        // Try to find timestamp and text
-        let timestamp = '';
+        // Try to find text
         let text = '';
         
         // Look for spans that might contain timestamp and text
         const spans = item.querySelectorAll('span');
         if (spans.length >= 2) {
-          timestamp = spans[0].textContent.trim();
           text = spans[1].textContent.trim();
         } else {
           // Otherwise just use the entire content
           text = item.textContent.trim();
           const match = text.match(/^(\d+:\d+)\s+(.+)$/);
           if (match) {
-            timestamp = match[1];
             text = match[2];
           }
         }
         
         if (text) {
+          const cleanText = removeTimestamps(text);
+          if (!cleanText) return;
+          
           // Start a new paragraph if we reached a sentence end or if 
           // this is the first segment we're processing
-          if (paragraphTimestamp === '') {
-            paragraphTimestamp = timestamp;
-          }
-          
           if (currentParagraph.length > 0 && 
              (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
-            transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n\n`;
-            currentParagraph = text;
-            paragraphTimestamp = timestamp;
+            transcriptText += `${currentParagraph.trim()}\n\n`;
+            currentParagraph = cleanText;
           } else {
             // Add space if the paragraph already has content
             if (currentParagraph.length > 0) {
               currentParagraph += ' ';
             }
-            currentParagraph += text;
+            currentParagraph += cleanText;
           }
-          
-          lastTimestamp = timestamp;
         }
       });
     }
     
     // Add the last paragraph if it exists
     if (currentParagraph.length > 0) {
-      transcriptText += `[${paragraphTimestamp}] ${currentParagraph.trim()}\n`;
+      transcriptText += `${currentParagraph.trim()}\n`;
     }
     
     return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content

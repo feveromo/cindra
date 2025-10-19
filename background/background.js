@@ -39,10 +39,17 @@ function handleSummarize(tab, options = {}) {
         if (result[cacheKey]) {
           // We have a cached transcript, use it directly
           const transcriptData = result[cacheKey];
-          const formattedContent = `URL: ${tab.url}\nVideo ID: ${videoId || 'Not available'}\n\n${transcriptData.content}`;
           
-          // Send directly to the selected AI model
-          sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, transcriptData.title);
+          // Send directly to the selected AI model with individual components
+          sendToSelectedModel(
+            config.aiModel, 
+            config.summaryPrompt, 
+            transcriptData.content,
+            transcriptData.title,
+            transcriptData.url,
+            transcriptData.channelName,
+            transcriptData.description
+          );
           return;
         }
         
@@ -69,37 +76,40 @@ function handleSummarize(tab, options = {}) {
 }
 
 // Function to send content to selected AI model
-function sendToSelectedModel(model, prompt, content, title) {
+function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null) {
   switch (model) {
     case 'perplexity':
-      openPerplexity(prompt, content, title);
+      openPerplexity(prompt, content, title, url, channel, description);
       break;
     case 'grok':
-      openGrok(prompt, content, title);
+      openGrok(prompt, content, title, url, channel, description);
       break;
     case 'claude':
-      openClaude(prompt, content, title);
+      openClaude(prompt, content, title, url, channel, description);
       break;
     case 'chatgpt':
-      openChatGPT(prompt, content, title);
+      openChatGPT(prompt, content, title, url, channel, description);
       break;
     case 'gemini':
-      openGemini(prompt, content, title);
+      openGemini(prompt, content, title, url, channel, description);
       break;
     case 'google-learning':
-      openGoogleLearning(prompt, content, title);
+      openGoogleLearning(prompt, content, title, url, channel, description);
       break;
     case 'deepseek':
-      openDeepseek(prompt, content, title);
+      openDeepseek(prompt, content, title, url, channel, description);
       break;
     case 'glm':
-      openGLM(prompt, content, title);
+      openGLM(prompt, content, title, url, channel, description);
       break;
     case 'kimi':
-      openKimi(prompt, content, title);
+      openKimi(prompt, content, title, url, channel, description);
+      break;
+    case 'huggingchat':
+      openHuggingChat(prompt, content, title, url, channel, description);
       break;
     default:
-      openGoogleAIStudio(prompt, content, title);
+      openGoogleAIStudio(prompt, content, title, url, channel, description);
   }
 }
 
@@ -247,6 +257,8 @@ function extractYouTubeTranscript(tab, config) {
       title: tab.title.replace(' - YouTube', ''),
       url: tab.url,
       videoId: videoId,
+      channelName: response.channelName,
+      description: response.description,
       content: response.transcript
     };
     
@@ -274,11 +286,16 @@ function extractYouTubeTranscript(tab, config) {
       isLoading: true
     });
     
-    // Create a formatted content string with the URL included separately
-    const formattedContent = `URL: ${transcriptData.url}\nVideo ID: ${transcriptData.videoId || 'Not available'}\n\n${transcriptData.content}`;
-    
-    // Send to appropriate AI model
-    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, transcriptData.title);
+    // Send to appropriate AI model with individual components
+    sendToSelectedModel(
+      config.aiModel, 
+      config.summaryPrompt, 
+      transcriptData.content,
+      transcriptData.title,
+      transcriptData.url,
+      transcriptData.channelName,
+      transcriptData.description
+    );
     
     // Final status message
     setTimeout(() => {
@@ -299,20 +316,46 @@ function handlePdfExtraction(tab, config) {
 }
 
 // Open Google AI Studio with the content
-function openGoogleAIStudio(prompt, content, title) {
+function openGoogleAIStudio(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Google AI Studio with prompt and content');
   
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -473,20 +516,46 @@ function waitForTab(tabId) {
 }
 
 // Open Perplexity with the content
-function openPerplexity(prompt, content, title) {
+function openPerplexity(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Perplexity with prompt and content');
   
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -510,20 +579,46 @@ ${cleanedContent}
 }
 
 // Open Grok with the content
-function openGrok(prompt, content, title) {
+function openGrok(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Grok with prompt and content');
   
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -562,20 +657,46 @@ ${cleanedContent}
 }
 
 // Open Claude with the content
-function openClaude(prompt, content, title) {
+function openClaude(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Claude with prompt and content');
   
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -614,20 +735,46 @@ ${cleanedContent}
 }
 
 // Open Gemini with the content
-function openGemini(prompt, content, title) {
+function openGemini(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Gemini with prompt and content');
   
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -837,18 +984,44 @@ function openErrorTab(message) {
   }
 }
 
-function openChatGPT(prompt, content, title) {
+function openChatGPT(prompt, content, title, url = null, channel = null, description = null) {
   // Clean up the content formatting
   const cleanedContent = cleanupContentFormatting(content);
   
   // Format with XML tags
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -886,15 +1059,41 @@ ${cleanedContent}
 }
 
 // Function to open Google Learning and pass prompt
-function openGoogleLearning(prompt, content, title) {
+function openGoogleLearning(prompt, content, title, url = null, channel = null, description = null) {
   const cleanedContent = cleanupContentFormatting(content);
-  const combinedPrompt = `<Task>
+  let combinedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title || 'N/A'}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    combinedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    combinedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    combinedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  combinedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -934,10 +1133,46 @@ ${cleanedContent}
 } 
 
 // Open DeepSeek with the content
-function openDeepseek(prompt, content, title) {
+function openDeepseek(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening DeepSeek with prompt and content');
   const cleanedContent = cleanupContentFormatting(content);
-  const formattedPrompt = `<Task>\n${prompt}\n</Task>\n\n<ContentTitle>\n${title || 'N/A'}\n</ContentTitle>\n\n<Content>\n${cleanedContent}\n</Content>`;
+  let formattedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
+
+<Content>
+${cleanedContent}
+</Content>`;
   const targetUrl = 'https://chat.deepseek.com/';
 
   chrome.storage.local.set({
@@ -976,16 +1211,42 @@ function openDeepseek(prompt, content, title) {
 }
 
 // Open GLM (Z.AI) with the content
-function openGLM(prompt, content, title) {
+function openGLM(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening GLM (Z.AI) with prompt and content');
   const cleanedContent = cleanupContentFormatting(content);
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title || 'N/A'}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -1022,16 +1283,42 @@ ${cleanedContent}
 }
 
 // Open Kimi with the content
-function openKimi(prompt, content, title) {
+function openKimi(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Kimi with prompt and content');
   const cleanedContent = cleanupContentFormatting(content);
-  const formattedPrompt = `<Task>
+  let formattedPrompt = `<Task>
 ${prompt}
 </Task>
 
 <ContentTitle>
 ${title || 'N/A'}
-</ContentTitle>
+</ContentTitle>`;
+
+  if (url) {
+    formattedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    formattedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    formattedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  formattedPrompt += `
 
 <Content>
 ${cleanedContent}
@@ -1060,6 +1347,79 @@ ${cleanedContent}
         // No tab exists, create a new one
         chrome.tabs.create({ url: targetUrl }, (newTab) => {
           console.log('Created new Kimi tab:', newTab.id);
+          // Content script will pick up from storage on load
+        });
+      }
+    });
+  });
+}
+
+// Open HuggingChat with the content
+function openHuggingChat(prompt, content, title, url = null, channel = null, description = null) {
+  console.log('Opening HuggingChat with prompt and content');
+  const cleanedContent = cleanupContentFormatting(content);
+  let combinedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>`;
+
+  if (url) {
+    combinedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    combinedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    combinedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  combinedPrompt += `
+
+<Content>
+${cleanedContent}
+</Content>`;
+  const targetUrl = 'https://huggingface.co/chat/';
+
+  // Store the prompt for the content script to pick up
+  chrome.storage.local.set({
+    pendingHuggingChatPrompt: combinedPrompt,
+    huggingChatPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingHuggingChatPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for HuggingChat.');
+      return;
+    }
+    console.log('HuggingChat prompt stored. Searching for existing tab or creating new one.');
+
+    // Check if a HuggingChat tab is already open
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // Tab exists, update it and focus
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, (updatedTab) => {
+          console.log('Focused existing HuggingChat tab:', updatedTab.id);
+        });
+      } else {
+        // No tab exists, create a new one
+        chrome.tabs.create({ url: targetUrl }, (newTab) => {
+          console.log('Created new HuggingChat tab:', newTab.id);
           // Content script will pick up from storage on load
         });
       }

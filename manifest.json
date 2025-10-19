@@ -97,6 +97,10 @@
     {
       "matches": ["https://www.kimi.com/*"],
       "js": ["content_scripts/kimi_content.js"]
+    },
+    {
+      "matches": ["https://huggingface.co/chat/*"],
+      "js": ["content_scripts/huggingchat_content.js"]
     }
   ],
   "web_accessible_resources": [

@@ -20,7 +20,7 @@ A powerful browser extension that helps you summarize web content using various 
 - **Google Learning** (learning.google.com)
 - **GLM** (chat.z.ai)
 - **Kimi** (kimi.com)
-
+- **HuggingChat** (huggingface.co/chat)
 
 ## Installation
 

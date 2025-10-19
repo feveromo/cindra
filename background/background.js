@@ -1,5 +1,46 @@
 // Listen for messages from popup or content script
+// Lightweight in-memory lock for Kimi claim
+let kimiClaimLock = false;
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'claimKimiPrompt') {
+    // Ensure only one claimer succeeds even if multiple content scripts race
+    if (kimiClaimLock) {
+      sendResponse({ success: false, error: 'locked' });
+      return true;
+    }
+    kimiClaimLock = true;
+    chrome.storage.local.get(['pendingKimiPrompt', 'kimiPromptTimestamp'], (state) => {
+      const release = () => { kimiClaimLock = false; };
+      if (chrome.runtime.lastError) {
+        release();
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        return;
+      }
+      const prompt = state.pendingKimiPrompt;
+      const ts = state.kimiPromptTimestamp || 0;
+      const fresh = (Date.now() - ts) < 60000;
+      if (!prompt || !fresh) {
+        // Nothing to claim or stale
+        if (!fresh && ts) {
+          chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
+        }
+        release();
+        sendResponse({ success: false, error: 'none' });
+        return;
+      }
+      // Remove keys to ensure exclusivity
+      chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
+        release();
+        if (chrome.runtime.lastError) {
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ success: true, prompt });
+        }
+      });
+    });
+    return true;
+  }
   if (message.action === 'summarize') {
     if (message.tabId) {
       chrome.tabs.get(message.tabId, (tab) => {
@@ -327,12 +368,14 @@ function openGoogleAIStudio(prompt, content, title, url = null, channel = null, 
 ${prompt}
 </Task>
 
+
 <ContentTitle>
 ${title}
 </ContentTitle>`;
 
   if (url) {
     formattedPrompt += `
+
 
 <URL>
 ${url}
@@ -342,6 +385,7 @@ ${url}
   if (channel) {
     formattedPrompt += `
 
+
 <Channel>
 ${channel}
 </Channel>`;
@@ -350,12 +394,14 @@ ${channel}
   if (description) {
     formattedPrompt += `
 
+
 <Description>
 ${description}
 </Description>`;
   }
 
   formattedPrompt += `
+
 
 <Content>
 ${cleanedContent}
@@ -465,56 +511,6 @@ function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
   });
 }
 
-// Function to ensure content script is loaded
-async function ensureContentScriptLoaded(tabId) {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const isYouTube = tab.url.includes('youtube.com/watch');
-
-    if (isYouTube) {
-      // For YouTube, check for specific YouTube functions
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          return typeof getYouTubeTranscript === 'function' && 
-                 typeof extractTranscriptFromApiResponse === 'function';
-        }
-      });
-    } else {
-      // For other sites, check for general content script functions
-      await chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          return typeof isPageReady === 'function' && 
-                 typeof insertPromptAndSubmit === 'function';
-        }
-      });
-    }
-    return true;
-  } catch (error) {
-    console.log('Content script not loaded, will retry');
-    return false;
-  }
-}
-
-// Function to wait for tab to be ready
-function waitForTab(tabId) {
-  return new Promise((resolve) => {
-    function checkTab() {
-      chrome.tabs.get(tabId, (tab) => {
-        if (chrome.runtime.lastError || !tab) {
-          setTimeout(checkTab, 100);
-        } else if (tab.status === 'complete') {
-          resolve(tab);
-        } else {
-          setTimeout(checkTab, 100);
-        }
-      });
-    }
-    checkTab();
-  });
-}
-
 // Open Perplexity with the content
 function openPerplexity(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Perplexity with prompt and content');
@@ -527,12 +523,14 @@ function openPerplexity(prompt, content, title, url = null, channel = null, desc
 ${prompt}
 </Task>
 
+
 <ContentTitle>
 ${title}
 </ContentTitle>`;
 
   if (url) {
     formattedPrompt += `
+
 
 <URL>
 ${url}
@@ -542,6 +540,7 @@ ${url}
   if (channel) {
     formattedPrompt += `
 
+
 <Channel>
 ${channel}
 </Channel>`;
@@ -550,12 +549,14 @@ ${channel}
   if (description) {
     formattedPrompt += `
 
+
 <Description>
 ${description}
 </Description>`;
   }
 
   formattedPrompt += `
+
 
 <Content>
 ${cleanedContent}
@@ -746,12 +747,14 @@ function openGemini(prompt, content, title, url = null, channel = null, descript
 ${prompt}
 </Task>
 
+
 <ContentTitle>
 ${title}
 </ContentTitle>`;
 
   if (url) {
     formattedPrompt += `
+
 
 <URL>
 ${url}
@@ -761,6 +764,7 @@ ${url}
   if (channel) {
     formattedPrompt += `
 
+
 <Channel>
 ${channel}
 </Channel>`;
@@ -769,12 +773,14 @@ ${channel}
   if (description) {
     formattedPrompt += `
 
+
 <Description>
 ${description}
 </Description>`;
   }
 
   formattedPrompt += `
+
 
 <Content>
 ${cleanedContent}
@@ -993,12 +999,14 @@ function openChatGPT(prompt, content, title, url = null, channel = null, descrip
 ${prompt}
 </Task>
 
+
 <ContentTitle>
 ${title}
 </ContentTitle>`;
 
   if (url) {
     formattedPrompt += `
+
 
 <URL>
 ${url}
@@ -1008,6 +1016,7 @@ ${url}
   if (channel) {
     formattedPrompt += `
 
+
 <Channel>
 ${channel}
 </Channel>`;
@@ -1016,12 +1025,14 @@ ${channel}
   if (description) {
     formattedPrompt += `
 
+
 <Description>
 ${description}
 </Description>`;
   }
 
   formattedPrompt += `
+
 
 <Content>
 ${cleanedContent}
@@ -1284,9 +1295,27 @@ ${cleanedContent}
 
 // Open Kimi with the content
 function openKimi(prompt, content, title, url = null, channel = null, description = null) {
+  // De-dup guard: prevent double-opens within a short interval
+  if (!openKimi.__lock) {
+    openKimi.__lock = { inFlight: false, ts: 0 };
+  }
+  const now = Date.now();
+  if (openKimi.__lock.inFlight && (now - openKimi.__lock.ts) < 8000) {
+    console.log('openKimi dedup: request suppressed (another open is in flight)');
+    return;
+  }
+  openKimi.__lock.inFlight = true;
+  openKimi.__lock.ts = now;
+
   console.log('Opening Kimi with prompt and content');
   const cleanedContent = cleanupContentFormatting(content);
-  let formattedPrompt = `<Task>
+
+  // If the incoming prompt already appears to be fully wrapped (has a closing </Content>),
+  // avoid re-wrapping to prevent duplicate XML blocks.
+  const alreadyWrapped = typeof prompt === 'string' && prompt.includes('</Content>');
+
+  let formattedPrompt = alreadyWrapped ? prompt : `
+<Task>
 ${prompt}
 </Task>
 
@@ -1294,7 +1323,7 @@ ${prompt}
 ${title || 'N/A'}
 </ContentTitle>`;
 
-  if (url) {
+  if (!alreadyWrapped && url) {
     formattedPrompt += `
 
 <URL>
@@ -1302,7 +1331,7 @@ ${url}
 </URL>`;
   }
 
-  if (channel) {
+  if (!alreadyWrapped && channel) {
     formattedPrompt += `
 
 <Channel>
@@ -1310,7 +1339,7 @@ ${channel}
 </Channel>`;
   }
 
-  if (description) {
+  if (!alreadyWrapped && description) {
     formattedPrompt += `
 
 <Description>
@@ -1318,38 +1347,72 @@ ${description}
 </Description>`;
   }
 
-  formattedPrompt += `
+  if (!alreadyWrapped) {
+    formattedPrompt += `
 
 <Content>
 ${cleanedContent}
 </Content>`;
-  const targetUrl = 'https://www.kimi.com/';
+  }
+  const targetUrl = 'https://kimi.com/';
+  
+  // Build a signature to detect near-duplicate requests
+  const promptSignature = `${title || ''}::${prompt.length}::${cleanedContent.length}`;
 
-  chrome.storage.local.set({
-    pendingKimiPrompt: formattedPrompt,
-    kimiPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingKimiPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for Kimi.');
+  // Check storage-level dedup to handle worker restarts or parallel triggers
+  chrome.storage.local.get(['kimiInFlight', 'kimiInFlightTs', 'kimiLastSignature', 'kimiLastSetAt'], (state) => {
+    const nowTs = Date.now();
+    const inFlight = state.kimiInFlight === true && (nowTs - (state.kimiInFlightTs || 0)) < 15000;
+    const isDuplicate = state.kimiLastSignature === promptSignature && (nowTs - (state.kimiLastSetAt || 0)) < 15000;
+
+    if (inFlight || isDuplicate) {
+      console.log('openKimi storage dedup: suppressed duplicate request', { inFlight, isDuplicate });
+      // Release in-memory lock quickly since we are suppressing
+      setTimeout(() => { openKimi.__lock.inFlight = false; }, 500);
       return;
     }
-    console.log('Kimi prompt stored. Searching for existing tab or creating new one.');
-    
-    // Check if a Kimi tab is already open
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        // Tab exists, update it and focus
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
-          console.log('Focused existing Kimi tab');
-        });
-      } else {
-        // No tab exists, create a new one
-        chrome.tabs.create({ url: targetUrl }, (newTab) => {
-          console.log('Created new Kimi tab:', newTab.id);
-          // Content script will pick up from storage on load
-        });
+
+    // Mark in-flight and store the prompt for the content script
+    chrome.storage.local.set({
+      pendingKimiPrompt: formattedPrompt,
+      kimiPromptTimestamp: nowTs,
+      kimiInFlight: true,
+      kimiInFlightTs: nowTs,
+      kimiLastSignature: promptSignature,
+      kimiLastSetAt: nowTs
+    }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('Error setting pendingKimiPrompt in storage:', chrome.runtime.lastError);
+        openErrorTab('Could not save prompt for Kimi.');
+        openKimi.__lock.inFlight = false;
+        return;
       }
+      console.log('Kimi prompt stored. Searching for existing tab or creating new one.');
+      
+      // Check if a Kimi tab is already open
+      chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+        if (tabs.length > 0) {
+          // Tab exists: reload to base so content script picks prompt from storage
+          chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
+            console.log('Focused and reloaded existing Kimi tab; content script will pick up from storage');
+            // Release locks shortly after focusing/reloading (content script also clears storage lock on success)
+            setTimeout(() => {
+              openKimi.__lock.inFlight = false;
+              chrome.storage.local.set({ kimiInFlight: false });
+            }, 5000);
+          });
+        } else {
+          // No tab exists, create a new one
+          chrome.tabs.create({ url: targetUrl }, (newTab) => {
+            console.log('Created new Kimi tab:', newTab.id);
+            // Content script will pick up from storage on load
+            setTimeout(() => {
+              openKimi.__lock.inFlight = false;
+              chrome.storage.local.set({ kimiInFlight: false });
+            }, 5000);
+          });
+        }
+      });
     });
   });
 }

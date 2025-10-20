@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/feveromo/cindra)
+
 # Cindra Summary - Browser Extension
 
 A powerful browser extension that helps you summarize web content using various AI services. Simply select text on any webpage and get instant summaries from your preferred AI model.

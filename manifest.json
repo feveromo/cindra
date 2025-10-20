@@ -102,6 +102,15 @@
       "matches": ["https://huggingface.co/chat/*"],
       "js": ["content_scripts/huggingchat_content.js"]
     }
+    ,
+    {
+      "matches": [
+        "https://boards.4chan.org/*",
+        "https://boards.4channel.org/*"
+      ],
+      "js": ["content_scripts/4chan_content.js"],
+      "run_at": "document_idle"
+    }
   ],
   "web_accessible_resources": [
     {

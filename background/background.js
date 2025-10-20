@@ -106,6 +106,12 @@ function handleSummarize(tab, options = {}) {
       return;
     }
     
+    // Check if it's a 4chan page
+    if (tab.url.includes('boards.4chan.org') || tab.url.includes('boards.4channel.org')) {
+      extract4chanContent(tab, config);
+      return;
+    }
+    
     // Handle PDF and regular webpages as before
     if (tab.url.toLowerCase().endsWith('.pdf')) {
       handlePdfExtraction(tab, config);
@@ -115,6 +121,33 @@ function handleSummarize(tab, options = {}) {
     extractPageContent(tab, config);
   });
 }
+// Extract 4chan content
+function extract4chanContent(tab, config) {
+  chrome.tabs.sendMessage(tab.id, {
+    action: 'extract4chanContent'
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Error sending message to 4chan content script:', chrome.runtime.lastError);
+      openErrorTab('Could not extract content from 4chan thread.');
+      return;
+    }
+
+    if (!response || !response.success) {
+      openErrorTab(response?.error || 'Could not extract content from 4chan thread.');
+      return;
+    }
+
+    const threadLog = response.content;
+    if (!threadLog || threadLog.trim() === '') {
+      openErrorTab('No content found on the 4chan thread to summarize.');
+      return;
+    }
+
+    // Send to appropriate AI model; title and URL are also present in the log header
+    sendToSelectedModel(config.aiModel, config.summaryPrompt, threadLog, tab.title, tab.url);
+  });
+}
+
 
 // Function to send content to selected AI model
 function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null) {
@@ -176,7 +209,7 @@ function extractPageContent(tab, config) {
     const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
     
     // Send to appropriate AI model based on settings
-    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title);
+  sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title, pageData.url);
   });
 }
 
@@ -361,22 +394,19 @@ function openGoogleAIStudio(prompt, content, title, url = null, channel = null, 
   console.log('Opening Google AI Studio with prompt and content');
   
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  // Prefer thread-preserving cleanup when content looks like ThreadLog
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
 </Task>
-
-
 <ContentTitle>
 ${title}
 </ContentTitle>`;
 
   if (url) {
     formattedPrompt += `
-
-
 <URL>
 ${url}
 </URL>`;
@@ -384,8 +414,6 @@ ${url}
 
   if (channel) {
     formattedPrompt += `
-
-
 <Channel>
 ${channel}
 </Channel>`;
@@ -393,16 +421,12 @@ ${channel}
 
   if (description) {
     formattedPrompt += `
-
-
 <Description>
 ${description}
 </Description>`;
   }
 
   formattedPrompt += `
-
-
 <Content>
 ${cleanedContent}
 </Content>`;
@@ -420,7 +444,7 @@ ${cleanedContent}
       console.log('New tab created for Google AI Studio, tab ID:', newTab.id);
       
       // Wait a moment before first attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 400));
       
       // Try to send the message
       const success = await sendMessageWithRetry(newTab.id, {
@@ -516,7 +540,7 @@ function openPerplexity(prompt, content, title, url = null, channel = null, desc
   console.log('Opening Perplexity with prompt and content');
   
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
@@ -584,7 +608,7 @@ function openGrok(prompt, content, title, url = null, channel = null, descriptio
   console.log('Opening Grok with prompt and content');
   
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
@@ -662,7 +686,7 @@ function openClaude(prompt, content, title, url = null, channel = null, descript
   console.log('Opening Claude with prompt and content');
   
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
@@ -740,7 +764,7 @@ function openGemini(prompt, content, title, url = null, channel = null, descript
   console.log('Opening Gemini with prompt and content');
   
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
@@ -878,6 +902,59 @@ function cleanupContentFormatting(content) {
   return cleaned;
 }
 
+// Cleanup variant that preserves post boundaries (e.g., ThreadLog separators)
+function cleanupContentFormattingThreads(content) {
+  if (!content) return '';
+
+  // Protect URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = [];
+  let protectedContent = content.replace(urlRegex, (match) => {
+    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
+    urls.push(match);
+    return placeholder;
+  });
+
+  // Replace HTML entities
+  let cleaned = protectedContent
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+
+  // Preserve post separators "\n---\n" and single newlines between posts.
+  // Temporarily mark separators and blank-line boundaries
+  cleaned = cleaned
+    .replace(/\n---\n/g, '__POST_SEP__')
+    .replace(/\n\n/g, '__BLANK_LINE__');
+
+  // Within remaining content, collapse newlines and spaces aggressively
+  cleaned = cleaned.replace(/(\r\n|\n|\r)+/g, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ');
+  cleaned = cleaned.replace(/\t+/g, ' ');
+  cleaned = cleaned.replace(/\u00A0/g, ' ');
+  cleaned = cleaned.replace(/\s*([.!?])\s*/g, '$1 ');
+  cleaned = cleaned.replace(/([.!?])\s{2,}/g, '$1 ');
+  cleaned = cleaned.trim();
+
+  // Restore separators and blank lines
+  cleaned = cleaned
+    .replace(/__BLANK_LINE__/g, '\n\n')
+    .replace(/__POST_SEP__/g, '\n---\n');
+
+  // Restore URLs
+  urls.forEach((url, idx) => {
+    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${idx}__`, url);
+  });
+
+  // Escape quotes for embedding
+  cleaned = cleaned.replace(/"/g, '\\"');
+
+  return cleaned;
+}
+
 // Open an error tab with a message
 function openErrorTab(message) {
   try {
@@ -992,7 +1069,7 @@ function openErrorTab(message) {
 
 function openChatGPT(prompt, content, title, url = null, channel = null, description = null) {
   // Clean up the content formatting
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   
   // Format with XML tags
   let formattedPrompt = `<Task>
@@ -1071,7 +1148,7 @@ ${cleanedContent}
 
 // Function to open Google Learning and pass prompt
 function openGoogleLearning(prompt, content, title, url = null, channel = null, description = null) {
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   let combinedPrompt = `<Task>
 ${prompt}
 </Task>
@@ -1146,7 +1223,7 @@ ${cleanedContent}
 // Open DeepSeek with the content
 function openDeepseek(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening DeepSeek with prompt and content');
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   let formattedPrompt = `<Task>
 ${prompt}
 </Task>
@@ -1224,7 +1301,7 @@ ${cleanedContent}
 // Open GLM (Z.AI) with the content
 function openGLM(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening GLM (Z.AI) with prompt and content');
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   let formattedPrompt = `<Task>
 ${prompt}
 </Task>
@@ -1308,7 +1385,7 @@ function openKimi(prompt, content, title, url = null, channel = null, descriptio
   openKimi.__lock.ts = now;
 
   console.log('Opening Kimi with prompt and content');
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
 
   // If the incoming prompt already appears to be fully wrapped (has a closing </Content>),
   // avoid re-wrapping to prevent duplicate XML blocks.
@@ -1420,7 +1497,7 @@ ${cleanedContent}
 // Open HuggingChat with the content
 function openHuggingChat(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening HuggingChat with prompt and content');
-  const cleanedContent = cleanupContentFormatting(content);
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
   let combinedPrompt = `<Task>
 ${prompt}
 </Task>

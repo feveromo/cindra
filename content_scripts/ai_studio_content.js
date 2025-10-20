@@ -130,7 +130,7 @@ function insertPromptAndSubmit(prompt, title) {
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
       
       // Small delay to ensure clearing took effect
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 300));
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 120));
     })
     .then(textarea => {
       // Set the prompt
@@ -155,7 +155,7 @@ function insertPromptAndSubmit(prompt, title) {
       }
       
       // Give the UI time to update
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 1000));
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 400));
     })
     .then(textarea => {
       // Double-check we're not already generating
@@ -223,7 +223,7 @@ function insertPromptAndSubmit(prompt, title) {
               } else {
                 resolve(false);
               }
-            }, 1000)
+            }, 500)
           );
         }
       });
@@ -289,11 +289,11 @@ function insertPromptAndSubmit(prompt, title) {
           if (isGeneratingResponse()) {
             promptSubmitted = true;
             console.log('Prompt submission confirmed via injected script');
-            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp', 'pendingPrompt', 'pendingTitle', 'promptTimestamp']);
           } else {
             console.log('Submission failed even with injected script');
           }
-        }, 1000);
+        }, 700);
       }
     })
     .catch(error => {
@@ -321,23 +321,29 @@ window.addEventListener('load', () => {
       
       console.log('AI Studio page detected, checking for pending prompts');
       
-      chrome.storage.local.get(['pendingPrompt', 'pendingTitle', 'promptTimestamp'], function(result) {
-        if (result.pendingPrompt) {
+      // Prefer new keys but keep legacy fallback
+      chrome.storage.local.get(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp', 'pendingPrompt', 'pendingTitle', 'promptTimestamp'], function(result) {
+        const prompt = result.pendingAIStudioPrompt || result.pendingPrompt;
+        const title = result.pendingAIStudioTitle || result.pendingTitle;
+        const ts = result.aiStudioPromptTimestamp || result.promptTimestamp || 0;
+        if (prompt) {
           // Check if the prompt is fresh (created within the last 5 minutes)
           const currentTime = Date.now();
-          const promptTime = result.promptTimestamp || 0;
           const fiveMinutesInMs = 5 * 60 * 1000;
           
-          if (currentTime - promptTime < fiveMinutesInMs) {
+          if (currentTime - ts < fiveMinutesInMs) {
             console.log('Found fresh pending prompt, inserting');
-            insertPromptAndSubmit(result.pendingPrompt, result.pendingTitle);
+            // Remove before submitting to avoid duplicate on reload
+            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp', 'pendingPrompt', 'pendingTitle', 'promptTimestamp'], () => {
+              insertPromptAndSubmit(prompt, title);
+            });
           } else {
             console.log('Found stale pending prompt, ignoring');
             // Clear old prompts to prevent future resubmissions
-            chrome.storage.local.remove(['pendingPrompt', 'pendingTitle', 'promptTimestamp']);
+            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp', 'pendingPrompt', 'pendingTitle', 'promptTimestamp']);
           }
         }
       });
     }
-  }, 2000);
+  }, 800);
 }); 

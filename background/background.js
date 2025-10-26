@@ -182,6 +182,9 @@ function sendToSelectedModel(model, prompt, content, title, url = null, channel 
     case 'huggingchat':
       openHuggingChat(prompt, content, title, url, channel, description);
       break;
+    case 'qwen':
+      openQwen(prompt, content, title, url, channel, description);
+      break;
     default:
       openGoogleAIStudio(prompt, content, title, url, channel, description);
   }
@@ -1561,6 +1564,86 @@ ${cleanedContent}
         chrome.tabs.create({ url: targetUrl }, (newTab) => {
           console.log('Created new HuggingChat tab:', newTab.id);
           // Content script will pick up from storage on load
+        });
+      }
+    });
+  });
+}
+
+// Open Qwen with the content
+function openQwen(prompt, content, title, url = null, channel = null, description = null) {
+  console.log('Opening Qwen with prompt and content');
+  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
+  let combinedPrompt = `<Task>
+${prompt}
+</Task>
+
+<ContentTitle>
+${title || 'N/A'}
+</ContentTitle>`;
+
+  if (url) {
+    combinedPrompt += `
+
+<URL>
+${url}
+</URL>`;
+  }
+
+  if (channel) {
+    combinedPrompt += `
+
+<Channel>
+${channel}
+</Channel>`;
+  }
+
+  if (description) {
+    combinedPrompt += `
+
+<Description>
+${description}
+</Description>`;
+  }
+
+  combinedPrompt += `
+
+<Content>
+${cleanedContent}
+</Content>`;
+
+  const targetUrl = 'https://chat.qwen.ai/';
+
+  chrome.storage.local.set({
+    pendingQwenPrompt: combinedPrompt,
+    pendingQwenTitle: title,
+    qwenPromptTimestamp: Date.now()
+  }, () => {
+    if (chrome.runtime.lastError) {
+      console.error('Error setting pendingQwenPrompt in storage:', chrome.runtime.lastError);
+      openErrorTab('Could not save prompt for Qwen.');
+      return;
+    }
+    console.log('Qwen prompt stored. Searching for existing tab or creating new one.');
+
+    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
+      if (tabs.length > 0) {
+        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
+          console.log('Focused existing Qwen tab');
+        });
+      } else {
+        chrome.tabs.create({ url: targetUrl }, async (newTab) => {
+          console.log('Created new Qwen tab:', newTab.id);
+          // Attempt immediate message; content script will also pick up from storage
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const success = await sendMessageWithRetry(newTab.id, {
+            action: 'insertPrompt',
+            prompt: combinedPrompt,
+            title: title
+          }).catch(() => false);
+          if (!success) {
+            console.log('Qwen message will be handled by content script on load');
+          }
         });
       }
     });

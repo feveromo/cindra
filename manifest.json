@@ -104,6 +104,11 @@
     }
     ,
     {
+      "matches": ["https://chat.qwen.ai/*"],
+      "js": ["content_scripts/qwen_content.js"]
+    }
+    ,
+    {
       "matches": [
         "https://boards.4chan.org/*",
         "https://boards.4channel.org/*"

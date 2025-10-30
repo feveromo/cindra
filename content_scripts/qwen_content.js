@@ -106,6 +106,69 @@ function robustClick(element) {
   });
 }
 
+function parsePromptSections(prompt) {
+  // Extract the Content section and everything before it
+  const contentStartTag = '<Content>';
+  const contentEndTag = '</Content>';
+  
+  const contentStartIndex = prompt.indexOf(contentStartTag);
+  const contentEndIndex = prompt.indexOf(contentEndTag);
+  
+  if (contentStartIndex === -1 || contentEndIndex === -1) {
+    // If no Content tags found, return original prompt as instruction and empty content
+    console.log('Qwen: No Content tags found in prompt, treating entire prompt as instruction');
+    return {
+      instructionPart: prompt,
+      contentPart: ''
+    };
+  }
+  
+  // Extract content between Content tags
+  const contentPart = prompt.substring(
+    contentStartIndex + contentStartTag.length,
+    contentEndIndex
+  ).trim();
+  
+  // Extract everything before Content tag (Task, ContentTitle, URL, Channel, Description)
+  const instructionPart = prompt.substring(0, contentStartIndex).trim();
+  
+  return {
+    instructionPart,
+    contentPart
+  };
+}
+
+function pasteTextAsFile(element, text) {
+  // Focus the element first
+  element.focus();
+  
+  // Don't clear existing content - we want to append the file to any existing text
+  // The element may already have the instruction text in it
+  
+  // Create a paste event with DataTransfer to trigger file upload for large text
+  try {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', text);
+    const pasteEvent = new ClipboardEvent('paste', {
+      clipboardData: dataTransfer,
+      bubbles: true,
+      cancelable: true
+    });
+    element.dispatchEvent(pasteEvent);
+  } catch (e) {
+    console.log('Qwen: Synthetic paste failed (non-fatal):', e);
+    // Fallback to regular insertion if paste fails
+    if (element.tagName && element.tagName.toLowerCase() === 'textarea') {
+      insertTextIntoTextarea(element, text);
+    } else {
+      insertTextIntoEditableDiv(element, text);
+    }
+  }
+  
+  // Dispatch input event for UI updates
+  element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+}
+
 async function insertPromptAndSubmit(prompt) {
   if (!prompt) throw new Error('No prompt provided');
 
@@ -117,14 +180,46 @@ async function insertPromptAndSubmit(prompt) {
     'div[contenteditable="true"]'
   ]);
 
-  if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
-    insertTextIntoTextarea(input, prompt);
-  } else {
-    insertTextIntoEditableDiv(input, prompt);
-  }
+  // Track if this is a large file upload
+  const isLargeFile = prompt.length > 40960;
 
-  // Allow UI to enable send
-  await new Promise(r => setTimeout(r, 800));
+  // If prompt exceeds 40960 characters, split it and handle separately
+  if (isLargeFile) {
+    console.log('Qwen: Prompt exceeds 40960 characters, splitting prompt for file upload');
+    const { instructionPart, contentPart } = parsePromptSections(prompt);
+    
+    // First, insert the instruction part (Task, ContentTitle, etc.) into the text input
+    if (instructionPart) {
+      console.log('Qwen: Inserting instruction part into text input');
+      if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
+        insertTextIntoTextarea(input, instructionPart);
+      } else {
+        insertTextIntoEditableDiv(input, instructionPart);
+      }
+      // Small delay to ensure instruction text is set
+      await new Promise(r => setTimeout(r, 300));
+    }
+    
+    // Then, paste the content part as a file (this should append/add the file)
+    if (contentPart) {
+      console.log('Qwen: Pasting content part as file');
+      pasteTextAsFile(input, contentPart);
+      // Allow more time for file upload processing
+      await new Promise(r => setTimeout(r, 1500));
+    } else {
+      console.warn('Qwen: No content part found after parsing, proceeding with instruction only');
+      await new Promise(r => setTimeout(r, 800));
+    }
+  } else {
+    // Use regular insertion for smaller prompts
+    if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
+      insertTextIntoTextarea(input, prompt);
+    } else {
+      insertTextIntoEditableDiv(input, prompt);
+    }
+    // Allow UI to enable send
+    await new Promise(r => setTimeout(r, 800));
+  }
 
   // Try to find a send/submit button; otherwise simulate Enter
   const sendButton = await waitForElement([
@@ -134,6 +229,10 @@ async function insertPromptAndSubmit(prompt) {
   ], 1500).catch(() => null);
 
   if (sendButton) {
+    // Add a small delay before clicking submit for large file uploads
+    if (isLargeFile) {
+      await new Promise(r => setTimeout(r, 750));
+    }
     robustClick(sendButton);
     setTimeout(() => sendButton.click(), 150);
   } else {

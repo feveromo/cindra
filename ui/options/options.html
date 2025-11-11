@@ -137,6 +137,41 @@
           </div>
         </div>
       </div>
+
+      <div class="settings-section">
+        <h2>Prompt Management</h2>
+        <p class="section-description">Create and manage your custom prompts for different use cases.</p>
+        
+        <div class="prompts-list" id="prompts-list">
+          <!-- Prompts will be populated here dynamically -->
+        </div>
+        
+        <button id="add-prompt-btn" class="secondary-btn">+ Add New Prompt</button>
+      </div>
+    </div>
+
+    <!-- Modal for adding/editing prompts -->
+    <div id="prompt-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-title">Add New Prompt</h3>
+          <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="prompt-name">Prompt Name:</label>
+            <input type="text" id="prompt-name" placeholder="e.g., General, Financial Analysis, Stock Research" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label for="prompt-text">Prompt Text:</label>
+            <textarea id="prompt-text" rows="6" placeholder="Enter your custom prompt here..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="modal-cancel" class="secondary-btn">Cancel</button>
+          <button id="modal-save" class="primary-btn">Save Prompt</button>
+        </div>
+      </div>
     </div>
 
     <div class="actions">

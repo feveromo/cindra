@@ -37,19 +37,18 @@
     </div>
 
     <div class="section">
-      <h2>Prompt for Summary</h2>
-      <textarea id="summary-prompt" rows="4" placeholder="Enter your custom prompt here...">Summarize the following content in 5-10 bullet points with timestamp if it's transcript.</textarea>
+      <h2>Select Prompt</h2>
+      <div class="model-selection">
+        <label for="prompt-selector">Saved Prompt:</label>
+        <select id="prompt-selector">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
     </div>
 
     <div class="section">
-      <h2>Content Processing</h2>
-      <div class="content-options">
-        <label class="radio-container">
-          <input type="radio" name="content-option" id="entire-content" checked>
-          <span class="radio-label">Entire Content</span>
-          <span class="description">✅ Entire transcripts (comprehensive)</span>
-        </label>
-      </div>
+      <h2>Prompt for Summary</h2>
+      <textarea id="summary-prompt" rows="4" placeholder="Enter your custom prompt here...">Summarize the following content in 5-10 bullet points with timestamp if it's transcript.</textarea>
     </div>
 
     <div class="actions">

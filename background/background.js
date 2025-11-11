@@ -63,10 +63,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function handleSummarize(tab, options = {}) {
   // Get settings
   chrome.storage.sync.get({
-    summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
+    savedPrompts: [],
+    activePromptId: null,
     contentOption: 'entire-content',
     aiModel: 'google-ai-studio'
   }, (settings) => {
+    // Get the active prompt text if not provided in options
+    if (!options.summaryPrompt && settings.activePromptId && settings.savedPrompts.length > 0) {
+      const activePrompt = settings.savedPrompts.find(p => p.id === settings.activePromptId);
+      if (activePrompt) {
+        settings.summaryPrompt = activePrompt.text;
+      } else {
+        settings.summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+      }
+    } else if (!options.summaryPrompt) {
+      settings.summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+    }
+    
     // Merge with options passed in (if any)
     const config = { ...settings, ...options };
     

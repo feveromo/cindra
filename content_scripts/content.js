@@ -93,18 +93,28 @@ function triggerSummarize() {
     return;
   }
 
-  // Get settings just like the popup does
+  // Get settings including active prompt
   try {
     chrome.storage.sync.get({
-      summaryPrompt: 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.',
-      contentOption: 'entire-content',
+      savedPrompts: [],
+      activePromptId: null,
       aiModel: 'google-ai-studio'
     }, (settings) => {
+      // Get the active prompt text
+      let summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+      
+      if (settings.activePromptId && settings.savedPrompts.length > 0) {
+        const activePrompt = settings.savedPrompts.find(p => p.id === settings.activePromptId);
+        if (activePrompt) {
+          summaryPrompt = activePrompt.text;
+        }
+      }
+      
       chrome.runtime.sendMessage({
         action: 'summarize',
         url: window.location.href,
-        summaryPrompt: settings.summaryPrompt,
-        contentOption: settings.contentOption,
+        summaryPrompt: summaryPrompt,
+        contentOption: 'entire-content',
         aiModel: settings.aiModel
       });
     });

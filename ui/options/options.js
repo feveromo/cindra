@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector(`input[name="copy-format"][value="${items.copyFormat}"]`).checked = true;
     document.querySelector(`input[name="floating-button"][value="${items.floatingButton}"]`).checked = true;
     document.querySelector(`input[name="ai-model"][value="${items.aiModel}"]`).checked = true;
-    
+
     // Apply theme
     applyTheme(items.theme);
   });
@@ -36,11 +36,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
   document.getElementById('modal-save').addEventListener('click', savePrompt);
-  
+
   // Close modal when clicking outside
   document.getElementById('prompt-modal').addEventListener('click', (e) => {
     if (e.target.id === 'prompt-modal') {
       closeModal();
+    }
+  });
+
+  // Event delegation for prompt list items (Edit/Delete)
+  document.getElementById('prompts-list').addEventListener('click', (e) => {
+    const target = e.target;
+    const promptItem = target.closest('.prompt-item');
+
+    if (!promptItem) return;
+
+    const promptId = promptItem.dataset.id;
+
+    if (target.classList.contains('edit') || target.closest('.edit')) {
+      editPrompt(promptId);
+    } else if (target.classList.contains('delete') || target.closest('.delete')) {
+      deletePrompt(promptId);
     }
   });
 });
@@ -60,7 +76,7 @@ function saveOptions() {
     const status = document.getElementById('status');
     status.textContent = 'Settings saved.';
     status.style.color = '#34a853';
-    
+
     setTimeout(() => {
       status.textContent = '';
     }, 2000);
@@ -88,12 +104,12 @@ function loadSavedPrompts() {
   chrome.storage.sync.get(['savedPrompts'], (result) => {
     const prompts = result.savedPrompts || [];
     const promptsList = document.getElementById('prompts-list');
-    
+
     if (prompts.length === 0) {
       promptsList.innerHTML = '<div class="empty-state">No saved prompts yet. Click "Add New Prompt" to create one.</div>';
       return;
     }
-    
+
     promptsList.innerHTML = '';
     prompts.forEach(prompt => {
       const promptItem = createPromptElement(prompt);
@@ -107,20 +123,20 @@ function createPromptElement(prompt) {
   const div = document.createElement('div');
   div.className = 'prompt-item';
   div.dataset.id = prompt.id;
-  
+
   const preview = prompt.text.length > 100 ? prompt.text.substring(0, 100) + '...' : prompt.text;
-  
+
   div.innerHTML = `
     <div class="prompt-info">
       <div class="prompt-name">${escapeHtml(prompt.name)}</div>
       <div class="prompt-preview">${escapeHtml(preview)}</div>
     </div>
     <div class="prompt-actions">
-      <button class="icon-btn edit" onclick="editPrompt('${prompt.id}')">Edit</button>
-      <button class="icon-btn delete" onclick="deletePrompt('${prompt.id}')">Delete</button>
+      <button class="icon-btn edit">Edit</button>
+      <button class="icon-btn delete">Delete</button>
     </div>
   `;
-  
+
   return div;
 }
 
@@ -146,7 +162,7 @@ function editPrompt(promptId) {
   chrome.storage.sync.get(['savedPrompts'], (result) => {
     const prompts = result.savedPrompts || [];
     const prompt = prompts.find(p => p.id === promptId);
-    
+
     if (prompt) {
       editingPromptId = promptId;
       document.getElementById('modal-title').textContent = 'Edit Prompt';
@@ -168,22 +184,22 @@ function closeModal() {
 function savePrompt() {
   const name = document.getElementById('prompt-name').value.trim();
   const text = document.getElementById('prompt-text').value.trim();
-  
+
   if (!name) {
     alert('Please enter a prompt name.');
     document.getElementById('prompt-name').focus();
     return;
   }
-  
+
   if (!text) {
     alert('Please enter the prompt text.');
     document.getElementById('prompt-text').focus();
     return;
   }
-  
+
   chrome.storage.sync.get(['savedPrompts', 'activePromptId'], (result) => {
     let prompts = result.savedPrompts || [];
-    
+
     if (editingPromptId) {
       // Update existing prompt
       const index = prompts.findIndex(p => p.id === editingPromptId);
@@ -199,13 +215,13 @@ function savePrompt() {
         text: text
       };
       prompts.push(newPrompt);
-      
+
       // If this is the first prompt, set it as active
       if (prompts.length === 1) {
         chrome.storage.sync.set({ activePromptId: newPrompt.id });
       }
     }
-    
+
     chrome.storage.sync.set({ savedPrompts: prompts }, () => {
       loadSavedPrompts();
       closeModal();
@@ -219,24 +235,24 @@ function deletePrompt(promptId) {
   if (!confirm('Are you sure you want to delete this prompt?')) {
     return;
   }
-  
+
   chrome.storage.sync.get(['savedPrompts', 'activePromptId'], (result) => {
     let prompts = result.savedPrompts || [];
-    
+
     if (prompts.length === 1) {
       alert('You cannot delete the last prompt. You must have at least one prompt.');
       return;
     }
-    
+
     prompts = prompts.filter(p => p.id !== promptId);
-    
+
     const updates = { savedPrompts: prompts };
-    
+
     // If we deleted the active prompt, set a new one
     if (result.activePromptId === promptId) {
       updates.activePromptId = prompts[0].id;
     }
-    
+
     chrome.storage.sync.set(updates, () => {
       loadSavedPrompts();
       showStatus('Prompt deleted successfully!', 'success');
@@ -249,12 +265,8 @@ function showStatus(message, type) {
   const status = document.getElementById('status');
   status.textContent = message;
   status.style.color = type === 'success' ? '#34a853' : '#d93025';
-  
+
   setTimeout(() => {
     status.textContent = '';
   }, 3000);
 }
-
-// Make functions globally accessible for onclick handlers
-window.editPrompt = editPrompt;
-window.deletePrompt = deletePrompt; 

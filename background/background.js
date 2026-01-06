@@ -79,25 +79,25 @@ function handleSummarize(tab, options = {}) {
     } else if (!options.summaryPrompt) {
       settings.summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
     }
-    
+
     // Merge with options passed in (if any)
     const config = { ...settings, ...options };
-    
+
     // Check if it's a YouTube video page
     if (tab.url.includes('youtube.com/watch')) {
       const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
       const cacheKey = `transcript_${videoId}`;
-      
+
       // Try to get cached transcript first
       chrome.storage.local.get([cacheKey], (result) => {
         if (result[cacheKey]) {
           // We have a cached transcript, use it directly
           const transcriptData = result[cacheKey];
-          
+
           // Send directly to the selected AI model with individual components
           sendToSelectedModel(
-            config.aiModel, 
-            config.summaryPrompt, 
+            config.aiModel,
+            config.summaryPrompt,
             transcriptData.content,
             transcriptData.title,
             transcriptData.url,
@@ -106,61 +106,28 @@ function handleSummarize(tab, options = {}) {
           );
           return;
         }
-        
+
         // No cached transcript, extract it normally
         extractYouTubeTranscript(tab, config);
       });
       return;
     }
-    
+
     // Check if it's a Reddit page
     if (tab.url.includes('reddit.com')) {
       extractRedditContent(tab, config);
       return;
     }
-    
-    // Check if it's a 4chan page
-    if (tab.url.includes('boards.4chan.org') || tab.url.includes('boards.4channel.org')) {
-      extract4chanContent(tab, config);
-      return;
-    }
-    
+
     // Handle PDF and regular webpages as before
     if (tab.url.toLowerCase().endsWith('.pdf')) {
       handlePdfExtraction(tab, config);
       return;
     }
-    
+
     extractPageContent(tab, config);
   });
 }
-// Extract 4chan content
-function extract4chanContent(tab, config) {
-  chrome.tabs.sendMessage(tab.id, {
-    action: 'extract4chanContent'
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error('Error sending message to 4chan content script:', chrome.runtime.lastError);
-      openErrorTab('Could not extract content from 4chan thread.');
-      return;
-    }
-
-    if (!response || !response.success) {
-      openErrorTab(response?.error || 'Could not extract content from 4chan thread.');
-      return;
-    }
-
-    const threadLog = response.content;
-    if (!threadLog || threadLog.trim() === '') {
-      openErrorTab('No content found on the 4chan thread to summarize.');
-      return;
-    }
-
-    // Send to appropriate AI model; title and URL are also present in the log header
-    sendToSelectedModel(config.aiModel, config.summaryPrompt, threadLog, tab.title, tab.url);
-  });
-}
-
 
 // Function to send content to selected AI model
 function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null) {
@@ -213,19 +180,19 @@ function extractPageContent(tab, config) {
       openErrorTab('Could not extract content from the page.');
       return;
     }
-    
+
     const pageData = results[0].result;
-    
+
     if (!pageData.content || pageData.content.trim() === '') {
       openErrorTab('No content found on the page to summarize.');
       return;
     }
-    
+
     // Create a formatted content string with the URL included separately
     const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
-    
+
     // Send to appropriate AI model based on settings
-  sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title, pageData.url);
+    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title, pageData.url);
   });
 }
 
@@ -271,39 +238,39 @@ function getPageContent() {
     document.querySelector('.main-content'),
     document.querySelector('#main')
   ].filter(el => el !== null);
-  
+
   let mainContent = '';
-  
+
   // If we found a main content element, use it
   if (possibleMainElements.length > 0) {
     // Use the first main element found
     const mainElement = possibleMainElements[0];
-    
+
     // Remove any extension UI elements first
     const extensionElements = mainElement.querySelectorAll('.cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
     extensionElements.forEach(el => {
       el.remove();
     });
-    
+
     mainContent = mainElement.innerText;
   } else {
     // Fallback to body text, but try to clean it up
     // First create a clone so we don't modify the actual page
     const bodyClone = document.body.cloneNode(true);
-    
+
     // Remove script, style, nav, footer, header, and extension-related elements
     const elementsToRemove = bodyClone.querySelectorAll('script, style, nav, footer, header, .cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
     elementsToRemove.forEach(el => {
       el.remove();
     });
-    
+
     mainContent = bodyClone.innerText;
   }
-  
+
   // Get metadata
   const title = document.title;
   const url = window.location.href;
-  
+
   // Return the formatted content with the raw URL, not in a formatted string
   return { title, url, content: mainContent };
 }
@@ -338,11 +305,11 @@ function extractYouTubeTranscript(tab, config) {
         status: response?.error || 'Could not extract transcript. Please try again.',
         isLoading: false
       });
-      
+
       openErrorTab(response?.error || 'Could not extract transcript from YouTube video.');
       return;
     }
-    
+
     const transcriptData = {
       title: tab.title.replace(' - YouTube', ''),
       url: tab.url,
@@ -351,7 +318,7 @@ function extractYouTubeTranscript(tab, config) {
       description: response.description,
       content: response.transcript
     };
-    
+
     if (!transcriptData.content || transcriptData.content.trim() === '') {
       // Send no transcript status
       chrome.tabs.sendMessage(tab.id, {
@@ -359,34 +326,34 @@ function extractYouTubeTranscript(tab, config) {
         status: 'No transcript found for this video.',
         isLoading: false
       });
-      
+
       openErrorTab('No transcript found for this YouTube video.');
       return;
     }
-    
+
     // Cache the transcript
     chrome.storage.local.set({
       [cacheKey]: transcriptData
     });
-    
+
     // Send success status
     chrome.tabs.sendMessage(tab.id, {
       action: 'transcriptStatus',
       status: 'Transcript extracted successfully! Sending to AI...',
       isLoading: true
     });
-    
+
     // Send to appropriate AI model with individual components
     sendToSelectedModel(
-      config.aiModel, 
-      config.summaryPrompt, 
+      config.aiModel,
+      config.summaryPrompt,
       transcriptData.content,
       transcriptData.title,
       transcriptData.url,
       transcriptData.channelName,
       transcriptData.description
     );
-    
+
     // Final status message
     setTimeout(() => {
       chrome.tabs.sendMessage(tab.id, {
@@ -408,11 +375,11 @@ function handlePdfExtraction(tab, config) {
 // Open Google AI Studio with the content
 function openGoogleAIStudio(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Google AI Studio with prompt and content');
-  
+
   // Clean up the content formatting
   // Prefer thread-preserving cleanup when content looks like ThreadLog
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
@@ -448,7 +415,7 @@ ${cleanedContent}
 </Content>`;
 
   console.log('Formatted prompt length for Google AI Studio:', formattedPrompt.length);
-  
+
   // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingAIStudioPrompt: formattedPrompt,
@@ -458,10 +425,10 @@ ${cleanedContent}
     // Then open Google AI Studio in a new tab
     chrome.tabs.create({ url: 'https://aistudio.google.com/app/prompts/new_chat' }, async (newTab) => {
       console.log('New tab created for Google AI Studio, tab ID:', newTab.id);
-      
+
       // Wait a moment before first attempt
       await new Promise(resolve => setTimeout(resolve, 400));
-      
+
       // Try to send the message
       const success = await sendMessageWithRetry(newTab.id, {
         action: 'insertPrompt',
@@ -471,7 +438,7 @@ ${cleanedContent}
         console.error('Error in message sending:', error);
         return false;
       });
-      
+
       if (!success) {
         console.log('Message will be handled by content script when it loads');
       }
@@ -554,10 +521,10 @@ function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
 // Open Perplexity with the content
 function openPerplexity(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Perplexity with prompt and content');
-  
+
   // Clean up the content formatting
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
@@ -603,7 +570,7 @@ ${cleanedContent}
 </Content>`;
 
   console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
-  
+
   // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingPerplexityPrompt: formattedPrompt,
@@ -613,7 +580,7 @@ ${cleanedContent}
     // Then open Perplexity in a new tab
     const newTab = await chrome.tabs.create({ url: 'https://www.perplexity.ai/' });
     console.log('New tab created for Perplexity, tab ID:', newTab.id);
-    
+
     // No longer need to wait or send message here.
     // The content script's checkForPendingPrompts will handle it.
   });
@@ -622,10 +589,10 @@ ${cleanedContent}
 // Open Grok with the content
 function openGrok(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Grok with prompt and content');
-  
+
   // Clean up the content formatting
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
@@ -666,7 +633,7 @@ ${cleanedContent}
 </Content>`;
 
   console.log('Formatted prompt length for Grok:', formattedPrompt.length);
-  
+
   // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingGrokPrompt: formattedPrompt,
@@ -676,10 +643,10 @@ ${cleanedContent}
     // Then open Grok in a new tab
     chrome.tabs.create({ url: 'https://grok.com/' }, async (newTab) => {
       console.log('New tab created for Grok, tab ID:', newTab.id);
-      
+
       // Wait a moment before first attempt
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Try to send the message
       const success = await sendMessageWithRetry(newTab.id, {
         action: 'insertPrompt',
@@ -689,7 +656,7 @@ ${cleanedContent}
         console.error('Error in message sending:', error);
         return false;
       });
-      
+
       if (!success) {
         console.log('Message will be handled by content script when it loads');
       }
@@ -700,10 +667,10 @@ ${cleanedContent}
 // Open Claude with the content
 function openClaude(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Claude with prompt and content');
-  
+
   // Clean up the content formatting
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
@@ -744,7 +711,7 @@ ${cleanedContent}
 </Content>`;
 
   console.log('Formatted prompt length for Claude:', formattedPrompt.length);
-  
+
   // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingClaudePrompt: formattedPrompt,
@@ -754,10 +721,10 @@ ${cleanedContent}
     // Then open Claude in a new tab
     chrome.tabs.create({ url: 'https://claude.ai/' }, async (newTab) => {
       console.log('New tab created for Claude, tab ID:', newTab.id);
-      
+
       // Wait a moment before first attempt
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Try to send the message
       const success = await sendMessageWithRetry(newTab.id, {
         action: 'insertPrompt',
@@ -767,7 +734,7 @@ ${cleanedContent}
         console.error('Error in message sending:', error);
         return false;
       });
-      
+
       if (!success) {
         console.log('Message will be handled by content script when it loads');
       }
@@ -778,15 +745,14 @@ ${cleanedContent}
 // Open Gemini with the content
 function openGemini(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Gemini with prompt and content');
-  
+
   // Clean up the content formatting
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
 </Task>
-
 
 <ContentTitle>
 ${title}
@@ -794,7 +760,6 @@ ${title}
 
   if (url) {
     formattedPrompt += `
-
 
 <URL>
 ${url}
@@ -804,7 +769,6 @@ ${url}
   if (channel) {
     formattedPrompt += `
 
-
 <Channel>
 ${channel}
 </Channel>`;
@@ -813,7 +777,6 @@ ${channel}
   if (description) {
     formattedPrompt += `
 
-
 <Description>
 ${description}
 </Description>`;
@@ -821,13 +784,12 @@ ${description}
 
   formattedPrompt += `
 
-
 <Content>
 ${cleanedContent}
 </Content>`;
 
   console.log('Formatted prompt length for Gemini:', formattedPrompt.length);
-  
+
   // Store the prompt in local storage first
   chrome.storage.local.set({
     pendingGeminiPrompt: formattedPrompt,
@@ -837,10 +799,10 @@ ${cleanedContent}
     // Then open Gemini in a new tab
     chrome.tabs.create({ url: 'https://gemini.google.com/app' }, async (newTab) => {
       console.log('New tab created for Gemini, tab ID:', newTab.id);
-      
+
       // Wait a moment before first attempt
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Try to send the message
       const success = await sendMessageWithRetry(newTab.id, {
         action: 'insertPrompt',
@@ -850,7 +812,7 @@ ${cleanedContent}
         console.error('Error in message sending:', error);
         return false;
       });
-      
+
       if (!success) {
         console.log('Message will be handled by content script when it loads');
       }
@@ -861,20 +823,20 @@ ${cleanedContent}
 // Function to clean up content formatting by removing excessive whitespace
 function cleanupContentFormatting(content) {
   if (!content) return '';
-  
+
   // First, find and temporarily replace URLs to protect them
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = [];
-  
+
   let protectedContent = content.replace(urlRegex, (match) => {
     const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
     urls.push(match);
     return placeholder;
   });
-  
+
   // Remove our extension's widget text
   protectedContent = protectedContent.replace(/🤖\s*Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
-  
+
   // Replace common HTML entities with their characters
   let cleaned = protectedContent
     .replace(/&nbsp;/g, ' ')
@@ -883,38 +845,38 @@ function cleanupContentFormatting(content) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
-  
+
   // Replace multiple newlines and line breaks with a single space
   cleaned = cleaned.replace(/(\r\n|\n|\r)+/g, ' ');
-  
+
   // Replace multiple spaces with a single space
   cleaned = cleaned.replace(/\s+/g, ' ');
-  
+
   // Replace multiple tabs with a single space
   cleaned = cleaned.replace(/\t+/g, ' ');
-  
+
   // Remove non-breaking spaces and other invisibles
   cleaned = cleaned.replace(/\u00A0/g, ' ');
-  
+
   // Preserve sentence structure by ensuring period, question mark, and exclamation mark
   // are followed by a single space but not preceded by one
   cleaned = cleaned.replace(/\s*([.!?])\s*/g, '$1 ');
-  
+
   // Fix cases where we might have double spaces after sentence punctuation
   cleaned = cleaned.replace(/([.!?])\s{2,}/g, '$1 ');
-  
+
   // Trim leading and trailing whitespace
   cleaned = cleaned.trim();
-  
+
   // Restore the original URLs
   urls.forEach((url, index) => {
     const placeholder = `__URL_PLACEHOLDER_${index}__`;
     cleaned = cleaned.replace(placeholder, url);
   });
-  
+
   // Escape any double quotes in the content since we're using them in the template string
   cleaned = cleaned.replace(/"/g, '\\"');
-  
+
   return cleaned;
 }
 
@@ -987,7 +949,7 @@ function openErrorTab(message) {
   } catch (error) {
     console.error('Failed to create notification:', error);
   }
-  
+
   try {
     // Second attempt: Use a data URL instead of a Blob URL
     const errorHtml = `
@@ -1046,23 +1008,23 @@ function openErrorTab(message) {
       </body>
       </html>
     `;
-    
+
     // Use data URL instead of creating a Blob
     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml);
-    
+
     // Open the error page in a new tab
     chrome.tabs.create({ url: dataUrl });
   } catch (error) {
     // Third attempt: Fallback to a simple error message
     console.error('Failed to open error tab:', error);
-    
+
     // Fall back to the simplest possible approach
     chrome.tabs.create({ url: 'about:blank' }, (tab) => {
       if (chrome.runtime.lastError) {
         console.error('Failed to create tab:', chrome.runtime.lastError);
         return;
       }
-      
+
       try {
         // Try to execute a script that shows an alert
         chrome.scripting.executeScript({
@@ -1086,7 +1048,7 @@ function openErrorTab(message) {
 function openChatGPT(prompt, content, title, url = null, channel = null, description = null) {
   // Clean up the content formatting
   const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  
+
   // Format with XML tags
   let formattedPrompt = `<Task>
 ${prompt}
@@ -1155,7 +1117,7 @@ ${cleanedContent}
           }
         });
       };
-      
+
       // Start trying to send the message
       setTimeout(sendMessageWithRetry, 1000);
     });
@@ -1234,7 +1196,7 @@ ${cleanedContent}
       }
     });
   });
-} 
+}
 
 // Open DeepSeek with the content
 function openDeepseek(prompt, content, title, url = null, channel = null, description = null) {
@@ -1367,7 +1329,7 @@ ${cleanedContent}
       return;
     }
     console.log('GLM prompt stored. Searching for existing tab or creating new one.');
-    
+
     // Check if a GLM tab is already open
     chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
       if (tabs.length > 0) {
@@ -1448,7 +1410,7 @@ ${cleanedContent}
 </Content>`;
   }
   const targetUrl = 'https://kimi.com/';
-  
+
   // Build a signature to detect near-duplicate requests
   const promptSignature = `${title || ''}::${prompt.length}::${cleanedContent.length}`;
 
@@ -1481,7 +1443,7 @@ ${cleanedContent}
         return;
       }
       console.log('Kimi prompt stored. Searching for existing tab or creating new one.');
-      
+
       // Check if a Kimi tab is already open
       chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
         if (tabs.length > 0) {

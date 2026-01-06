@@ -9,12 +9,12 @@ let isSubmitting = false;
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in Claude content script:', message);
-  
+
   if (message.action === 'insertPrompt') {
     // Reset flags for each new request
     isSubmitting = false;
     promptSubmitted = false;
-    
+
     // Format the prompt to preserve XML tags
     const formattedPrompt = formatPromptForClaude(message.prompt);
     insertPromptAndSubmit(formattedPrompt, message.title);
@@ -38,9 +38,9 @@ function waitForElement(selector, timeout = 10000) {
       console.log(`Element found immediately: ${selector}`);
       return resolve(element);
     }
-    
+
     console.log(`Waiting for element: ${selector}`);
-    
+
     const startTime = Date.now();
     const checkInterval = setInterval(() => {
       const element = document.querySelector(selector);
@@ -50,7 +50,7 @@ function waitForElement(selector, timeout = 10000) {
         resolve(element);
         return;
       }
-      
+
       if (Date.now() - startTime > timeout) {
         clearInterval(checkInterval);
         reject(new Error(`Timeout waiting for element: ${selector}`));
@@ -65,16 +65,16 @@ function insertPromptAndSubmit(prompt, title) {
     console.warn('Received empty prompt, not inserting');
     return;
   }
-  
+
   // If we're already submitting or submitted, don't start again
   if (isSubmitting || promptSubmitted) {
     console.log('Already submitting or submitted, ignoring duplicate call');
     return;
   }
-  
+
   // Set flag that we're in the submission process
   isSubmitting = true;
-  
+
   console.log('Attempting to insert prompt into Claude');
 
   // Try to find the editor div
@@ -85,30 +85,47 @@ function insertPromptAndSubmit(prompt, title) {
   ])
     .then(editor => {
       console.log('Editor found:', editor);
-      
-      // Clear existing content and focus the editor
-      editor.innerHTML = '';
+
+      // Focus the editor first
       editor.focus();
-      
-      // Create a pre element to preserve formatting
-      const pre = document.createElement('pre');
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.style.wordBreak = 'break-word';
-      pre.style.margin = '0';
-      
-      // Create a text node to preserve XML tags
-      const textNode = document.createTextNode(prompt);
-      pre.appendChild(textNode);
-      editor.appendChild(pre);
-      
-      // Dispatch events to trigger UI updates
-      editor.dispatchEvent(new Event('input', { bubbles: true }));
-      editor.dispatchEvent(new Event('change', { bubbles: true }));
-      
+
+      // Clear existing content by selecting all and deleting
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+
+      // Use execCommand to insert text - this properly updates ProseMirror's internal state
+      // Unlike setting innerHTML directly, this triggers the proper input handlers
+      const inserted = document.execCommand('insertText', false, prompt);
+
+      if (!inserted) {
+        // Fallback to clipboard paste if execCommand fails
+        console.log('execCommand failed, trying clipboard paste method');
+
+        // Use DataTransfer to simulate paste
+        const dataTransfer = new DataTransfer();
+        dataTransfer.setData('text/plain', prompt);
+
+        const pasteEvent = new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: dataTransfer
+        });
+
+        editor.dispatchEvent(pasteEvent);
+      }
+
+      // Dispatch additional events to ensure UI updates
+      editor.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: prompt
+      }));
+
       console.log('Content inserted, content length:', editor.textContent.length);
-      
-      // Give the UI a moment to update
-      return editor;
+
+      // Give the UI a moment to update before looking for submit button
+      return new Promise(resolve => setTimeout(() => resolve(editor), 300));
     })
     .then(editor => {
       // Look for the submit button (ensure it's enabled)
@@ -118,35 +135,39 @@ function insertPromptAndSubmit(prompt, title) {
     })
     .then(submitButton => {
       console.log('Submit button found, clicking:', submitButton);
-      
+
       // Click the submit button
       submitButton.click();
-      
+
       // Mark as submitted
       promptSubmitted = true;
       isSubmitting = false;
-      
+
       // Clear the pending prompt to prevent resubmission
       chrome.storage.local.remove(['pendingClaudePrompt', 'pendingClaudeTitle']);
-      
+
       console.log('Prompt submitted to Claude');
     })
     .catch(error => {
       // Reset the submission flag
       isSubmitting = false;
-      
+
       console.error('Error in insertPromptAndSubmit:', error.message);
-      
+
       // Try alternative method - Enter key
       try {
         console.log('Trying Enter key method');
         const editor = document.querySelector('div[contenteditable="true"]');
-        
+
         if (editor) {
-          // Make sure content is set
-          editor.innerHTML = prompt;
-          editor.dispatchEvent(new Event('input', { bubbles: true }));
-          
+          // Focus and clear
+          editor.focus();
+          document.execCommand('selectAll', false, null);
+          document.execCommand('delete', false, null);
+
+          // Use execCommand to properly update ProseMirror state
+          document.execCommand('insertText', false, prompt);
+
           // Focus and simulate Enter
           editor.focus();
           const enterEvent = new KeyboardEvent('keydown', {
@@ -157,16 +178,16 @@ function insertPromptAndSubmit(prompt, title) {
             bubbles: true,
             cancelable: true
           });
-          
+
           editor.dispatchEvent(enterEvent);
           console.log('Enter key simulated');
-          
+
           // Mark as submitted
           promptSubmitted = true;
-          
+
           // Clear the pending prompt
           chrome.storage.local.remove(['pendingClaudePrompt', 'pendingClaudeTitle']);
-          
+
           console.log('Prompt submitted with alternative method');
         } else {
           console.error('Could not find editor. Please submit manually.');
@@ -184,16 +205,16 @@ function checkForPendingPrompts() {
   if (isSubmitting || promptSubmitted) {
     return;
   }
-  
+
   console.log('Checking for pending prompts for Claude');
-  
-  chrome.storage.local.get(['pendingClaudePrompt', 'pendingClaudeTitle', 'claudePromptTimestamp'], function(result) {
+
+  chrome.storage.local.get(['pendingClaudePrompt', 'pendingClaudeTitle', 'claudePromptTimestamp'], function (result) {
     if (result.pendingClaudePrompt) {
       // Check if the prompt is fresh (created within the last 2 minutes)
       const currentTime = Date.now();
       const promptTime = result.claudePromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
-      
+
       if (currentTime - promptTime < twoMinutesInMs) {
         console.log('Found fresh pending prompt for Claude, inserting');
         const formattedPrompt = formatPromptForClaude(result.pendingClaudePrompt);

@@ -45,82 +45,138 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content_scripts/content.js"]
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content_scripts/content.js"
+      ]
     },
     {
-      "matches": ["*://aistudio.google.com/*"],
-      "js": ["content_scripts/ai_studio_content.js"]
+      "matches": [
+        "*://aistudio.google.com/*"
+      ],
+      "js": [
+        "content_scripts/ai_studio_content.js"
+      ]
     },
     {
-      "matches": ["*://*.perplexity.ai/*"],
-      "js": ["content_scripts/perplexity_content.js"]
+      "matches": [
+        "*://*.perplexity.ai/*"
+      ],
+      "js": [
+        "content_scripts/perplexity_content.js"
+      ]
     },
     {
-      "matches": ["*://grok.com/*"],
-      "js": ["content_scripts/grok_content.js"]
+      "matches": [
+        "*://grok.com/*"
+      ],
+      "js": [
+        "content_scripts/grok_content.js"
+      ]
     },
     {
-      "matches": ["*://claude.ai/*"],
-      "js": ["content_scripts/claude_content.js"]
+      "matches": [
+        "*://claude.ai/*"
+      ],
+      "js": [
+        "content_scripts/claude_content.js"
+      ]
     },
     {
-      "matches": ["*://chat.openai.com/*", "*://chatgpt.com/*", "*://chat.com/*"],
-      "js": ["content_scripts/chatgpt_content.js"]
+      "matches": [
+        "*://chat.openai.com/*",
+        "*://chatgpt.com/*",
+        "*://chat.com/*"
+      ],
+      "js": [
+        "content_scripts/chatgpt_content.js"
+      ]
     },
     {
-      "matches": ["https://gemini.google.com/app/*"],
-      "js": ["content_scripts/gemini_content.js"]
+      "matches": [
+        "https://gemini.google.com/app/*"
+      ],
+      "js": [
+        "content_scripts/gemini_content.js"
+      ]
     },
     {
-      "matches": ["*://www.youtube.com/*"],
-      "js": ["content_scripts/youtube_content.js"],
+      "matches": [
+        "*://www.youtube.com/*"
+      ],
+      "js": [
+        "content_scripts/youtube_content.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["*://*.reddit.com/*"],
-      "js": ["content_scripts/reddit_content.js"],
+      "matches": [
+        "*://*.reddit.com/*"
+      ],
+      "js": [
+        "content_scripts/reddit_content.js"
+      ],
       "run_at": "document_idle"
     },
-    {
-      "matches": ["https://learning.google.com/experiments/learn-about*"],
-      "js": ["content_scripts/google_learning_content.js"]
-    },
-    {
-      "matches": ["https://chat.deepseek.com/*"],
-      "js": ["content_scripts/deepseek_content.js"]
-    },
-    {
-      "matches": ["https://chat.z.ai/*"],
-      "js": ["content_scripts/glm_content.js"]
-    },
-    {
-      "matches": ["https://www.kimi.com/*"],
-      "js": ["content_scripts/kimi_content.js"]
-    },
-    {
-      "matches": ["https://huggingface.co/chat/*"],
-      "js": ["content_scripts/huggingchat_content.js"]
-    }
-    ,
-    {
-      "matches": ["https://chat.qwen.ai/*"],
-      "js": ["content_scripts/qwen_content.js"]
-    }
-    ,
     {
       "matches": [
-        "https://boards.4chan.org/*",
-        "https://boards.4channel.org/*"
+        "https://learning.google.com/experiments/learn-about*"
       ],
-      "js": ["content_scripts/4chan_content.js"],
-      "run_at": "document_idle"
+      "js": [
+        "content_scripts/google_learning_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*"
+      ],
+      "js": [
+        "content_scripts/deepseek_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chat.z.ai/*"
+      ],
+      "js": [
+        "content_scripts/glm_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://www.kimi.com/*"
+      ],
+      "js": [
+        "content_scripts/kimi_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://huggingface.co/chat/*"
+      ],
+      "js": [
+        "content_scripts/huggingchat_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chat.qwen.ai/*"
+      ],
+      "js": [
+        "content_scripts/qwen_content.js"
+      ]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["images/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "images/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
-} 
+}

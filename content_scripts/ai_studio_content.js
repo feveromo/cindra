@@ -88,16 +88,16 @@ function insertPromptAndSubmit(prompt, title) {
   
   // Try to find the textarea and submit button using multiple selectors
   const textareaSelectors = [
+    'textarea.textarea',  // Most common selector - try first
     'textarea.textarea.gmat-body-medium',
-    'textarea.textarea',
     'div[contenteditable="true"]',
     '.input-area textarea'
   ];
-  
+
   const findTextarea = async () => {
     for (const selector of textareaSelectors) {
       try {
-        const textarea = await waitForElement(selector, 5000);
+        const textarea = await waitForElement(selector, 1000);  // Reduced timeout
         if (textarea) return textarea;
       } catch (e) {
         console.log(`Textarea not found with selector: ${selector}`);
@@ -128,9 +128,9 @@ function insertPromptAndSubmit(prompt, title) {
       }
       
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      
+
       // Small delay to ensure clearing took effect
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 120));
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 50));
     })
     .then(textarea => {
       // Set the prompt
@@ -148,14 +148,14 @@ function insertPromptAndSubmit(prompt, title) {
       
       // Focus on the textarea
       textarea.focus();
-      
+
       // Set the document title for reference
       if (title) {
         document.title = `Summary: ${title} - Google AI Studio`;
       }
-      
+
       // Give the UI time to update
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 400));
+      return new Promise(resolve => setTimeout(() => resolve(textarea), 100));
     })
     .then(textarea => {
       // Double-check we're not already generating
@@ -215,7 +215,7 @@ function insertPromptAndSubmit(prompt, title) {
           console.log('Ctrl+Enter shortcut sent');
           
           // Give a slight delay to check if it worked
-          return new Promise(resolve => 
+          return new Promise(resolve =>
             setTimeout(() => {
               if (isGeneratingResponse()) {
                 promptSubmitted = true;
@@ -223,7 +223,7 @@ function insertPromptAndSubmit(prompt, title) {
               } else {
                 resolve(false);
               }
-            }, 500)
+            }, 200)
           );
         }
       });
@@ -284,7 +284,7 @@ function insertPromptAndSubmit(prompt, title) {
         document.body.appendChild(script);
         setTimeout(() => {
           script.remove();
-          
+
           // Check one more time if we're generating
           if (isGeneratingResponse()) {
             promptSubmitted = true;
@@ -293,17 +293,19 @@ function insertPromptAndSubmit(prompt, title) {
           } else {
             console.log('Submission failed even with injected script');
           }
-        }, 700);
+        }, 300);
       }
     })
     .catch(error => {
-      console.error('Error in insertPromptAndSubmit:', error.message);
-      
-      // If already submitted, this is not an error
+      // If already submitted, this is not an error - just log and return
       if (error.message === 'Already submitted' || promptSubmitted || isGeneratingResponse()) {
+        console.log('Submission skipped - already in progress or completed');
         isSubmitting = false;
         return;
       }
+
+      // Only log actual errors
+      console.error('Error in insertPromptAndSubmit:', error.message);
     })
     .finally(() => {
       // Always reset submission flag when done

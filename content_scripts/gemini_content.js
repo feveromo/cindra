@@ -55,54 +55,76 @@ function waitForElement(selector, timeout = 10000) {
 }
 
 // Function to insert text into the contenteditable div
-function insertTextIntoEditableDiv(div, text) {
-  // Ensure the div is focused
+async function insertTextIntoEditableDiv(div, text) {
+  console.log(`Inserting text of length: ${text.length}`);
+
+  // Ensure the div is focused initially
   div.focus();
 
-  // Target the inner paragraph element within the Quill editor
-  // Quill typically uses a <p> tag as the first child for content
-  let p = div.querySelector('p');
+  // For Quill-based editors like Gemini, setting innerHTML or innerText directly
+  // and then dispatching proper events works more reliably than execCommand
 
-  // If no <p> exists, create one (though usually one should be there)
-  if (!p) {
-    div.innerHTML = '<p><br></p>'; // Initialize with a paragraph and a line break
-    p = div.querySelector('p');
+  // Clear and set the content
+  // Use textContent for plain text (preserves newlines when rendered)
+  div.innerHTML = '';
+
+  // Create a document fragment to hold the text with proper line breaks
+  const fragment = document.createDocumentFragment();
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) {
+      fragment.appendChild(document.createElement('br'));
+    }
+    if (lines[i]) {
+      fragment.appendChild(document.createTextNode(lines[i]));
+    }
   }
 
-  // Clear existing content of the paragraph
-  p.innerHTML = ''; 
+  div.appendChild(fragment);
 
-  // Insert the new text directly into the paragraph
-  p.innerText = text;
+  // Remove the ql-blank class if present (indicates empty editor)
+  div.classList.remove('ql-blank');
 
-  // Move the cursor to the end of the inserted text (optional but good practice)
-  const range = document.createRange();
-  const sel = window.getSelection();
-  range.selectNodeContents(p);
-  range.collapse(false); // Collapse to the end
-  sel.removeAllRanges();
-  sel.addRange(range);
+  // Dispatch comprehensive events to notify the Quill editor of changes
+  // Note: InputEvent.data has browser-imposed limits (~32KB), so we don't pass
+  // the full text there. The DOM content is already set via appendChild above.
+  const inputEvent = new InputEvent('input', {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    inputType: 'insertText',
+    data: null  // Avoid browser truncation of large text in data property
+  });
+  div.dispatchEvent(inputEvent);
 
-  // Dispatch input events to trigger any attached listeners on the editor div
+  // Also dispatch a regular input event as fallback
   div.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   div.dispatchEvent(new Event('change', { bubbles: true }));
 
-  // Also dispatch on the paragraph itself, just in case
-  p.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  p.dispatchEvent(new Event('change', { bubbles: true }));
+  // Focus and move cursor to end
+  div.focus();
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(div);
+  range.collapse(false); // collapse to end
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  console.log('Text insertion complete, final div content length:', div.textContent.length);
 }
 
 // Main function to handle inserting prompt and submitting
 async function insertPromptAndSubmit(prompt, title) {
   try {
     console.log('Looking for input field...');
-    // Selector for the input area (contenteditable div)
-    const inputSelector = 'div.ql-editor[contenteditable="true"][data-placeholder="Ask Gemini"]';
+    // Selector for the input area (contenteditable div) - using aria-label for stability
+    const inputSelector = 'div.ql-editor[contenteditable="true"][aria-label="Enter a prompt here"]';
     const inputField = await waitForElement(inputSelector);
     console.log('Input field found:', inputField);
 
     // Insert the prompt text
-    insertTextIntoEditableDiv(inputField, prompt);
+    await insertTextIntoEditableDiv(inputField, prompt);
     console.log('Prompt text inserted.');
 
     // Wait a brief moment for the UI to update (e.g., enable the send button)
@@ -118,7 +140,7 @@ async function insertPromptAndSubmit(prompt, title) {
     // Click the send button
     sendButton.click();
     console.log('Send button clicked.');
-    
+
     // Clear the pending prompt from storage after successful submission
     // Moved clearing primarily to checkPendingPrompt, but keep here as failsafe
     chrome.storage.local.remove(['pendingGeminiPrompt', 'pendingGeminiTitle', 'geminiPromptTimestamp'], () => {
@@ -155,13 +177,14 @@ function checkPendingPrompt() {
       const promptToProcess = result.pendingGeminiPrompt;
       const titleToProcess = result.pendingGeminiTitle;
       const timestamp = result.geminiPromptTimestamp;
-      
+      console.log(`Gemini content script received prompt of length: ${promptToProcess.length}`);
+
       const promptAge = Date.now() - result.geminiPromptTimestamp;
-      
+
       // Check if the prompt is recent (e.g., within the last 60 seconds)
       if (promptAge < 60000) {
         console.log('Found pending Gemini prompt from storage:', result.pendingGeminiTitle);
-        
+
         // Set flag before starting async operations
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
@@ -177,8 +200,8 @@ function checkPendingPrompt() {
               console.error('Error processing pending prompt:', error);
               // isProcessing should be reset by the finally block, but as a safeguard:
               if (isProcessing) {
-                 console.warn('Resetting isProcessing flag in pending prompt catch block.');
-                 isProcessing = false;
+                console.warn('Resetting isProcessing flag in pending prompt catch block.');
+                isProcessing = false;
               }
               // Optional: Consider re-storing the prompt if submission fails critically?
               // chrome.storage.local.set({ pendingGeminiPrompt: promptToProcess, pendingGeminiTitle: titleToProcess, geminiPromptTimestamp: timestamp });

@@ -1,18 +1,13 @@
-// Content script specifically for YouTube
 console.log('YouTube content script loaded');
 
-// Flag to track whether we're already extracting or have extracted
 let isExtracting = false;
 let hasExtracted = false;
 
-// Function to add copy transcript button
 function addCopyTranscriptButton() {
-  // Check if button already exists
   if (document.querySelector('.copy-transcript-button')) {
     return;
   }
 
-  // Create the button
   const button = document.createElement('button');
   button.className = 'copy-transcript-button';
   button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
@@ -36,7 +31,6 @@ function addCopyTranscriptButton() {
     box-sizing: border-box;
   `;
 
-  // Add hover effect
   button.addEventListener('mouseover', () => {
     button.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
     button.style.color = '#ffffff';
@@ -47,37 +41,29 @@ function addCopyTranscriptButton() {
     button.style.color = '#aaaaaa';
   });
 
-  // Add click handler
   button.addEventListener('click', async () => {
     try {
-      // Show loading state
       button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
       button.style.color = '#666666';
       button.style.cursor = 'wait';
 
-      // Get the transcript
       const transcriptData = await getYouTubeTranscript();
-      
+
       if (transcriptData && transcriptData.content) {
-        // Copy to clipboard
         await navigator.clipboard.writeText(transcriptData.content);
-        
-        // Show success state
+
         button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
         button.style.color = '#137333';
-        
-        // Reset after 2 seconds
+
         setTimeout(() => {
           button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
           button.style.color = '#aaaaaa';
           button.style.cursor = 'pointer';
         }, 2000);
       } else {
-        // Show error state
         button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
         button.style.color = '#ea4335';
-        
-        // Reset after 2 seconds
+
         setTimeout(() => {
           button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
           button.style.color = '#aaaaaa';
@@ -85,11 +71,9 @@ function addCopyTranscriptButton() {
         }, 2000);
       }
     } catch (error) {
-      // Show error state
       button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
       button.style.color = '#ea4335';
-      
-      // Reset after 2 seconds
+
       setTimeout(() => {
         button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
         button.style.color = '#aaaaaa';
@@ -98,14 +82,11 @@ function addCopyTranscriptButton() {
     }
   });
 
-  // Based on the HTML structure provided by the user, try multiple insertion points
-  
-  // First attempt: Try to insert after the subscribe button
+  // YouTube shifts the action row often, so try stable insertion points in order.
   const subscribeButton = document.querySelector('#subscribe-button');
   if (subscribeButton) {
     console.log('Found subscribe button, inserting after it');
-    // Check if our button is already a direct sibling
-    if (subscribeButton.nextSibling && subscribeButton.nextSibling.classList && 
+    if (subscribeButton.nextSibling && subscribeButton.nextSibling.classList &&
         subscribeButton.nextSibling.classList.contains('copy-transcript-button')) {
       console.log('Button already exists after subscribe button');
       return;
@@ -113,16 +94,13 @@ function addCopyTranscriptButton() {
     subscribeButton.parentNode.insertBefore(button, subscribeButton.nextSibling);
     return;
   }
-  
-  // Second attempt: Try to insert in #top-row after the subscribe container
+
   const topRow = document.querySelector('#above-the-fold #top-row');
   if (topRow) {
     console.log('Found top-row, looking for subscribe button within');
-    // Find the subscribe button container within top-row
     const subscribeContainer = topRow.querySelector('#subscribe-button');
     if (subscribeContainer) {
-      // Check if our button is already next to subscribe container
-      if (subscribeContainer.nextSibling && subscribeContainer.nextSibling.classList && 
+      if (subscribeContainer.nextSibling && subscribeContainer.nextSibling.classList &&
           subscribeContainer.nextSibling.classList.contains('copy-transcript-button')) {
         console.log('Button already exists after subscribe container');
         return;
@@ -130,14 +108,12 @@ function addCopyTranscriptButton() {
       console.log('Found subscribe container, inserting after it');
       topRow.insertBefore(button, subscribeContainer.nextSibling);
     } else {
-      // Insert at the end of top-row if we can't find the subscribe button
       console.log('No subscribe container found, appending to top-row');
       topRow.appendChild(button);
     }
     return;
   }
 
-  // Third attempt: Try to add it after the title
   console.log('Trying title element fallback');
   const titleElement = document.querySelector('#above-the-fold #title h1');
   if (titleElement) {
@@ -145,26 +121,21 @@ function addCopyTranscriptButton() {
     return;
   }
 
-  // Fourth attempt: Add directly to the above-the-fold container
   console.log('Trying above-the-fold fallback');
   const aboveTheFold = document.querySelector('#above-the-fold');
   if (aboveTheFold) {
-    // Try to insert after title
     const title = aboveTheFold.querySelector('#title');
     if (title) {
       aboveTheFold.insertBefore(button, title.nextSibling);
     } else {
-      // Or just append to above-the-fold
       aboveTheFold.appendChild(button);
     }
     return;
   }
 
-  // Fifth attempt: Add to actions section if everything else fails
   console.log('Trying actions fallback');
   const actionsDiv = document.querySelector('#actions');
   if (actionsDiv) {
-    // Add to the beginning of actions inner
     const actionsInner = actionsDiv.querySelector('#actions-inner');
     if (actionsInner) {
       actionsInner.insertBefore(button, actionsInner.firstChild);
@@ -174,7 +145,6 @@ function addCopyTranscriptButton() {
     return;
   }
 
-  // Last attempt: Try ytd-watch-metadata
   console.log('Trying ytd-watch-metadata fallback');
   const watchMetadata = document.querySelector('ytd-watch-metadata');
   if (watchMetadata) {
@@ -184,91 +154,76 @@ function addCopyTranscriptButton() {
   }
 }
 
-// Function to check if we're on a video page
 function isVideoPage() {
   return window.location.pathname === '/watch' && new URLSearchParams(window.location.search).get('v');
 }
 
-// Make sure we're trying multiple times in case YouTube's UI loads slowly
 function initializeCopyButton() {
   if (isVideoPage()) {
-    // Try immediately when detected as a video page
     addCopyTranscriptButton();
-    
-    // Then try again after short delays to ensure YouTube's UI has fully loaded
+
+    // YouTube renders watch metadata lazily after SPA navigation.
     setTimeout(addCopyTranscriptButton, 1000);
     setTimeout(addCopyTranscriptButton, 3000);
   }
 }
 
-// Watch for changes to video area as YouTube is a dynamic SPA
 function setupMutationObserver() {
-  // Watch for URL changes
   let lastUrl = location.href;
   new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      // Reset and initialize when URL changes
       setTimeout(initializeCopyButton, 1000);
     }
   }).observe(document, { subtree: true, childList: true });
 
-  // Wait for video container to be available in the DOM
   function setupVideoObserver() {
     const videoContainer = document.querySelector('ytd-page-manager') || document.body;
-    
+
     if (!videoContainer) {
-      // If somehow both selectors failed, retry after a short delay
       setTimeout(setupVideoObserver, 500);
       return;
     }
-    
-    // Now we have a valid element to observe
+
     new MutationObserver((mutations) => {
-      // Check if any video player related elements were added
       const shouldTryAddButton = mutations.some(mutation => {
         return Array.from(mutation.addedNodes).some(node => {
-          if (node.nodeName === 'YTD-WATCH-METADATA' || 
-              node.id === 'above-the-fold' || 
+          if (node.nodeName === 'YTD-WATCH-METADATA' ||
+              node.id === 'above-the-fold' ||
               node.id === 'top-row') {
             return true;
           }
           return false;
         });
       });
-      
+
       if (shouldTryAddButton) {
         setTimeout(addCopyTranscriptButton, 500);
       }
     }).observe(videoContainer, { childList: true, subtree: true });
   }
 
-  // Start the setup process
   setupVideoObserver();
 }
 
-// Initialize button when page loads and setup observers
 initializeCopyButton();
 setupMutationObserver();
 
-// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message received in YouTube content script:', message);
-  
+
   if (message.action === 'extractTranscript') {
-    // Reset flags for each new request
     isExtracting = false;
     hasExtracted = false;
-    
-    // Extract transcript
+
     getYouTubeTranscript()
       .then(transcriptData => {
         if (!transcriptData || !transcriptData.content) {
           throw new Error('Could not extract transcript. Please ensure the video has captions available.');
         }
-        sendResponse({ 
-          success: true, 
+        sendResponse({
+          success: true,
           transcript: transcriptData.content,
           channelName: transcriptData.channelName,
           description: transcriptData.description
@@ -282,30 +237,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .finally(() => {
         isExtracting = false;
       });
-    
-    return true; // Keep the message channel open for async response
+
+    return true;
   }
 });
 
-// Helper function to remove timestamps from transcript text
 function removeTimestamps(text) {
   if (!text) return text;
-  
-  // Remove timestamps in various formats:
-  // [0:00], [00:00], [0:00:00], [00:00:00]
-  // Also remove standalone timestamps like 0:00, 00:00, etc.
+
+  // Strip bracketed timestamps and normalize the gaps they leave behind.
   return text
-    .replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g, '') // Remove [0:00] or [0:00:00] format
-    .replace(/\s+/g, ' ') // Clean up extra spaces
+    .replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Helper function to extract channel name from DOM
 function getChannelName() {
   try {
-    // Try multiple selectors for channel name (most specific first)
     const selectors = [
-      // New specific selectors based on actual YouTube DOM structure
       'ytd-video-owner-renderer #channel-name #text a',
       '#owner ytd-channel-name yt-formatted-string a',
       'ytd-video-owner-renderer ytd-channel-name a',
@@ -313,15 +262,15 @@ function getChannelName() {
       'ytd-channel-name #text a',
       'ytd-channel-name yt-formatted-string a'
     ];
-    
+
     for (const selector of selectors) {
       const channelElement = document.querySelector(selector);
       if (channelElement && channelElement.textContent) {
         return channelElement.textContent.trim();
       }
     }
-    
-    // Scoped fallback: only search within video metadata sections
+
+    // Keep the broad handle-link fallback scoped to video metadata.
     const scopeSelectors = ['#owner', 'ytd-video-owner-renderer', '#above-the-fold'];
     for (const scopeSelector of scopeSelectors) {
       const scope = document.querySelector(scopeSelector);
@@ -329,13 +278,13 @@ function getChannelName() {
         const channelLinks = scope.querySelectorAll('a[href*="/@"]');
         for (const link of channelLinks) {
           const text = link.textContent.trim();
-          if (text && text.length > 0 && text.length < 100) { // Sanity check
+          if (text && text.length > 0 && text.length < 100) {
             return text;
           }
         }
       }
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error extracting channel name:', error);
@@ -343,30 +292,26 @@ function getChannelName() {
   }
 }
 
-// Helper function to extract video description from DOM
 function getVideoDescription() {
   try {
-    // Try multiple selectors for description
     const selectors = [
       'ytd-text-inline-expander#description-inline-expander yt-attributed-string',
       '#description-inline-expander yt-attributed-string',
       'ytd-watch-metadata #description yt-attributed-string',
       '#description yt-formatted-string'
     ];
-    
+
     for (const selector of selectors) {
       const descElement = document.querySelector(selector);
       if (descElement && descElement.textContent) {
         let description = descElement.textContent.trim();
-        // Clean up the description - remove excessive whitespace
         description = description.replace(/\s+/g, ' ').trim();
         if (description.length > 0) {
           return description;
         }
       }
     }
-    
-    // Fallback: try expanded description section
+
     const expandedDesc = document.querySelector('#description-inner #expanded yt-attributed-string');
     if (expandedDesc && expandedDesc.textContent) {
       let description = expandedDesc.textContent.trim();
@@ -375,7 +320,7 @@ function getVideoDescription() {
         return description;
       }
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error extracting video description:', error);
@@ -383,19 +328,16 @@ function getVideoDescription() {
   }
 }
 
-// Function to get YouTube transcript
 function getYouTubeTranscript() {
   return new Promise(async (resolve) => {
     try {
-      // Get video title and URL
       const title = document.title.replace(' - YouTube', '');
       const url = window.location.href;
       const videoId = new URLSearchParams(window.location.search).get('v');
-      
-      // Extract channel name and description
+
       const channelName = getChannelName();
       const videoDescription = getVideoDescription();
-      
+
       if (!videoId) {
         resolve({
           title,
@@ -406,15 +348,13 @@ function getYouTubeTranscript() {
         });
         return;
       }
-      
+
       console.log('Attempting to extract transcript for video:', videoId);
       console.log('Channel:', channelName);
       console.log('Description length:', videoDescription ? videoDescription.length : 0);
-      
-      // Setup faster extraction with timeout
-      const extractionTimeout = 8000; // 8 seconds timeout for the entire process
-      
-      // Create a timeout promise
+
+      const extractionTimeout = 8000;
+
       const timeoutPromise = new Promise(resolve => {
         setTimeout(() => {
           resolve({
@@ -423,13 +363,10 @@ function getYouTubeTranscript() {
           });
         }, extractionTimeout);
       });
-      
-      // --- Create promises for each extraction method ---
-      
-      // Method 1: Extract from DOM by simulating user actions (PRIORITIZED)
+
+      // Prefer the visible transcript panel when it can be opened quickly.
       const domMethodPromise = new Promise(async (resolve) => {
         try {
-          // Check if transcript panel is already open
           let transcriptText = getExistingTranscriptFromDOM();
           if (transcriptText) {
             console.log('Transcript panel already open, extracted content');
@@ -439,19 +376,17 @@ function getYouTubeTranscript() {
             });
             return;
           }
-          
-          // Check if transcript button exists
+
           const transcriptButton = findTranscriptButton();
           if (transcriptButton) {
-            // Click the transcript button to open the transcript panel
             console.log('Found transcript button, attempting to open transcript panel');
             transcriptButton.click();
-            
-            // Wait for the transcript panel to open with a shorter timeout
+
+            // YouTube may lazy-load segments after the panel opens.
             let attempts = 0;
-            const maxAttempts = 10;
+            const maxAttempts = 15;
             while (attempts < maxAttempts) {
-              await new Promise(r => setTimeout(r, 300)); // Check every 300ms
+              await new Promise(r => setTimeout(r, 350));
               transcriptText = getExistingTranscriptFromDOM();
               if (transcriptText) {
                 console.log('Successfully extracted transcript after opening panel');
@@ -460,6 +395,14 @@ function getYouTubeTranscript() {
                   content: transcriptText
                 });
                 return;
+              }
+              // Scroll the panel once loaded to encourage lazy-rendered segments.
+              const scrollContainer = document.querySelector(
+                'ytd-engagement-panel-section-list-renderer[target-id="PAmodern_transcript_view"] .ytSectionListRendererContents, ' +
+                'yt-section-list-renderer[data-target-id="PAmodern_transcript_view"] .ytSectionListRendererContents'
+              );
+              if (scrollContainer) {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
               }
               attempts++;
             }
@@ -476,8 +419,7 @@ function getYouTubeTranscript() {
           });
         }
       });
-      
-      // Method 2: Access the captions directly through player data
+
       const playerDataPromise = new Promise(async (resolve) => {
         try {
           const playerResponse = getPlayerResponse();
@@ -507,15 +449,14 @@ function getYouTubeTranscript() {
           });
         }
       });
-      
-      // Method 3: Extract from YouTube's current innertube API
+
       const apiMethodPromise = new Promise(async (resolve) => {
         try {
           const ytcfg = getYtcfg();
           if (ytcfg) {
             const apiKey = ytcfg.INNERTUBE_API_KEY || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-            const clientVersion = ytcfg.INNERTUBE_CLIENT_VERSION || '2.20240401.00.00'; 
-            
+            const clientVersion = ytcfg.INNERTUBE_CLIENT_VERSION || '2.20240401.00.00';
+
             const response = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {
               method: 'POST',
               headers: {
@@ -536,7 +477,7 @@ function getYouTubeTranscript() {
                 params: btoa(JSON.stringify({videoId}))
               }),
             });
-            
+
             if (response.ok) {
               const data = await response.json();
               const transcriptData = extractTranscriptFromApiResponse(data);
@@ -562,8 +503,7 @@ function getYouTubeTranscript() {
           });
         }
       });
-      
-      // Method 4: Extract from window.ytInitialPlayerResponse
+
       const windowDataPromise = new Promise(async (resolve) => {
         try {
           if (window.ytInitialPlayerResponse) {
@@ -592,10 +532,9 @@ function getYouTubeTranscript() {
           });
         }
       });
-      
-      // Race all methods with timeout - try DOM method first and give it a head start
+
+      // Give the DOM path first chance, then race the data-backed fallbacks.
       setTimeout(() => {
-        // Start with DOM method first with a 1-second head start
         Promise.race([domMethodPromise, timeoutPromise]).then(result => {
           if (result.content) {
             resolve({
@@ -607,11 +546,10 @@ function getYouTubeTranscript() {
               content: result.content
             });
           } else {
-            // If DOM method fails, race all other methods together
             Promise.race([
-              playerDataPromise, 
-              apiMethodPromise, 
-              windowDataPromise, 
+              playerDataPromise,
+              apiMethodPromise,
+              windowDataPromise,
               timeoutPromise
             ]).then(result => {
               if (result.content) {
@@ -624,7 +562,6 @@ function getYouTubeTranscript() {
                   content: result.content
                 });
               } else {
-                // If all methods time out or fail, return helpful message
                 resolve({
                   title,
                   url,
@@ -656,14 +593,13 @@ function getYouTubeTranscript() {
   });
 }
 
-// Helper function to get ytcfg data
 function getYtcfg() {
   try {
     if (window.ytcfg && window.ytcfg.data_) {
       return window.ytcfg.data_;
     }
-    
-    // Fallback: extract from page
+
+    // Some pages expose ytcfg only inside script tags.
     const scriptElements = Array.from(document.querySelectorAll('script'));
     for (const script of scriptElements) {
       if (script.textContent.includes('ytcfg.set')) {
@@ -686,29 +622,43 @@ function getYtcfg() {
   return null;
 }
 
-// Helper function to find transcript button in DOM
 function findTranscriptButton() {
-  // Try various selectors for the transcript button
+  const possibleLabels = [
+    'Show transcript',
+    'Show Transcript',
+    'Transcript',
+    'Open transcript panel'
+  ];
+
+  for (const label of possibleLabels) {
+    const btn = document.querySelector(`button[aria-label="${label}"]`);
+    if (btn) {
+      console.log('Found transcript button via aria-label:', label);
+      return btn;
+    }
+  }
+
+  const menuItems = document.querySelectorAll('ytd-menu-service-item-renderer');
+  for (const item of menuItems) {
+    const text = item.textContent?.trim();
+    if (text && possibleLabels.some(label => text.toLowerCase() === label.toLowerCase())) {
+      console.log('Found transcript menu item:', text);
+      return item;
+    }
+  }
+
   const possibleSelectors = [
-    // Modern YouTube selectors
-    'button[aria-label="Show transcript"]',
-    'ytd-menu-service-item-renderer[aria-label="Show transcript"]',
     'tp-yt-paper-item:contains("Show transcript")',
-    // More button + transcript option
     'button.ytp-button[aria-label="More actions"]',
     'ytd-menu-service-item-renderer:contains("Show transcript")',
-    // Old YouTube UI selectors
     'button.ytp-subtitles-button',
-    // Try with classes that might contain the transcript button
     '.dropdown-trigger[aria-label="More actions"]',
     '.ytd-video-primary-info-renderer button.dropdown-trigger',
-    // Click the "..." menu if all else fails
     'ytd-button-renderer.dropdown-trigger'
   ];
-  
+
   for (const selector of possibleSelectors) {
     if (selector.includes(':contains')) {
-      // Handle jQuery-like :contains selector
       const [tagName, text] = selector.split(':contains(');
       const textToFind = text.replace(')', '').replace(/"/g, '');
       const elements = document.querySelectorAll(tagName);
@@ -724,30 +674,25 @@ function findTranscriptButton() {
       }
     }
   }
-  
+
   return null;
 }
 
-// Helper function to get player response data
 function getPlayerResponse() {
   try {
-    // Method 1: Window object
     if (window.ytInitialPlayerResponse) {
       return window.ytInitialPlayerResponse;
     }
-    
-    // Method 2: ytplayer config
+
     if (window.ytplayer && window.ytplayer.config) {
       const playerResponse = window.ytplayer.config.args?.player_response;
       if (playerResponse) {
         return JSON.parse(playerResponse);
       }
     }
-    
-    // Method 3: Extract from script tags
+
     const scriptElements = Array.from(document.querySelectorAll('script'));
     for (const script of scriptElements) {
-      // Look for ytInitialPlayerResponse
       if (script.textContent.includes('ytInitialPlayerResponse')) {
         const match = script.textContent.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
         if (match && match[1]) {
@@ -756,8 +701,7 @@ function getPlayerResponse() {
           } catch (e) {}
         }
       }
-      
-      // Look for PLAYER_VARS or PLAYER_RESPONSE
+
       if (script.textContent.includes('PLAYER_VARS') || script.textContent.includes('PLAYER_RESPONSE')) {
         let match = script.textContent.match(/PLAYER_RESPONSE'\s*:\s*'(.+?)'/);
         if (!match) {
@@ -776,55 +720,43 @@ function getPlayerResponse() {
   return null;
 }
 
-// Helper function to get transcript content directly from caption tracks
 async function getTranscriptContent(videoId, captionTracks) {
   try {
-    // Find the best caption track (prefer English or manual captions)
     let selectedTrack = null;
-    
-    // First look for English tracks
-    const englishTracks = captionTracks.filter(track => 
-      track.languageCode === 'en' || 
+
+    const englishTracks = captionTracks.filter(track =>
+      track.languageCode === 'en' ||
       track.name?.simpleText?.toLowerCase().includes('english')
     );
-    
+
     if (englishTracks.length > 0) {
-      // Prefer tracks that are not auto-generated
-      const manualTracks = englishTracks.filter(track => 
-        !track.name?.simpleText?.toLowerCase().includes('auto-generated') && 
+      const manualTracks = englishTracks.filter(track =>
+        !track.name?.simpleText?.toLowerCase().includes('auto-generated') &&
         !track.name?.simpleText?.toLowerCase().includes('automatic')
       );
-      
+
       selectedTrack = manualTracks.length > 0 ? manualTracks[0] : englishTracks[0];
     } else {
-      // If no English tracks, take the first one
       selectedTrack = captionTracks[0];
     }
-    
+
     if (selectedTrack && selectedTrack.baseUrl) {
-      // Extract the transcript URL
       let transcriptUrl = selectedTrack.baseUrl;
-      
-      // Add language and format parameters if not present
+
       if (!transcriptUrl.includes('&fmt=')) {
         transcriptUrl += '&fmt=json3';
       }
-      
-      // Use more efficient method with native fetch directly
+
       try {
-        // Use fetch directly without iframe - this is more likely to work with recent YouTube changes
         const response = await fetch(transcriptUrl);
         if (!response.ok) throw new Error('Failed to fetch transcript data');
-        
+
         const transcriptData = await response.text();
-        
-        // Parse the transcript data
+
         try {
-          // Try JSON format first
           if (transcriptData.startsWith('{')) {
             const jsonData = JSON.parse(transcriptData);
             if (jsonData.events) {
-              // Format JSON transcript
               let formattedText = 'Transcript:\n';
               for (const event of jsonData.events) {
                 if (event.segs && event.tStartMs !== undefined) {
@@ -839,9 +771,8 @@ async function getTranscriptContent(videoId, captionTracks) {
               }
               return formattedText;
             }
-          } 
-          
-          // Try XML format as fallback
+          }
+
           return parseTranscriptXml(transcriptData);
         } catch (e) {
           console.error('Error parsing transcript data:', e);
@@ -849,19 +780,16 @@ async function getTranscriptContent(videoId, captionTracks) {
         }
       } catch (fetchError) {
         console.error('Fetch error:', fetchError);
-        
-        // Fallback to the iframe method if direct fetch fails due to CORS
+
+        // Fall back to an iframe when direct fetch is blocked by CORS.
         return new Promise((resolve) => {
-          // Create a hidden iframe to load the transcript
           const iframe = document.createElement('iframe');
           iframe.style.display = 'none';
           document.body.appendChild(iframe);
-          
-          // Create a script that will fetch the transcript and store it in a global variable
+
           const scriptId = `youtube_transcript_data_${Date.now()}`;
           const script = document.createElement('script');
           script.textContent = `
-            // Use a unique name to avoid conflicts
             window.${scriptId} = null;
             fetch('${transcriptUrl}')
               .then(response => response.text())
@@ -872,11 +800,9 @@ async function getTranscriptContent(videoId, captionTracks) {
                 console.error('Failed to fetch transcript:', error);
               });
           `;
-          
-          // Add the script to the iframe
+
           iframe.contentDocument.body.appendChild(script);
-          
-          // Wait for the transcript to be fetched
+
           let attempt = 0;
           const maxAttempts = 10;
           const checkTranscriptData = () => {
@@ -885,20 +811,15 @@ async function getTranscriptContent(videoId, captionTracks) {
               resolve(null);
               return;
             }
-            
-            // Check if transcript data is available
+
             const transcriptData = iframe.contentWindow[scriptId];
             if (transcriptData) {
-              // Clean up
               document.body.removeChild(iframe);
-              
-              // Parse the transcript data
+
               try {
-                // Try JSON format first
                 if (transcriptData.startsWith('{')) {
                   const jsonData = JSON.parse(transcriptData);
                   if (jsonData.events) {
-                    // Format JSON transcript
                     let formattedText = 'Transcript:\n';
                     for (const event of jsonData.events) {
                       if (event.segs && event.tStartMs !== undefined) {
@@ -914,9 +835,8 @@ async function getTranscriptContent(videoId, captionTracks) {
                     resolve(formattedText);
                     return;
                   }
-                } 
-                
-                // Try XML format as fallback
+                }
+
                 resolve(parseTranscriptXml(transcriptData));
               } catch (e) {
                 console.error('Error parsing transcript data:', e);
@@ -927,7 +847,7 @@ async function getTranscriptContent(videoId, captionTracks) {
               setTimeout(checkTranscriptData, 300);
             }
           };
-          
+
           checkTranscriptData();
         });
       }
@@ -935,17 +855,14 @@ async function getTranscriptContent(videoId, captionTracks) {
   } catch (error) {
     console.error('Error getting transcript content:', error);
   }
-  
+
   return null;
 }
 
-// Helper function to extract transcript from API response
 function extractTranscriptFromApiResponse(data) {
   try {
     if (data && data.actions && data.actions.length > 0) {
-      // Navigate through different possible structures
       for (const action of data.actions) {
-        // Format 1: updateEngagementPanelAction
         if (action.updateEngagementPanelAction) {
           const content = action.updateEngagementPanelAction.content;
           if (content && content.transcriptRenderer && content.transcriptRenderer.body) {
@@ -955,12 +872,10 @@ function extractTranscriptFromApiResponse(data) {
             }
           }
         }
-        
-        // Format 2: appendContinuationItemsAction
+
         if (action.appendContinuationItemsAction) {
           const items = action.appendContinuationItemsAction.continuationItems;
           if (items && items.length > 0) {
-            // Look for transcript segments
             const segments = [];
             for (const item of items) {
               if (item.transcriptSegmentRenderer) {
@@ -970,41 +885,36 @@ function extractTranscriptFromApiResponse(data) {
                 });
               }
             }
-            
+
             if (segments.length > 0) {
               let transcriptText = 'Transcript:\n\n';
               let currentParagraph = '';
               let lastEndTime = -1;
-              
+
               for (const segment of segments) {
                 const cleanText = removeTimestamps(segment.text);
                 if (!cleanText) continue;
-                
-                // Start a new paragraph if this segment is more than 4 seconds after the last one
-                // or if we've accumulated enough text (roughly a sentence)
-                if (lastEndTime !== -1 && segment.startTime - lastEndTime > 4 || 
+
+                // Paragraph breaks follow transcript pauses or sentence endings.
+                if (lastEndTime !== -1 && segment.startTime - lastEndTime > 4 ||
                    (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-                  // Add the completed paragraph
                   transcriptText += `${currentParagraph.trim()}\n\n`;
-                  
-                  // Start a new paragraph
+
                   currentParagraph = cleanText;
                 } else {
-                  // Add space if the paragraph already has content
                   if (currentParagraph.length > 0) {
                     currentParagraph += ' ';
                   }
                   currentParagraph += cleanText;
                 }
-                
+
                 lastEndTime = segment.startTime;
               }
-              
-              // Add the last paragraph if it exists
+
               if (currentParagraph.length > 0) {
                 transcriptText += `${currentParagraph.trim()}\n`;
               }
-              
+
               return transcriptText;
             }
           }
@@ -1017,12 +927,11 @@ function extractTranscriptFromApiResponse(data) {
   return null;
 }
 
-// Helper function to format transcript from cue groups
 function formatTranscriptFromCueGroups(cueGroups) {
   let transcriptText = 'Transcript:\n\n';
   let currentParagraph = '';
   let lastEndTime = -1;
-  
+
   for (const cueGroup of cueGroups) {
     if (cueGroup.transcriptCueGroupRenderer) {
       const cues = cueGroup.transcriptCueGroupRenderer.cues;
@@ -1032,28 +941,24 @@ function formatTranscriptFromCueGroups(cueGroups) {
             const text = cue.transcriptCueRenderer.cue?.simpleText || '';
             const startMs = parseInt(cue.transcriptCueRenderer.startOffsetMs || '0');
             const startSec = Math.floor(startMs / 1000);
-            
+
             if (text) {
               const cleanText = removeTimestamps(text);
               if (!cleanText) continue;
-              
-              // Start a new paragraph if this cue is more than 4 seconds after the last one
-              // or if we've accumulated enough text (roughly a sentence)
-              if (lastEndTime !== -1 && startSec - lastEndTime > 4 || 
+
+              // Paragraph breaks follow transcript pauses or sentence endings.
+              if (lastEndTime !== -1 && startSec - lastEndTime > 4 ||
                  (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-                // Add the completed paragraph
                 transcriptText += `${currentParagraph.trim()}\n\n`;
-                
-                // Start a new paragraph
+
                 currentParagraph = cleanText;
               } else {
-                // Add space if the paragraph already has content
                 if (currentParagraph.length > 0) {
                   currentParagraph += ' ';
                 }
                 currentParagraph += cleanText;
               }
-              
+
               lastEndTime = startSec;
             }
           }
@@ -1061,22 +966,18 @@ function formatTranscriptFromCueGroups(cueGroups) {
       }
     }
   }
-  
-  // Add the last paragraph if it exists
+
   if (currentParagraph.length > 0) {
     transcriptText += `${currentParagraph.trim()}\n`;
   }
-  
-  return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
+
+  return transcriptText.length > 15 ? transcriptText : null;
 }
 
-// Helper function to get ytInitialData from page source
 function getYtInitialData() {
-  // Try to find ytInitialData in the page source
   const scriptElements = Array.from(document.querySelectorAll('script'));
   for (const script of scriptElements) {
     if (script.textContent.includes('ytInitialData')) {
-      // Use regex with a capturing group and non-greedy matching
       const dataMatch = script.textContent.match(/ytInitialData\s*=\s*({.+?});(?:\s|$)/);
       if (dataMatch && dataMatch[1]) {
         try {
@@ -1090,67 +991,62 @@ function getYtInitialData() {
   return null;
 }
 
-// Helper function to parse XML transcript
 function parseTranscriptXml(xmlText) {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
     const textElements = xmlDoc.getElementsByTagName('text');
-    
+
     if (textElements.length === 0) {
       return null;
     }
-    
+
     let transcriptText = 'Transcript:\n\n';
     let currentParagraph = '';
     let lastEndTime = -1;
-    
+
     for (let i = 0; i < textElements.length; i++) {
       const text = textElements[i].textContent.trim();
       if (text) {
         const cleanText = removeTimestamps(text);
         if (!cleanText) continue;
-        
+
         const startTime = parseFloat(textElements[i].getAttribute('start') || '0');
-        
-        // Start a new paragraph if this element is more than 4 seconds after the last one
-        // or if we've accumulated enough text (roughly a sentence)
-        if (lastEndTime !== -1 && startTime - lastEndTime > 4 || 
+
+        // Paragraph breaks follow transcript pauses or sentence endings.
+        if (lastEndTime !== -1 && startTime - lastEndTime > 4 ||
            (currentParagraph.length > 0 && currentParagraph.endsWith('.'))) {
-          // Add the completed paragraph
           transcriptText += `${currentParagraph.trim()}\n\n`;
-          
-          // Start a new paragraph
+
           currentParagraph = cleanText;
         } else {
-          // Add space if the paragraph already has content
           if (currentParagraph.length > 0) {
             currentParagraph += ' ';
           }
           currentParagraph += cleanText;
         }
-        
+
         lastEndTime = startTime;
       }
     }
-    
-    // Add the last paragraph if it exists
+
     if (currentParagraph.length > 0) {
       transcriptText += `${currentParagraph.trim()}\n`;
     }
-    
-    return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
+
+    return transcriptText.length > 15 ? transcriptText : null;
   } catch (error) {
     console.error('Error parsing XML:', error);
     return null;
   }
 }
 
-// Helper function to extract transcript from DOM if already visible
 function getExistingTranscriptFromDOM() {
   try {
-    // Check for transcript panel in DOM - try multiple selectors to be robust
+    // Closed transcript panels can remain in the DOM, so require visible state or segment content.
     const possiblePanelSelectors = [
+      'ytd-engagement-panel-section-list-renderer[target-id="PAmodern_transcript_view"]',
+      'yt-section-list-renderer[data-target-id="PAmodern_transcript_view"]',
       '#panels-container ytd-transcript-search-panel-renderer',
       '#panels-container ytd-transcript-renderer',
       '#panels-container [data-panel-id="transcript-search-panel"]',
@@ -1158,21 +1054,63 @@ function getExistingTranscriptFromDOM() {
       'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]',
       '#engagement-panel-searchable-transcript'
     ];
-    
+
     let transcriptPanel = null;
     for (const selector of possiblePanelSelectors) {
       const panels = document.querySelectorAll(selector);
-      if (panels.length > 0) {
-        transcriptPanel = panels[0];
-        break;
+      for (const panel of panels) {
+        const visibility = panel.getAttribute('visibility');
+        const hasContent = panel.querySelector('transcript-segment-view-model, ytd-transcript-segment-renderer');
+        if (!visibility || visibility.includes('EXPANDED') || hasContent) {
+          transcriptPanel = panel;
+          break;
+        }
       }
+      if (transcriptPanel) break;
     }
-    
+
     if (!transcriptPanel) {
       return null;
     }
-    
-    // Look for transcript segments in any found panel using various selectors
+
+    // Current transcript panels render each row as transcript-segment-view-model.
+    const newSegments = transcriptPanel.querySelectorAll('transcript-segment-view-model');
+    if (newSegments.length > 0) {
+      console.log('Found new YouTube transcript UI segments:', newSegments.length);
+      let transcriptText = 'Transcript:\n\n';
+      let currentParagraph = '';
+
+      newSegments.forEach(segment => {
+        const textEl = segment.querySelector('span[role="text"]');
+        const text = textEl ? textEl.textContent.trim() : '';
+
+        if (text) {
+          const cleanText = removeTimestamps(text);
+          if (!cleanText) return;
+
+          if (currentParagraph.length > 0 &&
+             (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
+            transcriptText += `${currentParagraph.trim()}\n\n`;
+            currentParagraph = cleanText;
+          } else {
+            if (currentParagraph.length > 0) {
+              currentParagraph += ' ';
+            }
+            currentParagraph += cleanText;
+          }
+        }
+      });
+
+      if (currentParagraph.length > 0) {
+        transcriptText += `${currentParagraph.trim()}\n`;
+      }
+
+      if (transcriptText.length > 15) {
+        return transcriptText;
+      }
+    }
+
+    // Legacy panels expose several older segment shapes.
     const possibleSegmentSelectors = [
       'ytd-transcript-segment-renderer',
       '[role="listitem"]',
@@ -1181,7 +1119,7 @@ function getExistingTranscriptFromDOM() {
       '.transcript-cue',
       '.subtitle-line'
     ];
-    
+
     let segments = [];
     for (const selector of possibleSegmentSelectors) {
       const foundSegments = transcriptPanel.querySelectorAll(selector);
@@ -1190,32 +1128,27 @@ function getExistingTranscriptFromDOM() {
         break;
       }
     }
-    
+
     if (segments.length === 0) {
       return null;
     }
-    
+
     let transcriptText = 'Transcript:\n\n';
     let currentParagraph = '';
-    
-    // Try different approaches to extract the text and timestamps
+
     if (transcriptPanel.querySelector('ytd-transcript-segment-renderer')) {
-      // Modern YouTube structure
       Array.from(segments).forEach(item => {
         const text = item.querySelector('.segment-text, .cue-text, .text, .subtitle-text')?.textContent?.trim() || '';
-        
+
         if (text) {
           const cleanText = removeTimestamps(text);
           if (!cleanText) return;
-          
-          // Start a new paragraph if we reached a sentence end or if 
-          // this is the first segment we're processing
-          if (currentParagraph.length > 0 && 
+
+          if (currentParagraph.length > 0 &&
              (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
             transcriptText += `${currentParagraph.trim()}\n\n`;
             currentParagraph = cleanText;
           } else {
-            // Add space if the paragraph already has content
             if (currentParagraph.length > 0) {
               currentParagraph += ' ';
             }
@@ -1224,36 +1157,29 @@ function getExistingTranscriptFromDOM() {
         }
       });
     } else {
-      // Alternative structure
       Array.from(segments).forEach(item => {
-        // Try to find text
         let text = '';
-        
-        // Look for spans that might contain timestamp and text
+
         const spans = item.querySelectorAll('span');
         if (spans.length >= 2) {
           text = spans[1].textContent.trim();
         } else {
-          // Otherwise just use the entire content
           text = item.textContent.trim();
           const match = text.match(/^(\d+:\d+)\s+(.+)$/);
           if (match) {
             text = match[2];
           }
         }
-        
+
         if (text) {
           const cleanText = removeTimestamps(text);
           if (!cleanText) return;
-          
-          // Start a new paragraph if we reached a sentence end or if 
-          // this is the first segment we're processing
-          if (currentParagraph.length > 0 && 
+
+          if (currentParagraph.length > 0 &&
              (currentParagraph.endsWith('.') || currentParagraph.endsWith('?') || currentParagraph.endsWith('!'))) {
             transcriptText += `${currentParagraph.trim()}\n\n`;
             currentParagraph = cleanText;
           } else {
-            // Add space if the paragraph already has content
             if (currentParagraph.length > 0) {
               currentParagraph += ' ';
             }
@@ -1262,13 +1188,12 @@ function getExistingTranscriptFromDOM() {
         }
       });
     }
-    
-    // Add the last paragraph if it exists
+
     if (currentParagraph.length > 0) {
       transcriptText += `${currentParagraph.trim()}\n`;
     }
-    
-    return transcriptText.length > 15 ? transcriptText : null; // Ensure we have meaningful content
+
+    return transcriptText.length > 15 ? transcriptText : null;
   } catch (error) {
     console.error('Error extracting from DOM:', error);
     return null;

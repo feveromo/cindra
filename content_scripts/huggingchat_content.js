@@ -1,10 +1,7 @@
-// Log when the script starts
 console.log('HuggingChat content script loaded');
 
-// Flag to prevent concurrent submissions
 let isProcessing = false;
 
-// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message in HuggingChat content script:', message);
   if (message.action === 'insertPrompt') {
@@ -29,11 +26,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         isProcessing = false;
         console.log('Processing finished, resetting isProcessing flag to false (onMessage finally).');
       });
-    return true; // Indicates asynchronous response
+    return true;
   }
 });
 
-// Function to find element with retry mechanism
 function waitForElement(selector, textContent = null, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const intervalTime = 100;
@@ -43,10 +39,10 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
       let element = document.querySelector(selector);
       if (element && textContent) {
         if (element.textContent.trim() !== textContent) {
-          element = null; // Not the right element
+          element = null;
         }
       }
-      
+
       if (element) {
         clearInterval(interval);
         resolve(element);
@@ -65,7 +61,6 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
   });
 }
 
-// Function to insert text into the textarea
 function insertTextIntoTextarea(textarea, text) {
   textarea.focus();
   textarea.value = text;
@@ -74,7 +69,6 @@ function insertTextIntoTextarea(textarea, text) {
   console.log('Text inserted into textarea and events dispatched.');
 }
 
-// Function to perform a robust click
 function robustClick(element) {
   if (!element) return;
   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -101,19 +95,16 @@ function robustClick(element) {
   console.log('Robust click events dispatched on:', element);
 }
 
-// Main function to handle inserting prompt and submitting
 async function insertPromptAndSubmit(prompt) {
   try {
     console.log('Looking for input field for HuggingChat...');
-    
-    // Debug: Log all textareas on the page
+
     const allTextareas = document.querySelectorAll('textarea');
     console.log(`Found ${allTextareas.length} textarea elements on the page`);
     allTextareas.forEach((textarea, index) => {
       console.log(`Textarea ${index}: placeholder="${textarea.placeholder}", aria-label="${textarea.getAttribute('aria-label')}"`);
     });
-    
-    // Selector for HuggingChat textarea
+
     const inputSelector = 'textarea[placeholder="Ask anything"]';
     const inputField = await waitForElement(inputSelector);
     console.log('Input field found:', inputField);
@@ -124,7 +115,6 @@ async function insertPromptAndSubmit(prompt) {
     await new Promise(resolve => setTimeout(resolve, 750));
 
     console.log('Looking for send button for HuggingChat...');
-    // Wait for button to be enabled (loses disabled attribute)
     const sendButtonSelector = 'button[type="submit"][aria-label="Send message"]:not([disabled])';
     const sendButton = await waitForElement(sendButtonSelector);
     console.log('Send button found and enabled:', sendButton);
@@ -132,7 +122,6 @@ async function insertPromptAndSubmit(prompt) {
     robustClick(sendButton);
     console.log('Robust send button click attempted.');
 
-    // Clear pending prompt from storage after successful submission
     chrome.storage.local.remove(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp'], () => {
       if (chrome.runtime.lastError) {
         console.error('Error clearing pending HuggingChat prompt:', chrome.runtime.lastError);
@@ -143,11 +132,10 @@ async function insertPromptAndSubmit(prompt) {
 
   } catch (error) {
     console.error('Error in insertPromptAndSubmit for HuggingChat:', error);
-    throw error; // Re-throw to be caught by the caller
+    throw error;
   }
 }
 
-// Check for pending prompts on page load
 function checkPendingPrompt() {
   if (isProcessing) {
     console.log('Processing already in progress, skipping pending HuggingChat prompt check.');
@@ -160,7 +148,7 @@ function checkPendingPrompt() {
       return;
     }
 
-    if (isProcessing) { // Check again in case of race condition
+    if (isProcessing) {
       console.log('Processing started while waiting for storage, skipping pending HuggingChat prompt.');
       return;
     }
@@ -170,8 +158,7 @@ function checkPendingPrompt() {
       const timestamp = result.huggingChatPromptTimestamp;
       const promptAge = Date.now() - timestamp;
 
-      // Check if the prompt is recent (e.g., within the last 60 seconds)
-      if (promptAge < 60000) { // 1 minute
+      if (promptAge < 60000) {
         console.log('Found pending HuggingChat prompt from storage:', promptToProcess.substring(0, 50) + '...');
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
@@ -179,7 +166,7 @@ function checkPendingPrompt() {
         chrome.storage.local.remove(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp'], () => {
           if (chrome.runtime.lastError) {
             console.error('Error clearing pending HuggingChat prompt before processing:', chrome.runtime.lastError);
-            isProcessing = false; 
+            isProcessing = false;
             console.log('Resetting isProcessing due to clear error (checkPendingPrompt).');
             return;
           }
@@ -204,11 +191,9 @@ function checkPendingPrompt() {
   });
 }
 
-// Check pending prompt when the script loads or the page becomes ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', checkPendingPrompt);
 } else {
-  // Small delay to ensure page elements might be more ready
-  setTimeout(checkPendingPrompt, 250); 
+  setTimeout(checkPendingPrompt, 250);
 }
 

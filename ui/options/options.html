@@ -4,24 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cindra Summary Settings</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <img src="/images/icon48.png" alt="Logo" class="logo">
-      <h1>Cindra Summary Settings</h1>
+      <div class="brand-mark">
+        <img src="/images/icon48.png" alt="Logo" class="logo">
+      </div>
+      <div class="header-copy">
+        <span class="eyebrow">Control Center</span>
+        <h1>Cindra Summary Settings</h1>
+        <p class="header-description">Tune the handoff experience, manage prompt presets, and keep the extension feeling consistent across sites.</p>
+      </div>
       <span class="version">v1.0.0</span>
+    </div>
+
+    <div class="intro-grid">
+      <div class="intro-card">
+        <span class="field-label">What This Page Covers</span>
+        <h2>Your Summary Workflow</h2>
+        <p class="section-description">Choose a default destination, set appearance preferences, and keep a library of prompts for different kinds of content.</p>
+      </div>
+      <div class="intro-card intro-card-accent">
+        <span class="field-label">Keyboard Shortcut</span>
+        <div class="shortcut-row">
+          <span class="key">Ctrl</span>
+          <span>+</span>
+          <span class="key">X</span>
+          <span>+</span>
+          <span class="key">X</span>
+        </div>
+        <p class="section-description">Use the shortcut whenever you want to trigger a summary without opening the popup first.</p>
+      </div>
     </div>
 
     <div class="settings-container">
       <div class="settings-section">
-        <h2>General Settings</h2>
+        <div class="section-heading">
+          <h2>General Settings</h2>
+          <p class="section-description">Set the defaults that shape where summaries go and how the extension behaves.</p>
+        </div>
         
         <div class="setting-item">
-          <span class="setting-label">AI Model:</span>
+          <div class="setting-copy">
+            <span class="setting-label">AI Model</span>
+            <p class="setting-description">Pick the service that should receive the current page when you summarize.</p>
+          </div>
           <div class="setting-controls">
             <label class="radio-container">
               <input type="radio" name="ai-model" id="google-ai-studio" value="google-ai-studio">
@@ -75,7 +106,10 @@
         </div>
         
         <div class="setting-item">
-          <span class="setting-label">Theme:</span>
+          <div class="setting-copy">
+            <span class="setting-label">Theme</span>
+            <p class="setting-description">Keep the extension synced to the system or force a specific light or dark look.</p>
+          </div>
           <div class="setting-controls">
             <label class="radio-container">
               <input type="radio" name="theme" id="auto-theme" value="auto">
@@ -93,21 +127,10 @@
         </div>
 
         <div class="setting-item">
-          <span class="setting-label">Copy Format:</span>
-          <div class="setting-controls">
-            <label class="radio-container">
-              <input type="radio" name="copy-format" id="plain-text" value="plain">
-              <span class="radio-label">Plain Text</span>
-            </label>
-            <label class="radio-container">
-              <input type="radio" name="copy-format" id="markdown" value="markdown">
-              <span class="radio-label">Markdown</span>
-            </label>
+          <div class="setting-copy">
+            <span class="setting-label">Floating Summary Button</span>
+            <p class="setting-description">Show or hide the on-page quick action button when supported by a site.</p>
           </div>
-        </div>
-
-        <div class="setting-item">
-          <span class="setting-label">Floating Summary Button:</span>
           <div class="setting-controls">
             <label class="radio-container">
               <input type="radio" name="floating-button" id="visible-button" value="visible">
@@ -122,7 +145,10 @@
       </div>
 
       <div class="settings-section">
-        <h2>Keyboard Shortcuts</h2>
+        <div class="section-heading">
+          <h2>Keyboard Shortcuts</h2>
+          <p class="section-description">A quick reminder for the global shortcut that triggers the summarize flow.</p>
+        </div>
         <div class="shortcut-info">
           <p>Use the following keyboard shortcut to control the extension:</p>
           <div class="shortcut-item">
@@ -139,8 +165,10 @@
       </div>
 
       <div class="settings-section">
-        <h2>Prompt Management</h2>
-        <p class="section-description">Create and manage your custom prompts for different use cases.</p>
+        <div class="section-heading">
+          <h2>Prompt Management</h2>
+          <p class="section-description">Create and manage prompt presets for different content types and research flows.</p>
+        </div>
         
         <div class="prompts-list" id="prompts-list">
           <!-- Prompts will be populated here dynamically -->
@@ -180,7 +208,7 @@
     </div>
 
     <div class="footer">
-      <p>&copy; 2025 Cindra Summary Extension</p>
+      <p class="footer-note">&copy; 2025 Cindra Summary Extension</p>
     </div>
   </div>
   <script src="options.js"></script>

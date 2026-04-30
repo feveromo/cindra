@@ -1,100 +1,86 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/feveromo/cindra)
 
-# Cindra Summary - Browser Extension
+# Cindra Summary
 
-A powerful browser extension that helps you summarize web content using various AI services. Simply select text on any webpage and get instant summaries from your preferred AI model.
+Cindra Summary is a Chrome extension that sends the current page, YouTube transcript, or Reddit thread to your preferred AI chat for summarization.
 
-## Features
+## What it does
 
-- **Multi-AI Support**: Works with ChatGPT, Claude, Gemini, Grok, Perplexity, Google AI Studio, and more
-- **Custom Prompts**: Use your own custom prompts for different types of summaries
-- **Clean Interface**: Simple popup interface for quick access
+- Summarizes the current page from the popup
+- Supports a keyboard shortcut: `Ctrl + X + X`
+- Can show a floating summarize button on regular webpages
+- Stores reusable prompt presets
+- Routes content into multiple AI destinations without using an API key directly
 
-## Supported AI Services
+## Supported destinations
 
-- **ChatGPT** (chat.openai.com)
-- **Claude** (claude.ai)
-- **Gemini** (gemini.google.com)
-- **Grok** (grok.com)
-- **Perplexity** (perplexity.ai)
-- **Google AI Studio** (aistudio.google.com)
-- **DeepSeek** (deepseek.com)
-- **Google Learning** (learning.google.com)
-- **GLM** (chat.z.ai)
-- **Kimi** (kimi.com)
-- **HuggingChat** (huggingface.co/chat)
+- Google AI Studio
+- Gemini
+- Perplexity
+- Grok
+- Claude
+- ChatGPT
+- Google Learning
+- DeepSeek
+- GLM (Z.AI)
+- Kimi
+- HuggingChat
+- Qwen
+
+## Content sources
+
+- Regular webpages
+- YouTube videos with transcript extraction
+- Reddit threads and posts
+
+## Known limitations
+
+- PDF extraction is not implemented yet
+- Provider integrations depend on each site's live DOM, so breakage can happen when those UIs change
 
 ## Installation
 
-### From Source
+1. Clone the repository:
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/feveromo/cindra.git
-   cd cindra
-   ```
+```bash
+git clone https://github.com/feveromo/cindra.git
+cd cindra
+```
 
-2. Open your browser and navigate to the extensions page:
-   - **Chrome**: `chrome://extensions/`
-
-3. Enable "Developer mode" (Chrome)
-
-4. Click "Load unpacked" (Chrome)
-
-5. Select the `cindra` folder from this repository
+2. Open `chrome://extensions/`
+3. Enable Developer Mode
+4. Click `Load unpacked`
+5. Select this repository folder
 
 ## Usage
 
-1. **Open Extension**: Click the Cindra Summary extension icon in your browser toolbar
-2. **Choose AI Model**: Select your preferred AI service from the dropdown
-3. **Customize Prompt** (Optional): Modify the default prompt to suit your needs
-4. **Generate Summary**: Click "Summarize Current Page" or, more conveniently, use the keyboard shortcut (CTRL + X + X) to open the selected AI service with your content and prompt.
+1. Open the extension popup
+2. Pick a destination AI service
+3. Pick or edit a prompt preset
+4. Click `Summarize Current Page`
 
-## Configuration
+You can also use `Ctrl + X + X` on a page, or the floating button if it is enabled in settings.
 
-### Setting Default AI Model
+## Project structure
 
-1. Left-click the extension icon in the toolbar
-2. Choose your preferred AI model from the available options
-3. Configure your custom summarization prompt
-4. Your selection will be saved and used as the default
-
-### Custom Prompts
-
-You can customize the prompt used for summarization:
-- Use the popup interface to modify prompts before each use
-- The extension will remember your last used prompt
-
-## Development
-
-### Project Structure
-
-```
+```text
 cindra/
-├── background/          # Background scripts
-├── content_scripts/     # Content scripts for each AI service
-├── ui/                  # User interface files
-│   ├── popup/          # Extension popup
-│   └── options/        # Options page
-├── images/             # Extension icons
-└── manifest.json       # Extension manifest
+├── background/          # MV3 service worker and routing logic
+├── content_scripts/     # Site-specific integrations and generic page shortcut UI
+├── images/              # Extension icons
+├── ui/
+│   ├── options/         # Settings page
+│   └── popup/           # Popup UI
+└── manifest.json
 ```
 
-### Adding New AI Services
+## Adding a provider
 
-To add support for a new AI service:
-
-1. Create a new content script in `content_scripts/`
-2. Update `manifest.json` with the new content script
-3. Add the service to the UI dropdowns in `ui/popup/popup.html` and `ui/options/options.html`
-4. Update the background script to handle the new service
-
-See the existing content scripts for examples of how to implement new AI service integrations.
+1. Add a content script in `content_scripts/`
+2. Register it in `manifest.json`
+3. Add the provider to the popup and options UI
+4. Add the routing case in `background/background.js`
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Thanks to all the AI services that make this extension possible
+MIT. See [LICENSE](LICENSE).

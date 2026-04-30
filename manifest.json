@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Cindra Summary",
   "version": "1.0.0",
-  "description": "Summarize YouTube, Reddit, and webpages instantly using top AI models like GPT-4o, Claude, Gemini, and more!",
+  "description": "Summarize webpages, YouTube videos, and Reddit threads with your preferred AI chat.",
   "action": {
     "default_popup": "ui/popup/popup.html",
     "default_icon": {
@@ -29,9 +29,13 @@
     "https://chat.com/*",
     "https://grok.com/*",
     "https://gemini.google.com/app/*",
+    "https://learning.google.com/experiments/learn-about*",
     "https://chat.deepseek.com/*",
     "https://chat.z.ai/*",
+    "https://kimi.com/*",
     "https://www.kimi.com/*",
+    "https://huggingface.co/chat/*",
+    "https://chat.qwen.ai/*",
     "*://*/*"
   ],
   "icons": {
@@ -146,6 +150,7 @@
     },
     {
       "matches": [
+        "https://kimi.com/*",
         "https://www.kimi.com/*"
       ],
       "js": [

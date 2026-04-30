@@ -4,60 +4,91 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cindra Summary</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <img src="/images/icon48.png" alt="Logo" class="logo">
-      <h1>Cindra Summary</h1>
-      <span class="version">v1.0.0</span>
+      <div class="brand-mark">
+        <img src="/images/icon48.png" alt="Logo" class="logo">
+      </div>
+      <div class="header-copy">
+        <span class="eyebrow">Page Summary Router</span>
+        <h1>Cindra Summary</h1>
+        <p class="header-description">Route the current page into your favorite AI workspace with the prompt you want.</p>
+      </div>
+      <span class="version-pill">v1.0.0</span>
     </div>
     
     <div class="section">
-      <h2>AI Models</h2>
+      <div class="section-heading">
+        <h2>Destination</h2>
+        <p class="section-copy">Pick the AI tab that should receive the generated summary.</p>
+      </div>
       <div class="model-selection">
-        <label for="ai-model">AI Model:</label>
-        <select id="ai-model">
-          <option value="google-ai-studio">Google AI Studio</option>
-          <option value="gemini">Gemini</option>
-          <option value="perplexity">Perplexity</option>
-          <option value="grok">Grok</option>
-          <option value="claude">Claude</option>
-          <option value="chatgpt">ChatGPT</option>
-          <option value="google-learning">Google Learning</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="glm">GLM (Z.AI)</option>
-          <option value="kimi">Kimi</option>
-          <option value="huggingchat">HuggingChat</option>
-          <option value="qwen">Qwen</option>
-        </select>
+        <label for="ai-model" class="field-label">AI Model</label>
+        <div class="select-wrap">
+          <select id="ai-model">
+            <option value="google-ai-studio">Google AI Studio</option>
+            <option value="gemini">Gemini</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="grok">Grok</option>
+            <option value="claude">Claude</option>
+            <option value="chatgpt">ChatGPT</option>
+            <option value="google-learning">Google Learning</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="glm">GLM (Z.AI)</option>
+            <option value="kimi">Kimi</option>
+            <option value="huggingchat">HuggingChat</option>
+            <option value="qwen">Qwen</option>
+          </select>
+        </div>
       </div>
     </div>
 
     <div class="section">
-      <h2>Select Prompt</h2>
+      <div class="section-heading">
+        <h2>Saved Prompt</h2>
+        <p class="section-copy">Swap between reusable prompt presets from your settings page.</p>
+      </div>
       <div class="model-selection">
-        <label for="prompt-selector">Saved Prompt:</label>
-        <select id="prompt-selector">
-          <!-- Populated dynamically -->
-        </select>
+        <label for="prompt-selector" class="field-label">Prompt Preset</label>
+        <div class="select-wrap">
+          <select id="prompt-selector">
+            <!-- Populated dynamically -->
+          </select>
+        </div>
       </div>
     </div>
 
     <div class="section">
-      <h2>Prompt for Summary</h2>
+      <div class="section-heading">
+        <h2>Prompt Draft</h2>
+        <p class="section-copy">Review or tweak the prompt before sending the page over.</p>
+      </div>
       <textarea id="summary-prompt" rows="4" placeholder="Enter your custom prompt here...">Summarize the following content in 5-10 bullet points with timestamp if it's transcript.</textarea>
     </div>
 
     <div class="actions">
       <button id="summarize-btn" class="primary-btn">Summarize Current Page</button>
-      <div class="shortcut-hint">Shortcut: Ctrl+X+X</div>
+      <div class="action-strip">
+        <div>
+          <div class="field-label">Shortcut</div>
+          <div class="status-meta">Quick trigger from the keyboard</div>
+        </div>
+        <div class="shortcut-hint">
+          <span class="keycap">Ctrl</span>
+          <span>+</span>
+          <span class="keycap">X</span>
+          <span>+</span>
+          <span class="keycap">X</span>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
-      <button id="options-btn">Settings</button>
+      <button id="options-btn">Open Settings</button>
     </div>
   </div>
   <script src="popup.js"></script>

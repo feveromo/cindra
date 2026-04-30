@@ -1,9 +1,7 @@
-// Track key states for Ctrl+X+X shortcut
 let ctrlPressed = false;
 let xPressed = false;
 let lastKeyDownTime = 0;
 
-// Listen for keyboard shortcut events
 try {
   document.addEventListener('keydown', handleShortcut);
 } catch (error) {
@@ -14,8 +12,7 @@ try {
 }
 
 function handleShortcut(e) {
-  // Check if extension context is still valid
-  // Safely check if chrome.runtime exists before accessing its properties
+  // Hot reloads can invalidate the extension context while this page is still open.
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
     console.log('Extension context invalid, removing event listener');
     document.removeEventListener('keydown', handleShortcut);
@@ -23,24 +20,20 @@ function handleShortcut(e) {
   }
 
   const currentTime = Date.now();
-  
-  // Check for Ctrl key
+
   if (e.key === 'Control') {
     ctrlPressed = true;
     lastKeyDownTime = currentTime;
     return;
   }
-  
-  // Check for X key while Ctrl is pressed
+
   if (ctrlPressed && e.key.toLowerCase() === 'x') {
-    // First X press
     if (!xPressed) {
       xPressed = true;
       lastKeyDownTime = currentTime;
       return;
     }
-    
-    // Second X press (within 500ms of first X)
+
     if (xPressed && (currentTime - lastKeyDownTime) < 500) {
       e.preventDefault();
       try {
@@ -51,32 +44,27 @@ function handleShortcut(e) {
           document.removeEventListener('keydown', handleShortcut);
         }
       }
-      
-      // Reset state
+
       resetKeyState();
       return;
     }
   }
-  
-  // If any other key, reset state
+
   if (e.key !== 'Control' && e.key.toLowerCase() !== 'x') {
     resetKeyState();
   }
 }
 
-// Reset key tracking state
 function resetKeyState() {
   ctrlPressed = false;
   xPressed = false;
 }
 
-// Listen for key up to track when Ctrl is released
 document.addEventListener('keyup', (e) => {
   if (e.key === 'Control') {
     ctrlPressed = false;
   }
   if (e.key.toLowerCase() === 'x') {
-    // Only reset xPressed if enough time has passed since the last keydown
     const currentTime = Date.now();
     if (currentTime - lastKeyDownTime > 500) {
       xPressed = false;
@@ -84,37 +72,32 @@ document.addEventListener('keyup', (e) => {
   }
 });
 
-// Trigger the summarize action
 function triggerSummarize() {
-  // Check extension context before proceeding
-  // Safely check if chrome.runtime exists
+  // Hot reloads can invalidate the extension context while this page is still open.
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
     console.log('Extension context invalid, cannot trigger summarize');
     return;
   }
 
-  // Get settings including active prompt
   try {
     chrome.storage.sync.get({
       savedPrompts: [],
       activePromptId: null,
       aiModel: 'google-ai-studio'
     }, (settings) => {
-      // Get the active prompt text
       let summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
-      
+
       if (settings.activePromptId && settings.savedPrompts.length > 0) {
         const activePrompt = settings.savedPrompts.find(p => p.id === settings.activePromptId);
         if (activePrompt) {
           summaryPrompt = activePrompt.text;
         }
       }
-      
+
       chrome.runtime.sendMessage({
         action: 'summarize',
         url: window.location.href,
         summaryPrompt: summaryPrompt,
-        contentOption: 'entire-content',
         aiModel: settings.aiModel
       });
     });
@@ -125,21 +108,19 @@ function triggerSummarize() {
   }
 }
 
-// Initialize UI elements based on settings
 chrome.storage.sync.get({
   floatingButton: 'visible'
 }, (settings) => {
-  // Add floating button if enabled (for all sites)
   if (settings.floatingButton === 'visible') {
     addWebPageButton();
   }
 });
 
-// Add summary button on regular web pages and PDFs
 function addWebPageButton() {
-  const isPDF = window.location.href.toLowerCase().endsWith('.pdf');
-  
-  // Create the floating button
+  if (window.location.href.toLowerCase().endsWith('.pdf')) {
+    return;
+  }
+
   const floatingButton = document.createElement('div');
   floatingButton.className = 'web-summary-button';
   floatingButton.style.cssText = `
@@ -159,15 +140,12 @@ function addWebPageButton() {
     z-index: 9999;
     transition: transform 0.2s;
   `;
-  
-  // Button icon - Use Cindra logo
+
   const buttonIcon = document.createElement('img');
   try {
-    // Make sure images/icon48.png exists in your project
-    buttonIcon.src = chrome.runtime.getURL('images/icon48.png'); 
+    buttonIcon.src = chrome.runtime.getURL('images/icon48.png');
   } catch (e) {
-    // Fallback if runtime is not available (e.g., during development hot-reloading)
-    buttonIcon.alt = 'Summarize'; 
+    buttonIcon.alt = 'Summarize';
     console.warn("Could not get extension URL for icon. Is the extension loaded?");
   }
   buttonIcon.style.cssText = `
@@ -177,8 +155,7 @@ function addWebPageButton() {
     position: relative;
     top: -2px;
   `;
-  
-  // Close button
+
   const closeButton = document.createElement('div');
   closeButton.style.cssText = `
     position: absolute;
@@ -202,50 +179,45 @@ function addWebPageButton() {
     margin: -2px;
   `;
   closeButton.textContent = '×';
-  
+
   closeButton.addEventListener('click', (e) => {
     e.stopPropagation();
     floatingButton.remove();
   });
-  
+
   closeButton.addEventListener('mouseover', (e) => {
     e.stopPropagation();
     closeButton.style.backgroundColor = '#3c4043';
     closeButton.style.opacity = '1';
   });
-  
+
   closeButton.addEventListener('mouseout', (e) => {
     e.stopPropagation();
     closeButton.style.backgroundColor = '#202124';
-    // Only hide if the main button isn't being hovered
     if (!floatingButton.matches(':hover')) {
       closeButton.style.opacity = '0';
     }
   });
-  
+
   floatingButton.appendChild(buttonIcon);
   floatingButton.appendChild(closeButton);
-  
-  // Hover effect
+
   floatingButton.addEventListener('mouseover', () => {
     floatingButton.style.transform = 'scale(1.1)';
     closeButton.style.opacity = '1';
   });
-  
+
   floatingButton.addEventListener('mouseout', () => {
     floatingButton.style.transform = 'scale(1.0)';
-    // Only hide if the close button isn't being hovered
     if (!closeButton.matches(':hover')) {
       closeButton.style.opacity = '0';
     }
   });
-  
-  // Click handler
+
   floatingButton.addEventListener('click', () => {
     triggerSummarize();
   });
-  
-  // Add tooltip
+
   const tooltip = document.createElement('div');
   tooltip.style.cssText = `
     position: absolute;
@@ -262,17 +234,16 @@ function addWebPageButton() {
     pointer-events: none;
   `;
   tooltip.textContent = 'Summarize with AI (Ctrl+X+X)';
-  
+
   floatingButton.addEventListener('mouseenter', () => {
     tooltip.style.opacity = '1';
   });
-  
+
   floatingButton.addEventListener('mouseleave', () => {
     tooltip.style.opacity = '0';
   });
-  
+
   floatingButton.appendChild(tooltip);
-  
-  // Add to page
+
   document.body.appendChild(floatingButton);
-} 
+}

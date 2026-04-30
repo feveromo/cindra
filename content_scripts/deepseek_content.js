@@ -1,9 +1,7 @@
-// Content script specifically for DeepSeek Chat
 console.log('DeepSeek content script loaded');
 
 let isProcessing = false;
 
-// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
@@ -11,7 +9,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: 'Already processing' });
       return true;
     }
-    
+
     isProcessing = true;
     insertPromptAndSubmit(message.prompt)
       .then(() => {
@@ -29,7 +27,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Wait for an element to appear in the DOM
 function waitForElement(selector, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const element = document.querySelector(selector);
@@ -51,21 +48,19 @@ function waitForElement(selector, timeout = 10000) {
   });
 }
 
-// Insert text into a textarea element
 function insertTextIntoTextarea(textarea, text) {
   textarea.focus();
   textarea.value = text;
-  
-  // Dispatch events to trigger React's onChange handlers
+
+  // React-backed inputs need synthetic input/change events after direct value writes.
   textarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   textarea.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-// Perform a robust click on an element
 function robustClick(element) {
   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  
-  // Dispatch mouse events to simulate a real click
+
+  // Some sites ignore element.click(), so send the full mouse event sequence.
   const events = ['mousedown', 'mouseup', 'click'];
   events.forEach(eventType => {
     const event = new MouseEvent(eventType, {
@@ -77,7 +72,6 @@ function robustClick(element) {
   });
 }
 
-// Main function to insert prompt and submit
 async function insertPromptAndSubmit(prompt) {
   if (!prompt) {
     throw new Error('No prompt provided');
@@ -85,63 +79,55 @@ async function insertPromptAndSubmit(prompt) {
 
   try {
     console.log('DeepSeek: Starting prompt insertion');
-    
-    // Wait for the textarea to be available
+
     const textarea = await waitForElement('textarea[placeholder="Message DeepSeek"]');
     console.log('DeepSeek: Found textarea');
-    
-    // Insert the prompt into the textarea
+
     insertTextIntoTextarea(textarea, prompt);
     console.log('DeepSeek: Inserted text into textarea');
 
-    // Wait for the UI to update and enable the submit button
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Wait for the submit button to become enabled after text insertion
     const submitButton = await waitForElement('div.bf38813a div[role="button"][aria-disabled="false"]._7436101', 3000);
     console.log('DeepSeek: Found enabled send button');
 
     robustClick(submitButton);
 
-    // Simple backup click after a short delay
+    // Backup click for DeepSeek's occasionally missed first handler.
     setTimeout(() => {
       submitButton.click();
     }, 200);
-    
-    // Clear the stored prompt to prevent reprocessing
+
     chrome.storage.local.remove(['pendingDeepseekPrompt', 'deepseekPromptTimestamp'], () => {
       console.log('DeepSeek: Cleared stored prompt');
     });
-    
+
   } catch (error) {
     console.error('DeepSeek: Error in insertPromptAndSubmit:', error);
     throw error;
   }
 }
 
-// Check for pending prompts when the page loads
 function checkPendingPrompt() {
   chrome.storage.local.get(['pendingDeepseekPrompt', 'deepseekPromptTimestamp'], (result) => {
     const prompt = result.pendingDeepseekPrompt;
     const timestamp = result.deepseekPromptTimestamp;
-    
+
     if (!prompt) {
       return;
     }
-    
-    // Check if the prompt is still fresh (within 2 minutes)
+
     const isFresh = timestamp && (Date.now() - timestamp) < 120000;
     if (!isFresh) {
       console.log('DeepSeek: Prompt is too old, removing from storage');
       chrome.storage.local.remove(['pendingDeepseekPrompt', 'deepseekPromptTimestamp']);
       return;
     }
-    
+
     console.log('DeepSeek: Found pending prompt, processing...');
-    
-    // Remove the prompt from storage before processing to avoid duplicates
+
+    // Claim the prompt before processing so reloads do not submit it twice.
     chrome.storage.local.remove(['pendingDeepseekPrompt', 'deepseekPromptTimestamp'], () => {
-      // Process the prompt
       isProcessing = true;
       insertPromptAndSubmit(prompt)
         .then(() => {
@@ -157,7 +143,6 @@ function checkPendingPrompt() {
   });
 }
 
-// Run the check for pending prompts after the page has loaded
 setTimeout(checkPendingPrompt, 2000);
 
 

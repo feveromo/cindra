@@ -1,14 +1,10 @@
-// Log when the script starts
 console.log('Kimi content script loaded');
 
-// Flag to prevent concurrent submissions
 let isProcessing = false;
 
-// Prevent duplicate message listener registration
 if (!window.kimiMessageListenerRegistered) {
   window.kimiMessageListenerRegistered = true;
-  
-  // Listen for messages from the background script
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message in Kimi content script:', message);
   if (message.action === 'insertPrompt') {
@@ -36,12 +32,11 @@ if (!window.kimiMessageListenerRegistered) {
           chrome.storage.local.set({ kimiInFlight: false });
         } catch (e) {}
       });
-    return true; // Indicates asynchronous response
+    return true;
   }
   });
 }
 
-// Function to find element with retry mechanism
 function waitForElement(selector, textContent = null, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const intervalTime = 100;
@@ -51,10 +46,10 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
       let element = document.querySelector(selector);
       if (element && textContent) {
         if (element.textContent.trim() !== textContent) {
-          element = null; // Not the right element
+          element = null;
         }
       }
-      
+
       if (element) {
         clearInterval(interval);
         resolve(element);
@@ -73,13 +68,11 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
   });
 }
 
-// Ensure we only send one XML block (drop any accidental duplicate blocks)
 function normalizePromptForKimi(prompt) {
   try {
     const closeTag = '</Content>';
     const firstCloseIdx = prompt.indexOf(closeTag);
     if (firstCloseIdx !== -1) {
-      // Keep everything up to and including the first closing Content tag
       const trimmed = prompt.slice(0, firstCloseIdx + closeTag.length);
       return trimmed;
     }
@@ -89,27 +82,23 @@ function normalizePromptForKimi(prompt) {
   }
 }
 
-// Function to insert text into the content-editable div
 function insertTextIntoEditableDiv(editableDiv, text) {
   console.log('Starting text insertion into Lexical editor...');
 
-  // Ensure focus
   editableDiv.focus();
 
-  // Select and clear any existing content in the editor
   try {
     const selection = window.getSelection();
     const range = document.createRange();
     range.selectNodeContents(editableDiv);
     selection.removeAllRanges();
     selection.addRange(range);
-    // Delete current contents to avoid concatenation
     document.execCommand('delete');
   } catch (e) {
     console.log('Initial clear failed (non-fatal):', e);
   }
 
-  // Use a single paste pathway to avoid double insertion; do not immediately fallback here.
+  // Kimi's Lexical editor can double-insert if paste and fallback both run.
   try {
     const dataTransfer = new DataTransfer();
     dataTransfer.setData('text/plain', text);
@@ -123,18 +112,15 @@ function insertTextIntoEditableDiv(editableDiv, text) {
     console.log('Synthetic paste failed (non-fatal):', e);
   }
 
-  // Dispatch a single input event to notify listeners
   try {
     editableDiv.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
   } catch (e) {}
 
-  // Refocus to ensure recognition
   editableDiv.focus();
 
   console.log('Text insertion complete.');
 }
 
-// Forcefully set content when rich editor paste/insert fails
 function forceSetEditableDivContent(editableDiv, text) {
   try {
     editableDiv.textContent = text;
@@ -144,17 +130,15 @@ function forceSetEditableDivContent(editableDiv, text) {
   }
 }
 
-// Function to perform a robust click
 function robustClick(element) {
   if (!element) return;
   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  // Prefer a single native click to avoid duplicate handlers
+  // Prefer one native click to avoid duplicate submit handlers.
   try {
     element.click();
     console.log('Native click() invoked on:', element);
   } catch (e) {
-    // Fallback: dispatch a single click event
     const clickEvent = new MouseEvent('click', {
       bubbles: true,
       cancelable: true,
@@ -165,17 +149,14 @@ function robustClick(element) {
   }
 }
 
-// Function to check if send button is enabled (not disabled)
 function isSendButtonEnabled(sendButtonContainer) {
   const isEnabled = !sendButtonContainer.classList.contains('disabled');
   console.log('Send button enabled check:', isEnabled, 'classList:', sendButtonContainer.classList.toString());
   return isEnabled;
 }
 
-// Function to wait for send button to be enabled with immediate check
 function waitForSendButtonEnabled(timeout = 20000) {
   return new Promise((resolve, reject) => {
-    // Try immediate check first
     const sendButtonContainer = document.querySelector('.send-button-container');
     if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
       const sendButton = sendButtonContainer.querySelector('.send-button');
@@ -186,15 +167,15 @@ function waitForSendButtonEnabled(timeout = 20000) {
       }
     }
 
-    const intervalTime = 100; // Check more frequently
+    const intervalTime = 100;
     let elapsedTime = 0;
     let lastLogTime = 0;
 
     console.log('Starting send button polling...');
     const interval = setInterval(() => {
       const sendButtonContainer = document.querySelector('.send-button-container');
-      
-      // Log periodically for debugging but less frequently 
+
+      // Keep long waits observable without spamming every poll.
       if (elapsedTime - lastLogTime >= 3000) {
         console.log(`Waiting for send button... elapsed: ${elapsedTime}ms, container found: ${!!sendButtonContainer}`);
         if (sendButtonContainer) {
@@ -202,7 +183,7 @@ function waitForSendButtonEnabled(timeout = 20000) {
         }
         lastLogTime = elapsedTime;
       }
-      
+
       if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
         clearInterval(interval);
         const sendButton = sendButtonContainer.querySelector('.send-button');
@@ -228,12 +209,10 @@ function waitForSendButtonEnabled(timeout = 20000) {
   });
 }
 
-// Main function to handle inserting prompt and submitting
 async function insertPromptAndSubmit(prompt) {
   try {
     console.log('Looking for input field for Kimi...');
-    
-    // Find the content-editable input field with robust selectors
+
     const inputSelectors = [
       '.chat-input-editor[contenteditable="true"]',
       '.chat-input [contenteditable="true"]',
@@ -246,52 +225,43 @@ async function insertPromptAndSubmit(prompt) {
         inputField = await waitForElement(sel, null, 1500);
         if (inputField) break;
       } catch (e) {
-        // continue trying next selector
       }
     }
     if (!inputField) {
-      // Final attempt with default selector and longer timeout
       inputField = await waitForElement('.chat-input-editor[contenteditable="true"]', null, 10000);
     }
     console.log('Input field found:', inputField);
 
-    // Check initial send button state
     const initialSendContainer = document.querySelector('.send-button-container');
     console.log('Initial send button state:', initialSendContainer?.classList.toString() || 'not found');
 
-    // Normalize to avoid duplicated XML blocks
     const normalizedPrompt = normalizePromptForKimi(prompt);
 
     insertTextIntoEditableDiv(inputField, normalizedPrompt);
     console.log('Prompt text inserted into Kimi input.');
-    
-    // Verify text was actually inserted
+
     const insertedText = inputField.textContent || inputField.innerText || '';
     console.log('Verification - inserted text length:', insertedText.length);
     console.log('Verification - expected text length:', normalizedPrompt.length);
 
-    // If insertion clearly failed or is severely truncated, force set the value
     if (insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))) {
       console.log('Detected truncated insertion; applying force-set fallback...');
       forceSetEditableDivContent(inputField, normalizedPrompt);
     }
 
-    // Check send button state after text insertion (but before waiting)
     const postInsertSendContainer = document.querySelector('.send-button-container');
     console.log('Post-insert send button state:', postInsertSendContainer?.classList.toString() || 'not found');
 
-    // Try immediate button detection (might already be enabled)
     console.log('Checking if send button is already enabled...');
     let sendButton;
     try {
-      sendButton = await waitForSendButtonEnabled(1000); // Very short timeout for immediate check
+      sendButton = await waitForSendButtonEnabled(1000);
       console.log('Send button was immediately available!');
     } catch (error) {
       console.log('Send button not immediately available, waiting for UI update...');
-      
-      // Give Lexical time to sync its internal state with the DOM
+
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       console.log('Looking for enabled send button for Kimi (full check)...');
       sendButton = await waitForSendButtonEnabled();
     }
@@ -300,7 +270,6 @@ async function insertPromptAndSubmit(prompt) {
     robustClick(sendButton);
     console.log('Send button click attempted.');
 
-    // Clear pending prompt from storage after successful submission
     chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
       if (chrome.runtime.lastError) {
         console.error('Error clearing pending Kimi prompt:', chrome.runtime.lastError);
@@ -311,17 +280,15 @@ async function insertPromptAndSubmit(prompt) {
 
   } catch (error) {
     console.error('Error in insertPromptAndSubmit for Kimi:', error);
-    
-    // Fallback: Try Enter key simulation
+
     console.log('Attempting Enter key fallback...');
     try {
       const inputField = document.querySelector('.chat-input-editor[contenteditable="true"]');
-      
+
       if (inputField) {
         console.log('[FALLBACK] Found input field, ensuring content is set...');
         insertTextIntoEditableDiv(inputField, prompt);
-        
-        // Simulate Enter key
+
         console.log('[FALLBACK] Simulating Enter key...');
         inputField.focus();
         const enterEvent = new KeyboardEvent('keydown', {
@@ -334,30 +301,27 @@ async function insertPromptAndSubmit(prompt) {
         });
         inputField.dispatchEvent(enterEvent);
         console.log('[FALLBACK SUCCESS] Enter key simulated.');
-        
-        // Clear storage after fallback
+
         chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
       }
     } catch (fallbackError) {
       console.error('[FALLBACK FAIL] Error during Enter key fallback:', fallbackError);
     }
-    
-    throw error; // Re-throw original error
+
+    throw error;
   }
 }
 
-// Check for pending prompts on page load
 function checkPendingPrompt() {
   if (isProcessing) {
     console.log('Processing already in progress, skipping pending Kimi prompt check.');
     return;
   }
   console.log('Checking for pending Kimi prompt...');
-  // Ask background to atomically claim the prompt to avoid multi-claim across windows
+  // Ask the background worker to claim the prompt so multiple Kimi tabs cannot submit it.
   try {
     chrome.runtime.sendMessage({ action: 'claimKimiPrompt' }, (resp) => {
       if (chrome.runtime.lastError) {
-        // Fallback to local get if messaging fails
         console.log('claimKimiPrompt failed, falling back to local get:', chrome.runtime.lastError.message);
         fallbackClaim();
         return;
@@ -366,7 +330,6 @@ function checkPendingPrompt() {
         console.log('No claimable Kimi prompt or locked; skipping.');
         return;
       }
-      // We obtained the prompt exclusively
       isProcessing = true;
       console.log('Setting isProcessing = true (claimed via background)');
       insertPromptAndSubmit(resp.prompt)
@@ -394,7 +357,7 @@ function checkPendingPrompt() {
       return;
     }
 
-    if (isProcessing) { // Check again in case of race condition
+    if (isProcessing) {
       console.log('Processing started while waiting for storage, skipping pending Kimi prompt.');
       return;
     }
@@ -404,8 +367,7 @@ function checkPendingPrompt() {
       const timestamp = result.kimiPromptTimestamp;
       const promptAge = Date.now() - timestamp;
 
-      // Check if the prompt is recent (e.g., within the last 60 seconds)
-      if (promptAge < 60000) { // 1 minute
+      if (promptAge < 60000) {
         console.log('Found pending Kimi prompt from storage:', promptToProcess.substring(0, 50) + '...');
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
@@ -413,7 +375,7 @@ function checkPendingPrompt() {
         chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
           if (chrome.runtime.lastError) {
             console.error('Error clearing pending Kimi prompt before processing:', chrome.runtime.lastError);
-            isProcessing = false; 
+            isProcessing = false;
             console.log('Resetting isProcessing due to clear error (checkPendingPrompt).');
             return;
           }
@@ -442,15 +404,12 @@ function checkPendingPrompt() {
   }
 }
 
-// Check pending prompt when the script loads or the page becomes ready
-// Only run once to prevent duplicate processing
 if (!window.kimiPendingPromptChecked) {
   window.kimiPendingPromptChecked = true;
-  
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', checkPendingPrompt);
   } else {
-    // Small delay to ensure page elements might be more ready
-    setTimeout(checkPendingPrompt, 250); 
+    setTimeout(checkPendingPrompt, 250);
   }
 }

@@ -1,10 +1,7 @@
-// Log when the script starts
 console.log('Google Learning content script loaded');
 
-// Flag to prevent concurrent submissions
 let isProcessing = false;
 
-// Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Received message in Google Learning content script:', message);
   if (message.action === 'insertPrompt') {
@@ -29,11 +26,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         isProcessing = false;
         console.log('Processing finished, resetting isProcessing flag to false (onMessage finally).');
       });
-    return true; // Indicates asynchronous response
+    return true;
   }
 });
 
-// Function to find element with retry mechanism
 function waitForElement(selector, textContent = null, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const intervalTime = 100;
@@ -43,10 +39,10 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
       let element = document.querySelector(selector);
       if (element && textContent) {
         if (element.textContent.trim() !== textContent) {
-          element = null; // Not the right element
+          element = null;
         }
       }
-      
+
       if (element) {
         clearInterval(interval);
         resolve(element);
@@ -65,7 +61,6 @@ function waitForElement(selector, textContent = null, timeout = 10000) {
   });
 }
 
-// Function to insert text into the textarea
 function insertTextIntoTextarea(textarea, text) {
   textarea.focus();
   textarea.value = text;
@@ -74,13 +69,9 @@ function insertTextIntoTextarea(textarea, text) {
   console.log('Text inserted into textarea and events dispatched.');
 }
 
-// Function to perform a robust click
 function robustClick(element) {
   if (!element) return;
   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  // Add a small delay after scrolling if needed, though often not necessary with event dispatch
-  // await new Promise(resolve => setTimeout(resolve, 100)); 
 
   const mousedownEvent = new MouseEvent('mousedown', {
     bubbles: true,
@@ -104,28 +95,26 @@ function robustClick(element) {
   console.log('Robust click events dispatched on:', element);
 }
 
-// Function to find the send button specifically
 function findSendButton() {
   const spans = document.querySelectorAll('span');
   console.log(`Found ${spans.length} span elements on the page`);
-  
+
   for (const span of spans) {
     const text = span.textContent.trim();
     const fontFamily = span.style.fontFamily;
     const cursor = span.style.cursor;
-    
+
     console.log(`Span text: "${text}", fontFamily: "${fontFamily}", cursor: "${cursor}"`);
-    
-    if (text === 'send' && 
-        fontFamily && 
+
+    if (text === 'send' &&
+        fontFamily &&
         fontFamily.includes('Google Symbols') &&
         cursor === 'pointer') {
       console.log('Found matching send button:', span);
       return span;
     }
   }
-  
-  // Fallback: look for any span with "send" text that's clickable
+
   for (const span of spans) {
     const text = span.textContent.trim();
     if (text === 'send' && (span.style.cursor === 'pointer' || span.onclick || span.getAttribute('role') === 'button')) {
@@ -133,12 +122,11 @@ function findSendButton() {
       return span;
     }
   }
-  
+
   console.log('No matching send button found');
   return null;
 }
 
-// Function to wait for the send button with a more specific approach
 function waitForSendButton(timeout = 10000) {
   return new Promise((resolve, reject) => {
     const intervalTime = 100;
@@ -146,7 +134,7 @@ function waitForSendButton(timeout = 10000) {
 
     const interval = setInterval(() => {
       const sendButton = findSendButton();
-      
+
       if (sendButton) {
         clearInterval(interval);
         resolve(sendButton);
@@ -161,22 +149,19 @@ function waitForSendButton(timeout = 10000) {
   });
 }
 
-// Main function to handle inserting prompt and submitting
 async function insertPromptAndSubmit(prompt) {
   try {
     console.log('Looking for input field for Google Learning...');
-    
-    // Debug: Log all textareas on the page
+
     const allTextareas = document.querySelectorAll('textarea');
     console.log(`Found ${allTextareas.length} textarea elements on the page`);
     allTextareas.forEach((textarea, index) => {
       console.log(`Textarea ${index}: placeholder="${textarea.placeholder}", aria-label="${textarea.getAttribute('aria-label')}"`);
     });
-    
-    // Updated selector to match the current interface
+
     const inputSelector = 'textarea[placeholder="Ask Learn About"]';
     let inputField;
-    
+
     try {
       inputField = await waitForElement(inputSelector);
     } catch (error) {
@@ -184,23 +169,21 @@ async function insertPromptAndSubmit(prompt) {
       const fallbackSelector = 'textarea[aria-label*="Ask"], textarea[aria-label*="Learn"]';
       inputField = await waitForElement(fallbackSelector);
     }
-    
+
     console.log('Input field found:', inputField);
 
     insertTextIntoTextarea(inputField, prompt);
     console.log('Prompt text inserted into Google Learning input.');
 
-    await new Promise(resolve => setTimeout(resolve, 750)); // Slightly increased delay
+    await new Promise(resolve => setTimeout(resolve, 750));
 
     console.log('Looking for send button for Google Learning...');
-    // Use the specific send button finder
     const sendButton = await waitForSendButton();
     console.log('Send button found and enabled:', sendButton);
 
-    robustClick(sendButton); // Use robust click
+    robustClick(sendButton);
     console.log('Robust send button click attempted.');
 
-    // Clear pending prompt from storage after successful submission
     chrome.storage.local.remove(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp'], () => {
       if (chrome.runtime.lastError) {
         console.error('Error clearing pending Google Learning prompt:', chrome.runtime.lastError);
@@ -211,12 +194,10 @@ async function insertPromptAndSubmit(prompt) {
 
   } catch (error) {
     console.error('Error in insertPromptAndSubmit for Google Learning:', error);
-    throw error; // Re-throw to be caught by the caller
+    throw error;
   }
-  // 'isProcessing' is reset by the caller's finally block
 }
 
-// Check for pending prompts on page load
 function checkPendingPrompt() {
   if (isProcessing) {
     console.log('Processing already in progress, skipping pending Google Learning prompt check.');
@@ -229,7 +210,7 @@ function checkPendingPrompt() {
       return;
     }
 
-    if (isProcessing) { // Check again in case of race condition
+    if (isProcessing) {
       console.log('Processing started while waiting for storage, skipping pending Google Learning prompt.');
       return;
     }
@@ -239,8 +220,7 @@ function checkPendingPrompt() {
       const timestamp = result.googleLearningPromptTimestamp;
       const promptAge = Date.now() - timestamp;
 
-      // Check if the prompt is recent (e.g., within the last 60 seconds)
-      if (promptAge < 60000) { // 1 minute
+      if (promptAge < 60000) {
         console.log('Found pending Google Learning prompt from storage:', promptToProcess.substring(0, 50) + '...');
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
@@ -248,8 +228,7 @@ function checkPendingPrompt() {
         chrome.storage.local.remove(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp'], () => {
           if (chrome.runtime.lastError) {
             console.error('Error clearing pending Google Learning prompt before processing:', chrome.runtime.lastError);
-            // If we can't clear it, maybe don't proceed to avoid double submission?
-            isProcessing = false; 
+            isProcessing = false;
             console.log('Resetting isProcessing due to clear error (checkPendingPrompt).');
             return;
           }
@@ -258,8 +237,6 @@ function checkPendingPrompt() {
             .then(() => console.log('Pending Google Learning prompt processed successfully.'))
             .catch(error => {
               console.error('Error processing pending Google Learning prompt:', error);
-              // Optional: Consider re-storing the prompt if submission fails critically?
-              // chrome.storage.local.set({ pendingGoogleLearningPrompt: promptToProcess, googleLearningPromptTimestamp: timestamp });
             })
             .finally(() => {
                 isProcessing = false;
@@ -276,21 +253,8 @@ function checkPendingPrompt() {
   });
 }
 
-// Check pending prompt when the script loads or the page becomes ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', checkPendingPrompt);
 } else {
-  // Small delay to ensure page elements might be more ready
-  setTimeout(checkPendingPrompt, 250); 
+  setTimeout(checkPendingPrompt, 250);
 }
-
-// Example of how to send a message to the background script (if needed)
-// function notifyBackground(data) {
-//   chrome.runtime.sendMessage({ type: "FROM_GOOGLE_LEARNING_CS", data: data }, response => {
-//     if (chrome.runtime.lastError) {
-//       console.error("Error sending message to background:", chrome.runtime.lastError.message);
-//     } else {
-//       console.log("Background script responded:", response);
-//     }
-//   });
-// } 

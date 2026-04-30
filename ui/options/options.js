@@ -5,12 +5,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load saved settings
   chrome.storage.sync.get({
     theme: 'auto',
-    copyFormat: 'plain',
     floatingButton: 'visible',
     aiModel: 'google-ai-studio'
   }, (items) => {
     document.querySelector(`input[name="theme"][value="${items.theme}"]`).checked = true;
-    document.querySelector(`input[name="copy-format"][value="${items.copyFormat}"]`).checked = true;
     document.querySelector(`input[name="floating-button"][value="${items.floatingButton}"]`).checked = true;
     document.querySelector(`input[name="ai-model"][value="${items.aiModel}"]`).checked = true;
 
@@ -63,13 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function saveOptions() {
   const theme = document.querySelector('input[name="theme"]:checked').value;
-  const copyFormat = document.querySelector('input[name="copy-format"]:checked').value;
   const floatingButton = document.querySelector('input[name="floating-button"]:checked').value;
   const aiModel = document.querySelector('input[name="ai-model"]:checked').value;
 
   chrome.storage.sync.set({
     theme,
-    copyFormat,
     floatingButton,
     aiModel
   }, () => {

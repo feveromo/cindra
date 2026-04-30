@@ -140,9 +140,8 @@ function summarizeCurrentPage() {
         tabId: currentTab.id,
         url: currentTab.url,
         summaryPrompt: summaryPrompt,
-        contentOption: 'entire-content',
         aiModel: settings.aiModel
       });
     });
   });
-} 
+}

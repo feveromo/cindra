@@ -65,7 +65,6 @@ function handleSummarize(tab, options = {}) {
   chrome.storage.sync.get({
     savedPrompts: [],
     activePromptId: null,
-    contentOption: 'entire-content',
     aiModel: 'google-ai-studio'
   }, (settings) => {
     // Get the active prompt text if not provided in options
@@ -376,43 +375,7 @@ function handlePdfExtraction(tab, config) {
 function openGoogleAIStudio(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Google AI Studio with prompt and content');
 
-  // Clean up the content formatting
-  // Prefer thread-preserving cleanup when content looks like ThreadLog
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   console.log('Formatted prompt length for Google AI Studio:', formattedPrompt.length);
 
@@ -522,52 +485,7 @@ function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
 function openPerplexity(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Perplexity with prompt and content');
 
-  // Clean up the content formatting
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
 
@@ -590,47 +508,7 @@ ${cleanedContent}
 function openGrok(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Grok with prompt and content');
 
-  // Clean up the content formatting
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   console.log('Formatted prompt length for Grok:', formattedPrompt.length);
 
@@ -668,47 +546,7 @@ ${cleanedContent}
 function openClaude(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Claude with prompt and content');
 
-  // Clean up the content formatting
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   console.log('Formatted prompt length for Claude:', formattedPrompt.length);
 
@@ -746,47 +584,7 @@ ${cleanedContent}
 function openGemini(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Gemini with prompt and content');
 
-  // Clean up the content formatting
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   console.log('Formatted prompt length for Gemini:', formattedPrompt.length);
 
@@ -933,6 +731,108 @@ function cleanupContentFormattingThreads(content) {
   return cleaned;
 }
 
+// Cleanup variant for ChatGPT: preserve paragraph breaks while reducing noisy line wraps
+function cleanupContentFormattingChatGPT(content) {
+  if (!content) return '';
+
+  // Protect URLs so whitespace normalization doesn't break them
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = [];
+  let protectedContent = content.replace(urlRegex, (match) => {
+    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
+    urls.push(match);
+    return placeholder;
+  });
+
+  // Remove our extension's widget text
+  protectedContent = protectedContent.replace(/🤖\s*Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
+
+  // Decode common entities and normalize line endings
+  let cleaned = protectedContent
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\u00A0/g, ' ')
+    .replace(/\r\n?/g, '\n');
+
+  // Normalize separator lines and preserve major boundaries before flattening noisy wraps
+  cleaned = cleaned
+    .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
+    .replace(/\n{2,}/g, '\n__PARA_BREAK__\n');
+
+  // Flatten single wrapped lines but keep paragraph markers
+  cleaned = cleaned
+    .replace(/\n/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*([.!?])\s*/g, '$1 ')
+    .replace(/([.!?])\s{2,}/g, '$1 ')
+    .trim();
+
+  // Restore paragraph and separator structure
+  cleaned = cleaned
+    .replace(/\s*__PARA_BREAK__\s*/g, '\n\n')
+    .replace(/\s*__POST_SEP__\s*/g, '\n---\n\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Restore URLs
+  urls.forEach((url, index) => {
+    const placeholder = `__URL_PLACEHOLDER_${index}__`;
+    cleaned = cleaned.replace(placeholder, url);
+  });
+
+  return cleaned;
+}
+
+function buildXmlSection(tagName, sectionContent) {
+  const text = (sectionContent ?? '').toString().trim();
+  return `<${tagName}>\n${text}\n</${tagName}>`;
+}
+
+function cleanSummaryContent(content, cleaner = null) {
+  if (cleaner) {
+    return cleaner(content);
+  }
+
+  return /\n---\n/.test(content)
+    ? cleanupContentFormattingThreads(content)
+    : cleanupContentFormatting(content);
+}
+
+function buildSummaryPrompt(prompt, content, title, url = null, channel = null, description = null, options = {}) {
+  const cleanedContent = cleanSummaryContent(content, options.cleaner);
+  const sections = [
+    buildXmlSection('Task', prompt || ''),
+    buildXmlSection('ContentTitle', title || 'N/A')
+  ];
+
+  const normalizedUrl = typeof url === 'string' ? url.trim() : '';
+  const normalizedChannel = typeof channel === 'string' ? channel.trim() : '';
+  const normalizedDescription = typeof description === 'string' ? description.trim() : '';
+
+  if (normalizedUrl) {
+    sections.push(buildXmlSection('URL', normalizedUrl));
+  }
+
+  if (normalizedChannel) {
+    sections.push(buildXmlSection('Channel', normalizedChannel));
+  }
+
+  if (normalizedDescription) {
+    sections.push(buildXmlSection('Description', normalizedDescription));
+  }
+
+  sections.push(buildXmlSection('Content', cleanedContent));
+
+  return {
+    promptText: sections.join(options.sectionSeparator || '\n\n'),
+    cleanedContent
+  };
+}
+
 // Open an error tab with a message
 function openErrorTab(message) {
   try {
@@ -1046,52 +946,17 @@ function openErrorTab(message) {
 }
 
 function openChatGPT(prompt, content, title, url = null, channel = null, description = null) {
-  // Clean up the content formatting
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
+  const {
+    promptText: formattedPrompt,
+    cleanedContent
+  } = buildSummaryPrompt(prompt, content, title, url, channel, description, {
+    cleaner: cleanupContentFormattingChatGPT
+  });
 
-  // Format with XML tags
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-
-<ContentTitle>
-${title}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-
-<Content>
-${cleanedContent}
-</Content>`;
+  console.log('ChatGPT prompt prepared:', {
+    promptLength: formattedPrompt.length,
+    cleanedContentLength: cleanedContent.length
+  });
 
   // Store the prompt and title temporarily
   chrome.storage.local.set({
@@ -1101,7 +966,7 @@ ${cleanedContent}
   }, () => {
     // Open ChatGPT in a new tab
     chrome.tabs.create({
-      url: 'https://chat.openai.com/',
+      url: 'https://chatgpt.com/',
       active: true
     }, (tab) => {
       // Set up a retry mechanism to ensure the content script is ready
@@ -1126,44 +991,7 @@ ${cleanedContent}
 
 // Function to open Google Learning and pass prompt
 function openGoogleLearning(prompt, content, title, url = null, channel = null, description = null) {
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  let combinedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (url) {
-    combinedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    combinedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    combinedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  combinedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
   const targetUrl = 'https://learning.google.com/experiments/learn-about'; // Ensure no trailing slash for consistency with manifest match
 
   // Store the prompt for the content script to pick up
@@ -1201,44 +1029,7 @@ ${cleanedContent}
 // Open DeepSeek with the content
 function openDeepseek(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening DeepSeek with prompt and content');
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
   const targetUrl = 'https://chat.deepseek.com/';
 
   chrome.storage.local.set({
@@ -1279,44 +1070,7 @@ ${cleanedContent}
 // Open GLM (Z.AI) with the content
 function openGLM(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening GLM (Z.AI) with prompt and content');
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  let formattedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
   const targetUrl = 'https://chat.z.ai/';
 
   chrome.storage.local.set({
@@ -1363,52 +1117,15 @@ function openKimi(prompt, content, title, url = null, channel = null, descriptio
   openKimi.__lock.ts = now;
 
   console.log('Opening Kimi with prompt and content');
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
+  const {
+    promptText: builtPrompt,
+    cleanedContent
+  } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   // If the incoming prompt already appears to be fully wrapped (has a closing </Content>),
   // avoid re-wrapping to prevent duplicate XML blocks.
   const alreadyWrapped = typeof prompt === 'string' && prompt.includes('</Content>');
-
-  let formattedPrompt = alreadyWrapped ? prompt : `
-<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (!alreadyWrapped && url) {
-    formattedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (!alreadyWrapped && channel) {
-    formattedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (!alreadyWrapped && description) {
-    formattedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  if (!alreadyWrapped) {
-    formattedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
-  }
+  const formattedPrompt = alreadyWrapped ? prompt : builtPrompt;
   const targetUrl = 'https://kimi.com/';
 
   // Build a signature to detect near-duplicate requests
@@ -1475,44 +1192,7 @@ ${cleanedContent}
 // Open HuggingChat with the content
 function openHuggingChat(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening HuggingChat with prompt and content');
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  let combinedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (url) {
-    combinedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    combinedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    combinedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  combinedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
   const targetUrl = 'https://huggingface.co/chat/';
 
   // Store the prompt for the content script to pick up
@@ -1548,44 +1228,7 @@ ${cleanedContent}
 // Open Qwen with the content
 function openQwen(prompt, content, title, url = null, channel = null, description = null) {
   console.log('Opening Qwen with prompt and content');
-  const cleanedContent = /\n---\n/.test(content) ? cleanupContentFormattingThreads(content) : cleanupContentFormatting(content);
-  let combinedPrompt = `<Task>
-${prompt}
-</Task>
-
-<ContentTitle>
-${title || 'N/A'}
-</ContentTitle>`;
-
-  if (url) {
-    combinedPrompt += `
-
-<URL>
-${url}
-</URL>`;
-  }
-
-  if (channel) {
-    combinedPrompt += `
-
-<Channel>
-${channel}
-</Channel>`;
-  }
-
-  if (description) {
-    combinedPrompt += `
-
-<Description>
-${description}
-</Description>`;
-  }
-
-  combinedPrompt += `
-
-<Content>
-${cleanedContent}
-</Content>`;
+  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
 
   const targetUrl = 'https://chat.qwen.ai/';
 

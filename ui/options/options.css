@@ -94,31 +94,6 @@ body {
   grid-template-columns: repeat(2, minmax(170px, 1fr));
 }
 
-.shortcut-info {
-  padding: 16px;
-  border: 1px solid var(--line);
-  background: var(--surface-muted);
-}
-
-.shortcut-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.shortcut-label {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.shortcut-keys {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .key {
   display: inline-flex;
   align-items: center;
@@ -321,7 +296,6 @@ body {
     padding: 16px;
   }
 
-  .shortcut-item,
   .actions {
     flex-direction: column;
     align-items: flex-start;

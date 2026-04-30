@@ -12,6 +12,22 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 - Stores reusable prompt presets
 - Routes content into multiple AI destinations without using an API key directly
 
+## Screenshots
+
+### Toolbar popup
+
+<p align="center">
+  <img src="images/screenshots/popup-main.png" alt="Cindra toolbar popup" width="320">
+  <img src="images/screenshots/popup-prompts.png" alt="Cindra toolbar popup prompt controls" width="320">
+</p>
+
+### Settings page
+
+<p align="center">
+  <img src="images/screenshots/settings-light.png" alt="Cindra settings page in light mode" width="48%">
+  <img src="images/screenshots/settings-dark.png" alt="Cindra settings page in dark mode" width="48%">
+</p>
+
 ## Supported destinations
 
 - Google AI Studio

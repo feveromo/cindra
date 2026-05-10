@@ -3,7 +3,7 @@ console.log('Google Learning content script loaded');
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message in Google Learning content script:', message);
+  console.log('Received message in Google Learning content script.');
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
       console.log('Already processing, ignoring message.');
@@ -221,7 +221,7 @@ function checkPendingPrompt() {
       const promptAge = Date.now() - timestamp;
 
       if (promptAge < 60000) {
-        console.log('Found pending Google Learning prompt from storage:', promptToProcess.substring(0, 50) + '...');
+        console.log('Found pending Google Learning prompt from storage.');
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
 

@@ -3,7 +3,7 @@ console.log('Gemini content script loaded');
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message in Gemini content script:', message);
+  console.log('Received message in Gemini content script.');
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
       console.log('Already processing, ignoring message.');
@@ -151,7 +151,7 @@ function checkPendingPrompt() {
       const promptAge = Date.now() - result.geminiPromptTimestamp;
 
       if (promptAge < 60000) {
-        console.log('Found pending Gemini prompt from storage:', result.pendingGeminiTitle);
+        console.log('Found pending Gemini prompt from storage.');
 
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');

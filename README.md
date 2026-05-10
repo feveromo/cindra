@@ -10,6 +10,9 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 - Supports a keyboard shortcut: `Ctrl + X + X`
 - Can show a floating summarize button on regular webpages
 - Stores reusable prompt presets
+- Can send the full page or only selected text
+- Opens an optional on-page composer when you highlight text so you can ask a question about that exact selection
+- Shows handoff status with copy/resend recovery for the last generated prompt
 - Routes content into multiple AI destinations without using an API key directly
 
 ## Screenshots
@@ -46,6 +49,7 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 ## Content sources
 
 - Regular webpages
+- Selected text from the current page
 - YouTube videos with transcript extraction
 - Reddit threads and posts
 
@@ -73,9 +77,10 @@ cd cindra
 1. Open the extension popup
 2. Pick a destination AI service
 3. Pick or edit a prompt preset
-4. Click `Summarize Current Page`
+4. Pick the content source if you want selected text or page text specifically
+5. Click `Summarize Current Page`
 
-You can also use `Ctrl + X + X` on a page, or the floating button if it is enabled in settings.
+You can also use `Ctrl + X + X` on a page, the floating button if it is enabled in settings, or highlight text and use the on-page composer to ask a focused question.
 
 ## Project structure
 
@@ -83,6 +88,7 @@ You can also use `Ctrl + X + X` on a page, or the floating button if it is enabl
 cindra/
 ├── background/          # MV3 service worker and routing logic
 ├── content_scripts/     # Site-specific integrations and generic page shortcut UI
+├── lib/                 # Shared provider/source registry
 ├── images/              # Extension icons
 ├── ui/
 │   ├── options/         # Settings page
@@ -94,8 +100,8 @@ cindra/
 
 1. Add a content script in `content_scripts/`
 2. Register it in `manifest.json`
-3. Add the provider to the popup and options UI
-4. Add the routing case in `background/background.js`
+3. Add the provider metadata to `lib/providers.js`
+4. Add any provider-specific insertion logic to the content script
 
 ## License
 

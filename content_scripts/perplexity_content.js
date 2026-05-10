@@ -21,7 +21,7 @@ function isPageReady() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in Perplexity content script:', message);
+  console.log('Message received in Perplexity content script.');
 
   if (message.action === 'insertPrompt') {
     if (isSubmitting || promptSubmitted) {
@@ -258,7 +258,7 @@ function insertPromptAndSubmit(prompt, title) {
         inputArea.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
         console.log('Input area is contenteditable, using insertTextIntoContentEditable');
-        console.log('Prompt to insert:', prompt);
+        console.log('Prompt prepared for Perplexity input.');
         insertTextIntoContentEditable(inputArea, prompt);
       }
 

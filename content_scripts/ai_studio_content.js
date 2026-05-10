@@ -4,7 +4,7 @@ let promptSubmitted = false;
 let isSubmitting = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in AI Studio content script:', message);
+  console.log('Message received in AI Studio content script.');
 
   if (message.action === 'insertPrompt') {
     isSubmitting = false;

@@ -89,7 +89,7 @@ body {
   gap: 8px;
 }
 
-.settings-section:first-of-type .setting-item:first-of-type .setting-controls {
+#provider-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(170px, 1fr));
 }
@@ -281,7 +281,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .settings-section:first-of-type .setting-item:first-of-type .setting-controls {
+  #provider-options {
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 }

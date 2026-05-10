@@ -18,7 +18,7 @@
         <h1>Cindra Summary</h1>
         <p class="header-description">Route the current page into your favorite AI workspace with the prompt you want.</p>
       </div>
-      <span class="version-pill">v1.0.0</span>
+      <span class="version-pill">v1.2.0</span>
     </div>
     
     <div class="section">
@@ -29,20 +29,20 @@
       <div class="model-selection">
         <label for="ai-model" class="field-label">AI Model</label>
         <div class="select-wrap">
-          <select id="ai-model">
-            <option value="google-ai-studio">Google AI Studio</option>
-            <option value="gemini">Gemini</option>
-            <option value="perplexity">Perplexity</option>
-            <option value="grok">Grok</option>
-            <option value="claude">Claude</option>
-            <option value="chatgpt">ChatGPT</option>
-            <option value="google-learning">Google Learning</option>
-            <option value="deepseek">DeepSeek</option>
-            <option value="glm">GLM (Z.AI)</option>
-            <option value="kimi">Kimi</option>
-            <option value="huggingchat">HuggingChat</option>
-            <option value="qwen">Qwen</option>
-          </select>
+          <select id="ai-model"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-heading">
+        <h2>Source</h2>
+        <p class="section-copy">Choose what gets packaged for the AI tab.</p>
+      </div>
+      <div class="model-selection">
+        <label for="content-source" class="field-label">Content Source</label>
+        <div class="select-wrap">
+          <select id="content-source"></select>
         </div>
       </div>
     </div>
@@ -72,6 +72,16 @@
 
     <div class="actions">
       <button id="summarize-btn" class="primary-btn">Summarize Current Page</button>
+      <div id="handoff-status" class="status-panel is-idle">
+        <div>
+          <div class="field-label">Last Handoff</div>
+          <div id="handoff-status-text" class="status-meta">Ready.</div>
+        </div>
+        <div id="handoff-actions" class="handoff-actions" hidden>
+          <button id="copy-last-prompt" class="secondary-btn compact-btn">Copy Prompt</button>
+          <button id="resend-last-prompt" class="secondary-btn compact-btn">Resend</button>
+        </div>
+      </div>
       <div class="action-strip">
         <div>
           <div class="field-label">Shortcut</div>
@@ -91,6 +101,7 @@
       <button id="options-btn">Open Settings</button>
     </div>
   </div>
+  <script src="../../lib/providers.js"></script>
   <script src="popup.js"></script>
 </body>
 </html> 

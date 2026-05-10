@@ -3,7 +3,7 @@ console.log('HuggingChat content script loaded');
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message in HuggingChat content script:', message);
+  console.log('Received message in HuggingChat content script.');
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
       console.log('Already processing, ignoring message.');
@@ -159,7 +159,7 @@ function checkPendingPrompt() {
       const promptAge = Date.now() - timestamp;
 
       if (promptAge < 60000) {
-        console.log('Found pending HuggingChat prompt from storage:', promptToProcess.substring(0, 50) + '...');
+        console.log('Found pending HuggingChat prompt from storage.');
         isProcessing = true;
         console.log('Setting isProcessing = true (checkPendingPrompt)');
 
@@ -196,4 +196,3 @@ if (document.readyState === 'loading') {
 } else {
   setTimeout(checkPendingPrompt, 250);
 }
-

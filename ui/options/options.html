@@ -25,7 +25,7 @@
             extension feeling consistent across sites.
           </p>
         </div>
-        <span class="version">v1.0.0</span>
+        <span class="version">v1.2.0</span>
       </div>
 
       <div class="intro-grid">
@@ -71,96 +71,18 @@
                 summarize.
               </p>
             </div>
-            <div class="setting-controls">
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="google-ai-studio"
-                  value="google-ai-studio"
-                />
-                <span class="radio-label">Google AI Studio</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="gemini"
-                  value="gemini"
-                />
-                <span class="radio-label">Gemini</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="perplexity"
-                  value="perplexity"
-                />
-                <span class="radio-label">Perplexity</span>
-              </label>
-              <label class="radio-container">
-                <input type="radio" name="ai-model" id="grok" value="grok" />
-                <span class="radio-label">Grok</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="claude"
-                  value="claude"
-                />
-                <span class="radio-label">Claude</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="chatgpt"
-                  value="chatgpt"
-                />
-                <span class="radio-label">ChatGPT</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="google-learning"
-                  value="google-learning"
-                />
-                <span class="radio-label">Google Learning</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="deepseek"
-                  value="deepseek"
-                />
-                <span class="radio-label">DeepSeek</span>
-              </label>
-              <label class="radio-container">
-                <input type="radio" name="ai-model" id="glm" value="glm" />
-                <span class="radio-label">GLM (Z.AI)</span>
-              </label>
-              <label class="radio-container">
-                <input type="radio" name="ai-model" id="kimi" value="kimi" />
-                <span class="radio-label">Kimi</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="ai-model"
-                  id="huggingchat"
-                  value="huggingchat"
-                />
-                <span class="radio-label">HuggingChat</span>
-              </label>
-              <label class="radio-container">
-                <input type="radio" name="ai-model" id="qwen" value="qwen" />
-                <span class="radio-label">Qwen</span>
-              </label>
+            <div class="setting-controls" id="provider-options"></div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-copy">
+              <span class="setting-label">Default Source</span>
+              <p class="setting-description">
+                Pick the content source used by the popup and shortcut unless
+                you change it for a single handoff.
+              </p>
             </div>
+            <div class="setting-controls" id="content-source-options"></div>
           </div>
 
           <div class="setting-item">
@@ -215,6 +137,35 @@
                   type="radio"
                   name="floating-button"
                   id="hidden-button"
+                  value="hidden"
+                />
+                <span class="radio-label">Hidden</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-copy">
+              <span class="setting-label">Selection Composer</span>
+              <p class="setting-description">
+                Show the small ask window after you highlight text on a page.
+              </p>
+            </div>
+            <div class="setting-controls">
+              <label class="radio-container">
+                <input
+                  type="radio"
+                  name="selection-composer"
+                  id="visible-selection-composer"
+                  value="visible"
+                />
+                <span class="radio-label">Visible</span>
+              </label>
+              <label class="radio-container">
+                <input
+                  type="radio"
+                  name="selection-composer"
+                  id="hidden-selection-composer"
                   value="hidden"
                 />
                 <span class="radio-label">Hidden</span>
@@ -280,6 +231,7 @@
         <div id="status" class="status"></div>
       </div>
     </div>
+    <script src="../../lib/providers.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

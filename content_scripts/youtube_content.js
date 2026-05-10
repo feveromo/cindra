@@ -211,7 +211,7 @@ initializeCopyButton();
 setupMutationObserver();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in YouTube content script:', message);
+  console.log('Message received in YouTube content script.');
 
   if (message.action === 'extractTranscript') {
     isExtracting = false;
@@ -453,8 +453,8 @@ function getYouTubeTranscript() {
       const apiMethodPromise = new Promise(async (resolve) => {
         try {
           const ytcfg = getYtcfg();
-          if (ytcfg) {
-            const apiKey = ytcfg.INNERTUBE_API_KEY || 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+          if (ytcfg && ytcfg.INNERTUBE_API_KEY) {
+            const apiKey = ytcfg.INNERTUBE_API_KEY;
             const clientVersion = ytcfg.INNERTUBE_CLIENT_VERSION || '2.20240401.00.00';
 
             const response = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {

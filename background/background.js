@@ -1,208 +1,319 @@
-// Listen for messages from popup or content script
-// Lightweight in-memory lock for Kimi claim
+importScripts('../lib/providers.js');
+
+const providerRegistry = globalThis.CindraProviders;
+const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+const MAX_RECENT_SUMMARIES = 5;
+
 let kimiClaimLock = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'claimKimiPrompt') {
-    // Ensure only one claimer succeeds even if multiple content scripts race
-    if (kimiClaimLock) {
-      sendResponse({ success: false, error: 'locked' });
-      return true;
-    }
-    kimiClaimLock = true;
-    chrome.storage.local.get(['pendingKimiPrompt', 'kimiPromptTimestamp'], (state) => {
-      const release = () => { kimiClaimLock = false; };
-      if (chrome.runtime.lastError) {
-        release();
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        return;
-      }
-      const prompt = state.pendingKimiPrompt;
-      const ts = state.kimiPromptTimestamp || 0;
-      const fresh = (Date.now() - ts) < 60000;
-      if (!prompt || !fresh) {
-        // Nothing to claim or stale
-        if (!fresh && ts) {
-          chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
-        }
-        release();
-        sendResponse({ success: false, error: 'none' });
-        return;
-      }
-      // Remove keys to ensure exclusivity
-      chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
-        release();
-        if (chrome.runtime.lastError) {
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          sendResponse({ success: true, prompt });
-        }
-      });
+    claimKimiPrompt(sendResponse);
+    return true;
+  }
+
+  if (message.action === 'summarize') {
+    resolveSourceTab(message, sender, (tab) => {
+      handleSummarize(tab, message);
     });
     return true;
   }
-  if (message.action === 'summarize') {
-    if (message.tabId) {
-      chrome.tabs.get(message.tabId, (tab) => {
-        handleSummarize(tab, message);
-      });
-    } else if (sender.tab) {
-      handleSummarize(sender.tab, message);
-    } else if (message.url) {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs.length > 0) {
-          handleSummarize(tabs[0], message);
-        }
-      });
-    }
+
+  if (message.action === 'resendSummary') {
+    resendSummary(message.summaryId);
+    return true;
   }
+
   return true;
 });
 
-// Handle the summarize action
-function handleSummarize(tab, options = {}) {
-  // Get settings
-  chrome.storage.sync.get({
-    savedPrompts: [],
-    activePromptId: null,
-    aiModel: 'google-ai-studio'
-  }, (settings) => {
-    // Get the active prompt text if not provided in options
-    if (!options.summaryPrompt && settings.activePromptId && settings.savedPrompts.length > 0) {
-      const activePrompt = settings.savedPrompts.find(p => p.id === settings.activePromptId);
-      if (activePrompt) {
-        settings.summaryPrompt = activePrompt.text;
-      } else {
-        settings.summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
-      }
-    } else if (!options.summaryPrompt) {
-      settings.summaryPrompt = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
-    }
+function claimKimiPrompt(sendResponse) {
+  if (kimiClaimLock) {
+    sendResponse({ success: false, error: 'locked' });
+    return;
+  }
 
-    // Merge with options passed in (if any)
-    const config = { ...settings, ...options };
+  kimiClaimLock = true;
+  chrome.storage.local.get(['pendingKimiPrompt', 'kimiPromptTimestamp'], (state) => {
+    const release = () => { kimiClaimLock = false; };
 
-    // Check if it's a YouTube video page
-    if (tab.url.includes('youtube.com/watch')) {
-      const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
-      const cacheKey = `transcript_${videoId}`;
-
-      // Try to get cached transcript first
-      chrome.storage.local.get([cacheKey], (result) => {
-        if (result[cacheKey]) {
-          // We have a cached transcript, use it directly
-          const transcriptData = result[cacheKey];
-
-          // Send directly to the selected AI model with individual components
-          sendToSelectedModel(
-            config.aiModel,
-            config.summaryPrompt,
-            transcriptData.content,
-            transcriptData.title,
-            transcriptData.url,
-            transcriptData.channelName,
-            transcriptData.description
-          );
-          return;
-        }
-
-        // No cached transcript, extract it normally
-        extractYouTubeTranscript(tab, config);
-      });
+    if (chrome.runtime.lastError) {
+      release();
+      sendResponse({ success: false, error: chrome.runtime.lastError.message });
       return;
     }
 
-    // Check if it's a Reddit page
+    const prompt = state.pendingKimiPrompt;
+    const ts = state.kimiPromptTimestamp || 0;
+    const fresh = (Date.now() - ts) < 60000;
+
+    if (!prompt || !fresh) {
+      if (!fresh && ts) {
+        chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
+      }
+      release();
+      sendResponse({ success: false, error: 'none' });
+      return;
+    }
+
+    chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
+      release();
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true, prompt });
+      }
+    });
+  });
+}
+
+function resolveSourceTab(message, sender, callback) {
+  if (message.tabId) {
+    chrome.tabs.get(message.tabId, (tab) => {
+      if (chrome.runtime.lastError || !tab) {
+        setStatus('error', 'Could not find the current tab.');
+        return;
+      }
+      callback(tab);
+    });
+    return;
+  }
+
+  if (sender.tab) {
+    callback(sender.tab);
+    return;
+  }
+
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs.length === 0) {
+      setStatus('error', 'No active tab found.');
+      return;
+    }
+    callback(tabs[0]);
+  });
+}
+
+function handleSummarize(tab, options = {}) {
+  if (!tab?.url) {
+    setStatus('error', 'No readable page URL found.');
+    return;
+  }
+
+  chrome.storage.sync.get({
+    savedPrompts: [],
+    activePromptId: null,
+    aiModel: providerRegistry.DEFAULT_PROVIDER,
+    contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE
+  }, (settings) => {
+    const config = {
+      ...settings,
+      ...options
+    };
+
+    config.aiModel = providerRegistry.getProvider(config.aiModel).id;
+    config.contentSource = providerRegistry.getContentSource(config.contentSource).id;
+    config.summaryPrompt = resolveSummaryPrompt(config);
+
+    setStatus('working', 'Extracting content...', {
+      model: config.aiModel,
+      title: tab.title,
+      url: tab.url
+    });
+
+    if (config.contentSource === 'selection' && typeof config.selectedText === 'string' && config.selectedText.trim()) {
+      sendCapturedSelection(tab, config);
+      return;
+    }
+
+    if (config.contentSource === 'selection') {
+      openErrorTab('No selected text found on this page.');
+      return;
+    }
+
+    if (typeof config.capturedPageContent === 'string' && config.capturedPageContent.trim()) {
+      sendCapturedPageContent(tab, config);
+      return;
+    }
+
+    if (config.capturedPageAttempted) {
+      openErrorTab('No content found on the page to summarize.');
+      return;
+    }
+
+    if (config.contentSource === 'selection' || config.contentSource === 'page') {
+      extractPageContent(tab, config, config.contentSource);
+      return;
+    }
+
+    if (tab.url.includes('youtube.com/watch')) {
+      extractYouTubeTranscriptWithCache(tab, config);
+      return;
+    }
+
     if (tab.url.includes('reddit.com')) {
       extractRedditContent(tab, config);
       return;
     }
 
-    // Handle PDF and regular webpages as before
     if (tab.url.toLowerCase().endsWith('.pdf')) {
-      handlePdfExtraction(tab, config);
+      handlePdfExtraction(tab);
       return;
     }
 
-    extractPageContent(tab, config);
+    extractPageContent(tab, config, 'page');
   });
 }
 
-// Function to send content to selected AI model
-function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null) {
-  switch (model) {
-    case 'perplexity':
-      openPerplexity(prompt, content, title, url, channel, description);
-      break;
-    case 'grok':
-      openGrok(prompt, content, title, url, channel, description);
-      break;
-    case 'claude':
-      openClaude(prompt, content, title, url, channel, description);
-      break;
-    case 'chatgpt':
-      openChatGPT(prompt, content, title, url, channel, description);
-      break;
-    case 'gemini':
-      openGemini(prompt, content, title, url, channel, description);
-      break;
-    case 'google-learning':
-      openGoogleLearning(prompt, content, title, url, channel, description);
-      break;
-    case 'deepseek':
-      openDeepseek(prompt, content, title, url, channel, description);
-      break;
-    case 'glm':
-      openGLM(prompt, content, title, url, channel, description);
-      break;
-    case 'kimi':
-      openKimi(prompt, content, title, url, channel, description);
-      break;
-    case 'huggingchat':
-      openHuggingChat(prompt, content, title, url, channel, description);
-      break;
-    case 'qwen':
-      openQwen(prompt, content, title, url, channel, description);
-      break;
-    default:
-      openGoogleAIStudio(prompt, content, title, url, channel, description);
-  }
+function sendCapturedPageContent(tab, config) {
+  const pageContent = normalizeCapturedText(config.capturedPageContent);
+  const formattedContent = `URL: ${tab.url}\n\nContent:\n${pageContent}`;
+
+  sendToSelectedModel(
+    config.aiModel,
+    config.summaryPrompt,
+    formattedContent,
+    tab.title,
+    tab.url,
+    null,
+    config.capturedPageDescription,
+    'page'
+  );
 }
 
-// Extract content from regular webpage
-function extractPageContent(tab, config) {
-  chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    function: getPageContent
-  }, (results) => {
-    if (!results || !results[0] || !results[0].result) {
-      openErrorTab('Could not extract content from the page.');
+function sendCapturedSelection(tab, config) {
+  const selectedText = normalizeCapturedText(config.selectedText);
+  const formattedContent = `URL: ${tab.url}\n\nSelected Text:\n${selectedText}`;
+
+  sendToSelectedModel(
+    config.aiModel,
+    config.summaryPrompt,
+    formattedContent,
+    tab.title,
+    tab.url,
+    null,
+    null,
+    'selection'
+  );
+}
+
+function normalizeCapturedText(text) {
+  return text
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function resolveSummaryPrompt(config) {
+  if (config.summaryPrompt) {
+    return config.summaryPrompt;
+  }
+
+  if (config.activePromptId && config.savedPrompts.length > 0) {
+    const activePrompt = config.savedPrompts.find(p => p.id === config.activePromptId);
+    if (activePrompt) {
+      return activePrompt.text;
+    }
+  }
+
+  return DEFAULT_PROMPT;
+}
+
+function extractYouTubeTranscriptWithCache(tab, config) {
+  const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
+  const cacheKey = `transcript_${videoId}`;
+
+  setStatus('working', 'Checking YouTube transcript cache...', {
+    model: config.aiModel,
+    title: tab.title,
+    url: tab.url,
+    sourceType: 'youtube-transcript'
+  });
+
+  chrome.storage.local.get([cacheKey], (result) => {
+    if (result[cacheKey]) {
+      const transcriptData = result[cacheKey];
+      setStatus('working', 'Using cached YouTube transcript...', {
+        model: config.aiModel,
+        title: transcriptData.title,
+        url: transcriptData.url,
+        sourceType: 'youtube-transcript'
+      });
+      sendToSelectedModel(
+        config.aiModel,
+        config.summaryPrompt,
+        transcriptData.content,
+        transcriptData.title,
+        transcriptData.url,
+        transcriptData.channelName,
+        transcriptData.description,
+        'youtube-transcript'
+      );
       return;
     }
 
-    const pageData = results[0].result;
+    extractYouTubeTranscript(tab, config, cacheKey, videoId);
+  });
+}
+
+function extractPageContent(tab, config, contentSource) {
+  chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    function: getPageContent,
+    args: [contentSource]
+  }, (results) => {
+    if (chrome.runtime.lastError) {
+      openErrorTab('Could not read this page. Try refreshing it and running Cindra again.');
+      return;
+    }
+
+    const pageData = results?.[0]?.result;
+    if (!pageData || pageData.error) {
+      openErrorTab(pageData?.error || 'Could not extract content from the page.');
+      return;
+    }
 
     if (!pageData.content || pageData.content.trim() === '') {
       openErrorTab('No content found on the page to summarize.');
       return;
     }
 
-    // Create a formatted content string with the URL included separately
-    const formattedContent = `URL: ${pageData.url}\n\nContent:\n${pageData.content}`;
+    const heading = pageData.sourceType === 'selection' ? 'Selected Text' : 'Content';
+    const formattedContent = `URL: ${pageData.url}\n\n${heading}:\n${pageData.content}`;
 
-    // Send to appropriate AI model based on settings
-    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, pageData.title, pageData.url);
+    sendToSelectedModel(
+      config.aiModel,
+      config.summaryPrompt,
+      formattedContent,
+      pageData.title,
+      pageData.url,
+      null,
+      pageData.description,
+      pageData.sourceType
+    );
   });
 }
 
-// Extract Reddit content
 function extractRedditContent(tab, config) {
+  setStatus('working', 'Extracting Reddit thread...', {
+    model: config.aiModel,
+    title: tab.title,
+    url: tab.url,
+    sourceType: 'reddit-thread'
+  });
+
   chrome.tabs.sendMessage(tab.id, {
     action: 'extractRedditContent'
   }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error('Error sending message to Reddit content script:', chrome.runtime.lastError);
-      openErrorTab('Could not extract content from Reddit page.');
+      setStatus('working', 'Reddit helper unavailable; using page text...', {
+        model: config.aiModel,
+        title: tab.title,
+        url: tab.url,
+        sourceType: 'page'
+      });
+      extractPageContent(tab, config, 'page');
       return;
     }
 
@@ -212,99 +323,146 @@ function extractRedditContent(tab, config) {
     }
 
     const redditContent = response.content;
-
     if (!redditContent || redditContent.trim() === '') {
       openErrorTab('No content found on the Reddit page to summarize.');
       return;
     }
 
-    // Create a formatted content string with the URL and title
     const formattedContent = `URL: ${tab.url}\nTitle: ${tab.title}\n\n${redditContent}`;
-
-    // Send to appropriate AI model
-    sendToSelectedModel(config.aiModel, config.summaryPrompt, formattedContent, tab.title);
+    sendToSelectedModel(
+      config.aiModel,
+      config.summaryPrompt,
+      formattedContent,
+      tab.title,
+      tab.url,
+      null,
+      null,
+      'reddit-thread'
+    );
   });
 }
 
-// Extract content from a webpage
-function getPageContent() {
-  // First, try to find the main content elements
-  const possibleMainElements = [
-    document.querySelector('main'),
-    document.querySelector('article'),
-    document.querySelector('#content'),
-    document.querySelector('.content'),
-    document.querySelector('.main-content'),
-    document.querySelector('#main')
-  ].filter(el => el !== null);
-
-  let mainContent = '';
-
-  // If we found a main content element, use it
-  if (possibleMainElements.length > 0) {
-    // Use the first main element found
-    const mainElement = possibleMainElements[0];
-
-    // Remove any extension UI elements first
-    const extensionElements = mainElement.querySelectorAll('.cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
-    extensionElements.forEach(el => {
-      el.remove();
-    });
-
-    mainContent = mainElement.innerText;
-  } else {
-    // Fallback to body text, but try to clean it up
-    // First create a clone so we don't modify the actual page
-    const bodyClone = document.body.cloneNode(true);
-
-    // Remove script, style, nav, footer, header, and extension-related elements
-    const elementsToRemove = bodyClone.querySelectorAll('script, style, nav, footer, header, .cindra-summary-ext, .yt-summary-widget, [data-extension="cindra-summary"]');
-    elementsToRemove.forEach(el => {
-      el.remove();
-    });
-
-    mainContent = bodyClone.innerText;
-  }
-
-  // Get metadata
+function getPageContent(contentSource = 'page') {
   const title = document.title;
   const url = window.location.href;
+  const description = document.querySelector('meta[name="description"]')?.content || '';
+  const selection = window.getSelection?.().toString().trim() || '';
 
-  // Return the formatted content with the raw URL, not in a formatted string
-  return { title, url, content: mainContent };
+  if (contentSource === 'selection') {
+    if (!selection) {
+      return {
+        title,
+        url,
+        error: 'No selected text found on this page.'
+      };
+    }
+
+    return {
+      title,
+      url,
+      description,
+      sourceType: 'selection',
+      content: normalizeExtractedText(selection)
+    };
+  }
+
+  const mainContent = getReadablePageText();
+  return {
+    title,
+    url,
+    description,
+    sourceType: 'page',
+    content: mainContent
+  };
+
+  function getReadablePageText() {
+    const selectors = [
+      'main',
+      'article',
+      '[role="main"]',
+      '#content',
+      '.content',
+      '.main-content',
+      '#main'
+    ];
+
+    const candidates = selectors
+      .flatMap(selector => Array.from(document.querySelectorAll(selector)))
+      .filter(Boolean);
+
+    const bestCandidate = candidates
+      .map(element => ({
+        element,
+        length: (element.innerText || '').trim().length
+      }))
+      .sort((a, b) => b.length - a.length)[0]?.element;
+
+    const sourceElement = bestCandidate || document.body;
+    if (!sourceElement) return '';
+
+    const clone = sourceElement.cloneNode(true);
+    clone.querySelectorAll([
+      'script',
+      'style',
+      'noscript',
+      'nav',
+      'footer',
+      'header',
+      'aside',
+      'form',
+      'button',
+      'input',
+      'select',
+      'textarea',
+      '[hidden]',
+      '[aria-hidden="true"]',
+      '.cindra-summary-ext',
+      '.web-summary-button',
+      '.yt-summary-widget',
+      '[data-extension="cindra-summary"]'
+    ].join(',')).forEach(element => element.remove());
+
+    return normalizeExtractedText(clone.innerText || '');
+  }
+
+  function normalizeExtractedText(text) {
+    return text
+      .replace(/\r\n?/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+  }
 }
 
-// Extract YouTube transcript
-function extractYouTubeTranscript(tab, config) {
-  // Send initial status
+function extractYouTubeTranscript(tab, config, cacheKey, videoId) {
   chrome.tabs.sendMessage(tab.id, {
     action: 'transcriptStatus',
     status: 'Extracting transcript...',
     isLoading: true
   });
 
-  // Extract video ID
-  const videoId = new URLSearchParams(new URL(tab.url).search).get('v');
-  const cacheKey = `transcript_${videoId}`;
+  setStatus('working', 'Extracting YouTube transcript...', {
+    model: config.aiModel,
+    title: tab.title,
+    url: tab.url,
+    sourceType: 'youtube-transcript'
+  });
 
-  // Send message to youtube_content.js to extract transcript
   chrome.tabs.sendMessage(tab.id, {
     action: 'extractTranscript'
   }, (response) => {
     if (chrome.runtime.lastError) {
-      console.error('Error sending message:', chrome.runtime.lastError);
-      openErrorTab('Could not extract transcript. Please try refreshing the page.');
+      openErrorTab('Could not extract transcript. Please refresh the page and try again.');
       return;
     }
 
     if (!response || !response.success) {
-      // Send error status
       chrome.tabs.sendMessage(tab.id, {
         action: 'transcriptStatus',
         status: response?.error || 'Could not extract transcript. Please try again.',
         isLoading: false
       });
-
       openErrorTab(response?.error || 'Could not extract transcript from YouTube video.');
       return;
     }
@@ -312,37 +470,29 @@ function extractYouTubeTranscript(tab, config) {
     const transcriptData = {
       title: tab.title.replace(' - YouTube', ''),
       url: tab.url,
-      videoId: videoId,
+      videoId,
       channelName: response.channelName,
       description: response.description,
       content: response.transcript
     };
 
     if (!transcriptData.content || transcriptData.content.trim() === '') {
-      // Send no transcript status
       chrome.tabs.sendMessage(tab.id, {
         action: 'transcriptStatus',
         status: 'No transcript found for this video.',
         isLoading: false
       });
-
       openErrorTab('No transcript found for this YouTube video.');
       return;
     }
 
-    // Cache the transcript
-    chrome.storage.local.set({
-      [cacheKey]: transcriptData
-    });
-
-    // Send success status
+    chrome.storage.local.set({ [cacheKey]: transcriptData });
     chrome.tabs.sendMessage(tab.id, {
       action: 'transcriptStatus',
-      status: 'Transcript extracted successfully! Sending to AI...',
+      status: 'Transcript extracted. Sending to AI...',
       isLoading: true
     });
 
-    // Send to appropriate AI model with individual components
     sendToSelectedModel(
       config.aiModel,
       config.summaryPrompt,
@@ -350,339 +500,289 @@ function extractYouTubeTranscript(tab, config) {
       transcriptData.title,
       transcriptData.url,
       transcriptData.channelName,
-      transcriptData.description
+      transcriptData.description,
+      'youtube-transcript'
     );
 
-    // Final status message
     setTimeout(() => {
       chrome.tabs.sendMessage(tab.id, {
         action: 'transcriptStatus',
-        status: 'Transcript sent to AI. Opening in new tab...',
+        status: 'Transcript queued for AI.',
         isLoading: false
       });
     }, 1000);
   });
 }
 
-// Handle PDF extraction
-function handlePdfExtraction(tab, config) {
-  // This is a placeholder for PDF extraction functionality
-  // PDF extraction requires more complex handling that might need additional libraries
+function handlePdfExtraction(tab) {
   openErrorTab('PDF extraction is not yet implemented.');
 }
 
-// Open Google AI Studio with the content
-function openGoogleAIStudio(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Google AI Studio with prompt and content');
+function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null, sourceType = 'page') {
+  const provider = providerRegistry.getProvider(model);
+  const options = provider.id === 'chatgpt' ? { cleaner: cleanupContentFormattingChatGPT } : {};
+  const { promptText, cleanedContent } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
+  const recentSummary = createRecentSummary(provider.id, promptText, title, url, sourceType);
 
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
+  saveRecentSummary(recentSummary);
+  setStatus('working', `Opening ${provider.label}...`, {
+    model: provider.id,
+    title,
+    url,
+    sourceType,
+    summaryId: recentSummary.id,
+    promptLength: promptText.length,
+    contentLength: cleanedContent.length
+  });
 
-  console.log('Formatted prompt length for Google AI Studio:', formattedPrompt.length);
+  openPreparedPrompt(provider.id, promptText, title, {
+    title,
+    url,
+    sourceType,
+    summaryId: recentSummary.id
+  });
+}
 
-  // Store the prompt in local storage first
-  chrome.storage.local.set({
-    pendingAIStudioPrompt: formattedPrompt,
-    pendingAIStudioTitle: title,
-    aiStudioPromptTimestamp: Date.now()
-  }, () => {
-    // Then open Google AI Studio in a new tab
-    chrome.tabs.create({ url: 'https://aistudio.google.com/app/prompts/new_chat' }, async (newTab) => {
-      console.log('New tab created for Google AI Studio, tab ID:', newTab.id);
+function openPreparedPrompt(providerId, promptText, title, metadata = {}) {
+  const provider = providerRegistry.getProvider(providerId);
 
-      // Wait a moment before first attempt
-      await new Promise(resolve => setTimeout(resolve, 400));
+  if (provider.specialOpen === 'kimi') {
+    openKimiPreparedPrompt(provider, promptText, title, metadata);
+    return;
+  }
 
-      // Try to send the message
-      const success = await sendMessageWithRetry(newTab.id, {
-        action: 'insertPrompt',
-        prompt: formattedPrompt,
-        title: title
-      }).catch(error => {
-        console.error('Error in message sending:', error);
-        return false;
+  setPendingPrompt(provider, promptText, title, () => {
+    if (chrome.runtime.lastError) {
+      openErrorTab(`Could not save prompt for ${provider.label}.`);
+      return;
+    }
+
+    const afterOpen = (tab) => {
+      setStatus('success', `Opened ${provider.label}; prompt queued.`, {
+        ...metadata,
+        model: provider.id,
+        targetUrl: provider.targetUrl
       });
 
-      if (!success) {
-        console.log('Message will be handled by content script when it loads');
+      if (provider.retryDelayMs && tab?.id) {
+        setTimeout(() => {
+          sendMessageWithRetry(tab.id, {
+            action: 'insertPrompt',
+            prompt: promptText,
+            title
+          }).then((success) => {
+            if (!success) {
+              setStatus('success', `${provider.label} will pick up the queued prompt on load.`, {
+                ...metadata,
+                model: provider.id,
+                targetUrl: provider.targetUrl
+              });
+            }
+          });
+        }, provider.retryDelayMs);
       }
+    };
+
+    if (provider.reuseTab) {
+      chrome.tabs.query({ url: provider.targetUrl + '*' }, (tabs) => {
+        if (tabs.length > 0) {
+          chrome.tabs.update(tabs[0].id, {
+            active: true,
+            url: provider.targetUrl
+          }, afterOpen);
+        } else {
+          chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
+        }
+      });
+      return;
+    }
+
+    chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
+  });
+}
+
+function setPendingPrompt(provider, promptText, title, callback) {
+  const payload = {
+    [provider.pendingPromptKey]: promptText,
+    [provider.timestampKey]: Date.now()
+  };
+
+  if (provider.pendingTitleKey) {
+    payload[provider.pendingTitleKey] = title || '';
+  }
+
+  chrome.storage.local.set(payload, callback);
+}
+
+function openKimiPreparedPrompt(provider, promptText, title, metadata = {}) {
+  if (!openKimiPreparedPrompt.lock) {
+    openKimiPreparedPrompt.lock = { inFlight: false, ts: 0 };
+  }
+
+  const now = Date.now();
+  if (openKimiPreparedPrompt.lock.inFlight && (now - openKimiPreparedPrompt.lock.ts) < 8000) {
+    setStatus('working', 'Kimi handoff already in progress.', {
+      ...metadata,
+      model: provider.id
+    });
+    return;
+  }
+
+  openKimiPreparedPrompt.lock.inFlight = true;
+  openKimiPreparedPrompt.lock.ts = now;
+
+  const promptSignature = `${title || ''}::${promptText.length}`;
+
+  chrome.storage.local.get(['kimiInFlight', 'kimiInFlightTs', 'kimiLastSignature', 'kimiLastSetAt'], (state) => {
+    const nowTs = Date.now();
+    const inFlight = state.kimiInFlight === true && (nowTs - (state.kimiInFlightTs || 0)) < 15000;
+    const isDuplicate = state.kimiLastSignature === promptSignature && (nowTs - (state.kimiLastSetAt || 0)) < 15000;
+
+    if (inFlight || isDuplicate) {
+      setStatus('working', 'Kimi already has this prompt queued.', {
+        ...metadata,
+        model: provider.id
+      });
+      setTimeout(() => { openKimiPreparedPrompt.lock.inFlight = false; }, 500);
+      return;
+    }
+
+    chrome.storage.local.set({
+      [provider.pendingPromptKey]: promptText,
+      [provider.timestampKey]: nowTs,
+      kimiInFlight: true,
+      kimiInFlightTs: nowTs,
+      kimiLastSignature: promptSignature,
+      kimiLastSetAt: nowTs
+    }, () => {
+      if (chrome.runtime.lastError) {
+        openKimiPreparedPrompt.lock.inFlight = false;
+        openErrorTab('Could not save prompt for Kimi.');
+        return;
+      }
+
+      const release = () => {
+        setTimeout(() => {
+          openKimiPreparedPrompt.lock.inFlight = false;
+          chrome.storage.local.set({ kimiInFlight: false });
+        }, 5000);
+      };
+
+      const afterOpen = () => {
+        setStatus('success', 'Opened Kimi; prompt queued.', {
+          ...metadata,
+          model: provider.id,
+          targetUrl: provider.targetUrl
+        });
+        release();
+      };
+
+      chrome.tabs.query({ url: provider.targetUrl + '*' }, (tabs) => {
+        if (tabs.length > 0) {
+          chrome.tabs.update(tabs[0].id, {
+            active: true,
+            url: provider.targetUrl
+          }, afterOpen);
+        } else {
+          chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
+        }
+      });
     });
   });
 }
 
-// Function to send message with retry logic
+function resendSummary(summaryId) {
+  chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
+    const summaries = items.cindraRecentSummaries || [];
+    const summary = summaries.find(item => item.id === summaryId) || summaries[0];
+
+    if (!summary?.promptText) {
+      setStatus('error', 'No saved prompt to resend.');
+      return;
+    }
+
+    const provider = providerRegistry.getProvider(summary.model);
+    setStatus('working', `Resending to ${provider.label}...`, {
+      model: provider.id,
+      title: summary.title,
+      url: summary.url,
+      sourceType: summary.sourceType,
+      summaryId: summary.id
+    });
+
+    openPreparedPrompt(provider.id, summary.promptText, summary.title, {
+      title: summary.title,
+      url: summary.url,
+      sourceType: summary.sourceType,
+      summaryId: summary.id
+    });
+  });
+}
+
+function createRecentSummary(model, promptText, title, url, sourceType) {
+  return {
+    id: 'summary_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    model,
+    promptText,
+    promptLength: promptText.length,
+    title: title || 'Untitled',
+    url: url || '',
+    sourceType: sourceType || 'page',
+    createdAt: Date.now()
+  };
+}
+
+function saveRecentSummary(summary) {
+  chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
+    const summaries = [summary, ...(items.cindraRecentSummaries || [])]
+      .filter((item, index, all) => all.findIndex(other => other.id === item.id) === index)
+      .slice(0, MAX_RECENT_SUMMARIES);
+
+    chrome.storage.local.set({ cindraRecentSummaries: summaries });
+  });
+}
+
+function setStatus(state, message, details = {}) {
+  chrome.storage.local.set({
+    cindraLastStatus: {
+      state,
+      message,
+      updatedAt: Date.now(),
+      ...details
+    }
+  });
+}
+
 function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
   return new Promise((resolve) => {
     chrome.tabs.get(tabId, (tab) => {
       if (chrome.runtime.lastError || !tab) {
-        console.log('Tab not found or error:', chrome.runtime.lastError);
         resolve(false);
         return;
       }
 
-      // Special handling for YouTube
-      const isYouTube = tab.url.includes('youtube.com/watch');
-      if (isYouTube) {
-        // For YouTube, we need to ensure the content script is injected into the correct frame
-        chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          func: () => {
-            // Check if we're in the main frame
-            if (window.location === window.parent.location) {
-              return typeof getYouTubeTranscript === 'function';
-            }
-            return false;
-          }
-        }).then(() => {
-          chrome.tabs.sendMessage(tabId, message, (response) => {
-            if (chrome.runtime.lastError) {
-              if (attempt < maxAttempts) {
-                const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
-                setTimeout(() => {
-                  sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts)
-                    .then(resolve);
-                }, retryTime);
-              } else {
-                resolve(false);
-              }
-            } else {
-              resolve(true);
-            }
-          });
-        }).catch(() => {
+      chrome.tabs.sendMessage(tabId, message, () => {
+        if (chrome.runtime.lastError) {
           if (attempt < maxAttempts) {
             const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
             setTimeout(() => {
-              sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts)
-                .then(resolve);
+              sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts).then(resolve);
             }, retryTime);
           } else {
             resolve(false);
           }
-        });
-      } else {
-        // Normal handling for non-YouTube sites
-        chrome.tabs.sendMessage(tabId, message, (response) => {
-          if (chrome.runtime.lastError) {
-            if (attempt < maxAttempts) {
-              const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
-              setTimeout(() => {
-                sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts)
-                  .then(resolve);
-              }, retryTime);
-            } else {
-              resolve(false);
-            }
-          } else {
-            resolve(true);
-          }
-        });
-      }
-    });
-  });
-}
+          return;
+        }
 
-// Open Perplexity with the content
-function openPerplexity(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Perplexity with prompt and content');
-
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  console.log('Formatted prompt length for Perplexity:', formattedPrompt.length);
-
-  // Store the prompt in local storage first
-  chrome.storage.local.set({
-    pendingPerplexityPrompt: formattedPrompt,
-    pendingPerplexityTitle: title,
-    perplexityPromptTimestamp: Date.now()
-  }, async () => {
-    // Then open Perplexity in a new tab
-    const newTab = await chrome.tabs.create({ url: 'https://www.perplexity.ai/' });
-    console.log('New tab created for Perplexity, tab ID:', newTab.id);
-
-    // No longer need to wait or send message here.
-    // The content script's checkForPendingPrompts will handle it.
-  });
-}
-
-// Open Grok with the content
-function openGrok(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Grok with prompt and content');
-
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  console.log('Formatted prompt length for Grok:', formattedPrompt.length);
-
-  // Store the prompt in local storage first
-  chrome.storage.local.set({
-    pendingGrokPrompt: formattedPrompt,
-    pendingGrokTitle: title,
-    grokPromptTimestamp: Date.now()
-  }, () => {
-    // Then open Grok in a new tab
-    chrome.tabs.create({ url: 'https://grok.com/' }, async (newTab) => {
-      console.log('New tab created for Grok, tab ID:', newTab.id);
-
-      // Wait a moment before first attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Try to send the message
-      const success = await sendMessageWithRetry(newTab.id, {
-        action: 'insertPrompt',
-        prompt: formattedPrompt,
-        title: title
-      }).catch(error => {
-        console.error('Error in message sending:', error);
-        return false;
+        resolve(true);
       });
-
-      if (!success) {
-        console.log('Message will be handled by content script when it loads');
-      }
     });
   });
 }
 
-// Open Claude with the content
-function openClaude(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Claude with prompt and content');
-
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  console.log('Formatted prompt length for Claude:', formattedPrompt.length);
-
-  // Store the prompt in local storage first
-  chrome.storage.local.set({
-    pendingClaudePrompt: formattedPrompt,
-    pendingClaudeTitle: title,
-    claudePromptTimestamp: Date.now()
-  }, () => {
-    // Then open Claude in a new tab
-    chrome.tabs.create({ url: 'https://claude.ai/' }, async (newTab) => {
-      console.log('New tab created for Claude, tab ID:', newTab.id);
-
-      // Wait a moment before first attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Try to send the message
-      const success = await sendMessageWithRetry(newTab.id, {
-        action: 'insertPrompt',
-        prompt: formattedPrompt,
-        title: title
-      }).catch(error => {
-        console.error('Error in message sending:', error);
-        return false;
-      });
-
-      if (!success) {
-        console.log('Message will be handled by content script when it loads');
-      }
-    });
-  });
-}
-
-// Open Gemini with the content
-function openGemini(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Gemini with prompt and content');
-
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  console.log('Formatted prompt length for Gemini:', formattedPrompt.length);
-
-  // Store the prompt in local storage first
-  chrome.storage.local.set({
-    pendingGeminiPrompt: formattedPrompt,
-    pendingGeminiTitle: title,
-    geminiPromptTimestamp: Date.now()
-  }, () => {
-    // Then open Gemini in a new tab
-    chrome.tabs.create({ url: 'https://gemini.google.com/app' }, async (newTab) => {
-      console.log('New tab created for Gemini, tab ID:', newTab.id);
-
-      // Wait a moment before first attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Try to send the message
-      const success = await sendMessageWithRetry(newTab.id, {
-        action: 'insertPrompt',
-        prompt: formattedPrompt,
-        title: title
-      }).catch(error => {
-        console.error('Error in message sending:', error);
-        return false;
-      });
-
-      if (!success) {
-        console.log('Message will be handled by content script when it loads');
-      }
-    });
-  });
-}
-
-// Function to clean up content formatting by removing excessive whitespace
 function cleanupContentFormatting(content) {
   if (!content) return '';
 
-  // First, find and temporarily replace URLs to protect them
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const urls = [];
-
-  let protectedContent = content.replace(urlRegex, (match) => {
-    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
-    urls.push(match);
-    return placeholder;
-  });
-
-  // Remove our extension's widget text
-  protectedContent = protectedContent.replace(/🤖\s*Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
-
-  // Replace common HTML entities with their characters
-  let cleaned = protectedContent
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  // Replace multiple newlines and line breaks with a single space
-  cleaned = cleaned.replace(/(\r\n|\n|\r)+/g, ' ');
-
-  // Replace multiple spaces with a single space
-  cleaned = cleaned.replace(/\s+/g, ' ');
-
-  // Replace multiple tabs with a single space
-  cleaned = cleaned.replace(/\t+/g, ' ');
-
-  // Remove non-breaking spaces and other invisibles
-  cleaned = cleaned.replace(/\u00A0/g, ' ');
-
-  // Preserve sentence structure by ensuring period, question mark, and exclamation mark
-  // are followed by a single space but not preceded by one
-  cleaned = cleaned.replace(/\s*([.!?])\s*/g, '$1 ');
-
-  // Fix cases where we might have double spaces after sentence punctuation
-  cleaned = cleaned.replace(/([.!?])\s{2,}/g, '$1 ');
-
-  // Trim leading and trailing whitespace
-  cleaned = cleaned.trim();
-
-  // Restore the original URLs
-  urls.forEach((url, index) => {
-    const placeholder = `__URL_PLACEHOLDER_${index}__`;
-    cleaned = cleaned.replace(placeholder, url);
-  });
-
-  // Escape any double quotes in the content since we're using them in the template string
-  cleaned = cleaned.replace(/"/g, '\\"');
-
-  return cleaned;
-}
-
-// Cleanup variant that preserves post boundaries (e.g., ThreadLog separators)
-function cleanupContentFormattingThreads(content) {
-  if (!content) return '';
-
-  // Protect URLs
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = [];
   let protectedContent = content.replace(urlRegex, (match) => {
@@ -691,63 +791,8 @@ function cleanupContentFormattingThreads(content) {
     return placeholder;
   });
 
-  // Replace HTML entities
-  let cleaned = protectedContent
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
 
-  // Preserve post separators "\n---\n" and single newlines between posts.
-  // Temporarily mark separators and blank-line boundaries
-  cleaned = cleaned
-    .replace(/\n---\n/g, '__POST_SEP__')
-    .replace(/\n\n/g, '__BLANK_LINE__');
-
-  // Within remaining content, collapse newlines and spaces aggressively
-  cleaned = cleaned.replace(/(\r\n|\n|\r)+/g, ' ');
-  cleaned = cleaned.replace(/\s+/g, ' ');
-  cleaned = cleaned.replace(/\t+/g, ' ');
-  cleaned = cleaned.replace(/\u00A0/g, ' ');
-  cleaned = cleaned.replace(/\s*([.!?])\s*/g, '$1 ');
-  cleaned = cleaned.replace(/([.!?])\s{2,}/g, '$1 ');
-  cleaned = cleaned.trim();
-
-  // Restore separators and blank lines
-  cleaned = cleaned
-    .replace(/__BLANK_LINE__/g, '\n\n')
-    .replace(/__POST_SEP__/g, '\n---\n');
-
-  // Restore URLs
-  urls.forEach((url, idx) => {
-    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${idx}__`, url);
-  });
-
-  // Escape quotes for embedding
-  cleaned = cleaned.replace(/"/g, '\\"');
-
-  return cleaned;
-}
-
-// Cleanup variant for ChatGPT: preserve paragraph breaks while reducing noisy line wraps
-function cleanupContentFormattingChatGPT(content) {
-  if (!content) return '';
-
-  // Protect URLs so whitespace normalization doesn't break them
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const urls = [];
-  let protectedContent = content.replace(urlRegex, (match) => {
-    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
-    urls.push(match);
-    return placeholder;
-  });
-
-  // Remove our extension's widget text
-  protectedContent = protectedContent.replace(/🤖\s*Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
-
-  // Decode common entities and normalize line endings
   let cleaned = protectedContent
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -756,32 +801,93 @@ function cleanupContentFormattingChatGPT(content) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/\u00A0/g, ' ')
-    .replace(/\r\n?/g, '\n');
-
-  // Normalize separator lines and preserve major boundaries before flattening noisy wraps
-  cleaned = cleaned
-    .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
-    .replace(/\n{2,}/g, '\n__PARA_BREAK__\n');
-
-  // Flatten single wrapped lines but keep paragraph markers
-  cleaned = cleaned
-    .replace(/\n/g, ' ')
-    .replace(/[ \t]+/g, ' ')
+    .replace(/(\r\n|\n|\r)+/g, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/\s*([.!?])\s*/g, '$1 ')
     .replace(/([.!?])\s{2,}/g, '$1 ')
     .trim();
 
-  // Restore paragraph and separator structure
+  urls.forEach((url, index) => {
+    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
+  });
+
+  return cleaned.replace(/"/g, '\\"');
+}
+
+function cleanupContentFormattingThreads(content) {
+  if (!content) return '';
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = [];
+  let protectedContent = content.replace(urlRegex, (match) => {
+    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
+    urls.push(match);
+    return placeholder;
+  });
+
+  let cleaned = protectedContent
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n---\n/g, '__POST_SEP__')
+    .replace(/\n\n/g, '__BLANK_LINE__');
+
   cleaned = cleaned
+    .replace(/(\r\n|\n|\r)+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\u00A0/g, ' ')
+    .replace(/\s*([.!?])\s*/g, '$1 ')
+    .replace(/([.!?])\s{2,}/g, '$1 ')
+    .trim()
+    .replace(/__BLANK_LINE__/g, '\n\n')
+    .replace(/__POST_SEP__/g, '\n---\n');
+
+  urls.forEach((url, index) => {
+    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
+  });
+
+  return cleaned.replace(/"/g, '\\"');
+}
+
+function cleanupContentFormattingChatGPT(content) {
+  if (!content) return '';
+
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = [];
+  let protectedContent = content.replace(urlRegex, (match) => {
+    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
+    urls.push(match);
+    return placeholder;
+  });
+
+  protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
+
+  let cleaned = protectedContent
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\u00A0/g, ' ')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
+    .replace(/\n{2,}/g, '\n__PARA_BREAK__\n')
+    .replace(/\n/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*([.!?])\s*/g, '$1 ')
+    .replace(/([.!?])\s{2,}/g, '$1 ')
+    .trim()
     .replace(/\s*__PARA_BREAK__\s*/g, '\n\n')
     .replace(/\s*__POST_SEP__\s*/g, '\n---\n\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
-  // Restore URLs
   urls.forEach((url, index) => {
-    const placeholder = `__URL_PLACEHOLDER_${index}__`;
-    cleaned = cleaned.replace(placeholder, url);
+    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
   });
 
   return cleaned;
@@ -833,25 +939,17 @@ function buildSummaryPrompt(prompt, content, title, url = null, channel = null, 
   };
 }
 
-// Open an error tab with a message
 function openErrorTab(message) {
-  try {
-    // First attempt: Try to show a native Chrome notification if available
-    if (chrome.notifications && chrome.notifications.create) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'images/icon128.png',
-        title: 'Cindra Summary Error',
-        message: message
-      });
-      return;
-    }
-  } catch (error) {
-    console.error('Failed to create notification:', error);
-  }
+  setStatus('error', message);
 
   try {
-    // Second attempt: Use a data URL instead of a Blob URL
+    const escapedMessage = message
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
     const errorHtml = `
       <!DOCTYPE html>
       <html>
@@ -859,7 +957,7 @@ function openErrorTab(message) {
         <title>Cindra Summary Error</title>
         <style>
           body {
-            font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+            font-family: Arial, sans-serif;
             background-color: #f8f9fa;
             color: #202124;
             display: flex;
@@ -870,14 +968,13 @@ function openErrorTab(message) {
           }
           .error-container {
             background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border: 1px solid #dadce0;
             padding: 24px;
             max-width: 500px;
             text-align: center;
           }
           h1 {
-            color: #ea4335;
+            color: #d93025;
             font-size: 24px;
             margin-bottom: 16px;
           }
@@ -886,384 +983,29 @@ function openErrorTab(message) {
             line-height: 1.5;
           }
           button {
-            background-color: #4285f4;
+            background-color: #202124;
             color: white;
             border: none;
             padding: 10px 20px;
-            border-radius: 4px;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
-          }
-          button:hover {
-            background-color: #3367d6;
           }
         </style>
       </head>
       <body>
         <div class="error-container">
           <h1>Error</h1>
-          <p>${message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')}</p>
+          <p>${escapedMessage}</p>
           <button onclick="window.close()">Close</button>
         </div>
       </body>
       </html>
     `;
 
-    // Use data URL instead of creating a Blob
-    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml);
-
-    // Open the error page in a new tab
-    chrome.tabs.create({ url: dataUrl });
-  } catch (error) {
-    // Third attempt: Fallback to a simple error message
-    console.error('Failed to open error tab:', error);
-
-    // Fall back to the simplest possible approach
-    chrome.tabs.create({ url: 'about:blank' }, (tab) => {
-      if (chrome.runtime.lastError) {
-        console.error('Failed to create tab:', chrome.runtime.lastError);
-        return;
-      }
-
-      try {
-        // Try to execute a script that shows an alert
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          function: (errorMsg) => {
-            document.body.innerHTML = `<div style="font-family: sans-serif; padding: 20px;">
-              <h1 style="color: #d93025;">Error</h1>
-              <p>${errorMsg}</p>
-            </div>`;
-            document.title = 'Cindra Summary Error';
-          },
-          args: [message]
-        });
-      } catch (scriptError) {
-        console.error('Failed to execute script:', scriptError);
-      }
-    });
-  }
-}
-
-function openChatGPT(prompt, content, title, url = null, channel = null, description = null) {
-  const {
-    promptText: formattedPrompt,
-    cleanedContent
-  } = buildSummaryPrompt(prompt, content, title, url, channel, description, {
-    cleaner: cleanupContentFormattingChatGPT
-  });
-
-  console.log('ChatGPT prompt prepared:', {
-    promptLength: formattedPrompt.length,
-    cleanedContentLength: cleanedContent.length
-  });
-
-  // Store the prompt and title temporarily
-  chrome.storage.local.set({
-    pendingChatGPTPrompt: formattedPrompt,
-    pendingChatGPTTitle: title,
-    chatgptPromptTimestamp: Date.now()
-  }, () => {
-    // Open ChatGPT in a new tab
     chrome.tabs.create({
-      url: 'https://chatgpt.com/',
-      active: true
-    }, (tab) => {
-      // Set up a retry mechanism to ensure the content script is ready
-      const sendMessageWithRetry = () => {
-        chrome.tabs.sendMessage(tab.id, {
-          action: 'insertPrompt',
-          prompt: formattedPrompt,
-          title: title
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            // If the content script isn't ready yet, retry after a delay
-            setTimeout(sendMessageWithRetry, 1000);
-          }
-        });
-      };
-
-      // Start trying to send the message
-      setTimeout(sendMessageWithRetry, 1000);
+      url: 'data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml)
     });
-  });
-}
-
-// Function to open Google Learning and pass prompt
-function openGoogleLearning(prompt, content, title, url = null, channel = null, description = null) {
-  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-  const targetUrl = 'https://learning.google.com/experiments/learn-about'; // Ensure no trailing slash for consistency with manifest match
-
-  // Store the prompt for the content script to pick up
-  chrome.storage.local.set({
-    pendingGoogleLearningPrompt: combinedPrompt,
-    googleLearningPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingGoogleLearningPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for Google Learning.');
-      return;
-    }
-    console.log('Google Learning prompt stored. Searching for existing tab or creating new one.');
-
-    // Check if a Google Learning tab is already open
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        // Tab exists, update it and focus
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, (updatedTab) => {
-          // Ensure the tab is fully loaded before trying to send a message
-          // The content script will pick up from storage on load
-          console.log('Focused existing Google Learning tab:', updatedTab.id);
-        });
-      } else {
-        // No tab exists, create a new one
-        chrome.tabs.create({ url: targetUrl }, (newTab) => {
-          console.log('Created new Google Learning tab:', newTab.id);
-          // Content script will pick up from storage on load
-        });
-      }
-    });
-  });
-}
-
-// Open DeepSeek with the content
-function openDeepseek(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening DeepSeek with prompt and content');
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-  const targetUrl = 'https://chat.deepseek.com/';
-
-  chrome.storage.local.set({
-    pendingDeepseekPrompt: formattedPrompt,
-    pendingDeepseekTitle: title,
-    deepseekPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingDeepseekPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for DeepSeek.');
-      return;
-    }
-    console.log('DeepSeek prompt stored. Searching for existing tab or creating new one.');
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
-          console.log('Focused existing DeepSeek tab');
-        });
-      } else {
-        chrome.tabs.create({ url: targetUrl }, async (newTab) => {
-          console.log('Created new DeepSeek tab:', newTab.id);
-          // Try to send message once the tab is (likely) ready; content script will also pick up from storage
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const success = await sendMessageWithRetry(newTab.id, {
-            action: 'insertPrompt',
-            prompt: formattedPrompt,
-            title: title
-          }).catch(() => false);
-          if (!success) {
-            console.log('DeepSeek message will be handled by content script on load');
-          }
-        });
-      }
-    });
-  });
-}
-
-// Open GLM (Z.AI) with the content
-function openGLM(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening GLM (Z.AI) with prompt and content');
-  const { promptText: formattedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-  const targetUrl = 'https://chat.z.ai/';
-
-  chrome.storage.local.set({
-    pendingGLMPrompt: formattedPrompt,
-    glmPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingGLMPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for GLM.');
-      return;
-    }
-    console.log('GLM prompt stored. Searching for existing tab or creating new one.');
-
-    // Check if a GLM tab is already open
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        // Tab exists, update it and focus
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
-          console.log('Focused existing GLM tab');
-        });
-      } else {
-        // No tab exists, create a new one
-        chrome.tabs.create({ url: targetUrl }, (newTab) => {
-          console.log('Created new GLM tab:', newTab.id);
-          // Content script will pick up from storage on load
-        });
-      }
-    });
-  });
-}
-
-// Open Kimi with the content
-function openKimi(prompt, content, title, url = null, channel = null, description = null) {
-  // De-dup guard: prevent double-opens within a short interval
-  if (!openKimi.__lock) {
-    openKimi.__lock = { inFlight: false, ts: 0 };
+  } catch (error) {
+    console.error('Failed to open error tab:', error);
   }
-  const now = Date.now();
-  if (openKimi.__lock.inFlight && (now - openKimi.__lock.ts) < 8000) {
-    console.log('openKimi dedup: request suppressed (another open is in flight)');
-    return;
-  }
-  openKimi.__lock.inFlight = true;
-  openKimi.__lock.ts = now;
-
-  console.log('Opening Kimi with prompt and content');
-  const {
-    promptText: builtPrompt,
-    cleanedContent
-  } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  // If the incoming prompt already appears to be fully wrapped (has a closing </Content>),
-  // avoid re-wrapping to prevent duplicate XML blocks.
-  const alreadyWrapped = typeof prompt === 'string' && prompt.includes('</Content>');
-  const formattedPrompt = alreadyWrapped ? prompt : builtPrompt;
-  const targetUrl = 'https://kimi.com/';
-
-  // Build a signature to detect near-duplicate requests
-  const promptSignature = `${title || ''}::${prompt.length}::${cleanedContent.length}`;
-
-  // Check storage-level dedup to handle worker restarts or parallel triggers
-  chrome.storage.local.get(['kimiInFlight', 'kimiInFlightTs', 'kimiLastSignature', 'kimiLastSetAt'], (state) => {
-    const nowTs = Date.now();
-    const inFlight = state.kimiInFlight === true && (nowTs - (state.kimiInFlightTs || 0)) < 15000;
-    const isDuplicate = state.kimiLastSignature === promptSignature && (nowTs - (state.kimiLastSetAt || 0)) < 15000;
-
-    if (inFlight || isDuplicate) {
-      console.log('openKimi storage dedup: suppressed duplicate request', { inFlight, isDuplicate });
-      // Release in-memory lock quickly since we are suppressing
-      setTimeout(() => { openKimi.__lock.inFlight = false; }, 500);
-      return;
-    }
-
-    // Mark in-flight and store the prompt for the content script
-    chrome.storage.local.set({
-      pendingKimiPrompt: formattedPrompt,
-      kimiPromptTimestamp: nowTs,
-      kimiInFlight: true,
-      kimiInFlightTs: nowTs,
-      kimiLastSignature: promptSignature,
-      kimiLastSetAt: nowTs
-    }, () => {
-      if (chrome.runtime.lastError) {
-        console.error('Error setting pendingKimiPrompt in storage:', chrome.runtime.lastError);
-        openErrorTab('Could not save prompt for Kimi.');
-        openKimi.__lock.inFlight = false;
-        return;
-      }
-      console.log('Kimi prompt stored. Searching for existing tab or creating new one.');
-
-      // Check if a Kimi tab is already open
-      chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-        if (tabs.length > 0) {
-          // Tab exists: reload to base so content script picks prompt from storage
-          chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
-            console.log('Focused and reloaded existing Kimi tab; content script will pick up from storage');
-            // Release locks shortly after focusing/reloading (content script also clears storage lock on success)
-            setTimeout(() => {
-              openKimi.__lock.inFlight = false;
-              chrome.storage.local.set({ kimiInFlight: false });
-            }, 5000);
-          });
-        } else {
-          // No tab exists, create a new one
-          chrome.tabs.create({ url: targetUrl }, (newTab) => {
-            console.log('Created new Kimi tab:', newTab.id);
-            // Content script will pick up from storage on load
-            setTimeout(() => {
-              openKimi.__lock.inFlight = false;
-              chrome.storage.local.set({ kimiInFlight: false });
-            }, 5000);
-          });
-        }
-      });
-    });
-  });
-}
-
-// Open HuggingChat with the content
-function openHuggingChat(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening HuggingChat with prompt and content');
-  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-  const targetUrl = 'https://huggingface.co/chat/';
-
-  // Store the prompt for the content script to pick up
-  chrome.storage.local.set({
-    pendingHuggingChatPrompt: combinedPrompt,
-    huggingChatPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingHuggingChatPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for HuggingChat.');
-      return;
-    }
-    console.log('HuggingChat prompt stored. Searching for existing tab or creating new one.');
-
-    // Check if a HuggingChat tab is already open
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        // Tab exists, update it and focus
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, (updatedTab) => {
-          console.log('Focused existing HuggingChat tab:', updatedTab.id);
-        });
-      } else {
-        // No tab exists, create a new one
-        chrome.tabs.create({ url: targetUrl }, (newTab) => {
-          console.log('Created new HuggingChat tab:', newTab.id);
-          // Content script will pick up from storage on load
-        });
-      }
-    });
-  });
-}
-
-// Open Qwen with the content
-function openQwen(prompt, content, title, url = null, channel = null, description = null) {
-  console.log('Opening Qwen with prompt and content');
-  const { promptText: combinedPrompt } = buildSummaryPrompt(prompt, content, title, url, channel, description);
-
-  const targetUrl = 'https://chat.qwen.ai/';
-
-  chrome.storage.local.set({
-    pendingQwenPrompt: combinedPrompt,
-    pendingQwenTitle: title,
-    qwenPromptTimestamp: Date.now()
-  }, () => {
-    if (chrome.runtime.lastError) {
-      console.error('Error setting pendingQwenPrompt in storage:', chrome.runtime.lastError);
-      openErrorTab('Could not save prompt for Qwen.');
-      return;
-    }
-    console.log('Qwen prompt stored. Searching for existing tab or creating new one.');
-
-    chrome.tabs.query({ url: targetUrl + '*' }, (tabs) => {
-      if (tabs.length > 0) {
-        chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl }, () => {
-          console.log('Focused existing Qwen tab');
-        });
-      } else {
-        chrome.tabs.create({ url: targetUrl }, async (newTab) => {
-          console.log('Created new Qwen tab:', newTab.id);
-          // Attempt immediate message; content script will also pick up from storage
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const success = await sendMessageWithRetry(newTab.id, {
-            action: 'insertPrompt',
-            prompt: combinedPrompt,
-            title: title
-          }).catch(() => false);
-          if (!success) {
-            console.log('Qwen message will be handled by content script on load');
-          }
-        });
-      }
-    });
-  });
 }

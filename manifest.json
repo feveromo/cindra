@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cindra Summary",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Summarize webpages, YouTube videos, and Reddit threads with your preferred AI chat.",
   "action": {
     "default_popup": "ui/popup/popup.html",
@@ -35,8 +35,7 @@
     "https://kimi.com/*",
     "https://www.kimi.com/*",
     "https://huggingface.co/chat/*",
-    "https://chat.qwen.ai/*",
-    "*://*/*"
+    "https://chat.qwen.ai/*"
   ],
   "icons": {
     "16": "images/icon16.png",

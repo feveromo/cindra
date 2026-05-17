@@ -1,3 +1,11 @@
+(() => {
+  if (globalThis.__CINDRA_DEBUG__) return;
+  if (!globalThis.__CINDRA_LOG_MUTED__) {
+    globalThis.__CINDRA_LOG_MUTED__ = true;
+    console.log = () => {};
+  }
+})();
+
 console.log('AI Studio content script loaded');
 
 let promptSubmitted = false;
@@ -102,7 +110,7 @@ function insertPromptAndSubmit(prompt, title) {
       }
 
       if (textarea.tagName.toLowerCase() === 'div') {
-        textarea.innerHTML = '';
+        textarea.textContent = '';
       } else {
         textarea.value = '';
       }
@@ -114,7 +122,7 @@ function insertPromptAndSubmit(prompt, title) {
     })
     .then(textarea => {
       if (textarea.tagName.toLowerCase() === 'div') {
-        textarea.innerHTML = prompt;
+        textarea.textContent = prompt;
       } else {
         textarea.value = prompt;
       }

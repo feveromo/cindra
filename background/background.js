@@ -3,6 +3,9 @@ importScripts('../lib/providers.js');
 const providerRegistry = globalThis.CindraProviders;
 const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
 const MAX_RECENT_SUMMARIES = 5;
+const MAX_PROMPT_CONTENT_CHARS = 120000;
+const PROMPT_CONTENT_HEAD_CHARS = 80000;
+const PROMPT_CONTENT_TAIL_CHARS = 30000;
 
 let kimiClaimLock = false;
 
@@ -521,7 +524,12 @@ function handlePdfExtraction(tab) {
 function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null, sourceType = 'page') {
   const provider = providerRegistry.getProvider(model);
   const options = provider.id === 'chatgpt' ? { cleaner: cleanupContentFormattingChatGPT } : {};
-  const { promptText, cleanedContent } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
+  const {
+    promptText,
+    cleanedContent,
+    contentTruncated,
+    originalContentLength
+  } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
   const recentSummary = createRecentSummary(provider.id, promptText, title, url, sourceType);
 
   saveRecentSummary(recentSummary);
@@ -532,7 +540,9 @@ function sendToSelectedModel(model, prompt, content, title, url = null, channel 
     sourceType,
     summaryId: recentSummary.id,
     promptLength: promptText.length,
-    contentLength: cleanedContent.length
+    contentLength: cleanedContent.length,
+    originalContentLength,
+    contentTruncated
   });
 
   openPreparedPrompt(provider.id, promptText, title, {
@@ -733,12 +743,19 @@ function createRecentSummary(model, promptText, title, url, sourceType) {
 }
 
 function saveRecentSummary(summary) {
-  chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
-    const summaries = [summary, ...(items.cindraRecentSummaries || [])]
-      .filter((item, index, all) => all.findIndex(other => other.id === item.id) === index)
-      .slice(0, MAX_RECENT_SUMMARIES);
+  chrome.storage.sync.get({ promptHistory: 'enabled' }, (settings) => {
+    if (settings.promptHistory === 'disabled') {
+      chrome.storage.local.remove('cindraRecentSummaries');
+      return;
+    }
 
-    chrome.storage.local.set({ cindraRecentSummaries: summaries });
+    chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
+      const summaries = [summary, ...(items.cindraRecentSummaries || [])]
+        .filter((item, index, all) => all.findIndex(other => other.id === item.id) === index)
+        .slice(0, MAX_RECENT_SUMMARIES);
+
+      chrome.storage.local.set({ cindraRecentSummaries: summaries });
+    });
   });
 }
 
@@ -908,8 +925,31 @@ function cleanSummaryContent(content, cleaner = null) {
     : cleanupContentFormatting(content);
 }
 
+function limitPromptContent(content) {
+  const text = content || '';
+  if (text.length <= MAX_PROMPT_CONTENT_CHARS) {
+    return {
+      text,
+      truncated: false,
+      originalLength: text.length
+    };
+  }
+
+  const head = text.slice(0, PROMPT_CONTENT_HEAD_CHARS).trimEnd();
+  const tail = text.slice(-PROMPT_CONTENT_TAIL_CHARS).trimStart();
+  const omitted = text.length - head.length - tail.length;
+  const notice = `[Cindra note: ${omitted.toLocaleString()} characters were omitted from the middle to keep this handoff within browser and provider limits.]`;
+
+  return {
+    text: `${head}\n\n${notice}\n\n${tail}`,
+    truncated: true,
+    originalLength: text.length
+  };
+}
+
 function buildSummaryPrompt(prompt, content, title, url = null, channel = null, description = null, options = {}) {
-  const cleanedContent = cleanSummaryContent(content, options.cleaner);
+  const limitedContent = limitPromptContent(cleanSummaryContent(content, options.cleaner));
+  const cleanedContent = limitedContent.text;
   const sections = [
     buildXmlSection('Task', prompt || ''),
     buildXmlSection('ContentTitle', title || 'N/A')
@@ -935,7 +975,9 @@ function buildSummaryPrompt(prompt, content, title, url = null, channel = null, 
 
   return {
     promptText: sections.join(options.sectionSeparator || '\n\n'),
-    cleanedContent
+    cleanedContent,
+    contentTruncated: limitedContent.truncated,
+    originalContentLength: limitedContent.originalLength
   };
 }
 

@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('summarize-btn').addEventListener('click', summarizeCurrentPage);
   document.getElementById('copy-last-prompt').addEventListener('click', copyLastPrompt);
   document.getElementById('resend-last-prompt').addEventListener('click', resendLastPrompt);
+  document.getElementById('clear-handoff-history').addEventListener('click', clearHandoffHistory);
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
@@ -270,6 +271,15 @@ function resendLastPrompt() {
     chrome.runtime.sendMessage({
       action: 'resendSummary',
       summaryId: latestSummary.id
+    });
+  });
+}
+
+function clearHandoffHistory() {
+  chrome.storage.local.remove('cindraRecentSummaries', () => {
+    setLocalStatus({
+      state: 'success',
+      message: 'Handoff history cleared.'
     });
   });
 }

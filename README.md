@@ -13,6 +13,7 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 - Can send the full page or only selected text
 - Opens an optional on-page composer when you highlight text so you can ask a question about that exact selection
 - Shows handoff status with copy/resend recovery for the last generated prompt
+- Lets you clear or disable saved prompt handoff history
 - Routes content into multiple AI destinations without using an API key directly
 
 ## Screenshots
@@ -56,6 +57,7 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 ## Known limitations
 
 - PDF extraction is not implemented yet
+- Very long pages may be trimmed in the middle to stay within browser and provider limits
 - Provider integrations depend on each site's live DOM, so breakage can happen when those UIs change
 
 ## Installation

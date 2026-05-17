@@ -1,3 +1,11 @@
+(() => {
+  if (globalThis.__CINDRA_DEBUG__) return;
+  if (!globalThis.__CINDRA_LOG_MUTED__) {
+    globalThis.__CINDRA_LOG_MUTED__ = true;
+    console.log = () => {};
+  }
+})();
+
 let ctrlPressed = false;
 let xPressed = false;
 let lastKeyDownTime = 0;
@@ -40,6 +48,11 @@ function handleShortcut(e) {
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
     console.log('Extension context invalid, removing event listener');
     document.removeEventListener('keydown', handleShortcut);
+    return;
+  }
+
+  if (!shouldHandleShortcutEvent(e)) {
+    resetKeyState();
     return;
   }
 
@@ -343,7 +356,7 @@ function showSelectionComposer(rect, selectedText) {
         :host {
           all: initial;
           color-scheme: light dark;
-          font-family: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+          font-family: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
         }
 
         * {
@@ -699,8 +712,59 @@ function clearSelectionHighlight() {
   selectionHighlightHost = null;
 }
 
+function shouldHandleShortcutEvent(event) {
+  return !event.defaultPrevented &&
+    shouldRunOnCurrentPage() &&
+    !isProviderDestinationHost() &&
+    !isEditableTarget(event.target);
+}
+
+function shouldOfferGenericPageUi() {
+  return shouldRunOnCurrentPage() &&
+    !isProviderDestinationHost() &&
+    !isSpecialExtractionHost();
+}
+
+function shouldRunOnCurrentPage() {
+  return window.location.protocol === 'http:' || window.location.protocol === 'https:';
+}
+
+function isProviderDestinationHost() {
+  const hostname = window.location.hostname.toLowerCase();
+  const providerHosts = [
+    'aistudio.google.com',
+    'gemini.google.com',
+    'perplexity.ai',
+    'claude.ai',
+    'chat.openai.com',
+    'chatgpt.com',
+    'chat.com',
+    'grok.com',
+    'learning.google.com',
+    'chat.deepseek.com',
+    'chat.z.ai',
+    'kimi.com',
+    'chat.qwen.ai'
+  ];
+
+  if (hostname === 'huggingface.co' && window.location.pathname.startsWith('/chat')) {
+    return true;
+  }
+
+  return providerHosts.some(host => hostname === host || hostname.endsWith(`.${host}`));
+}
+
+function isSpecialExtractionHost() {
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname === 'youtube.com' ||
+    hostname.endsWith('.youtube.com') ||
+    hostname === 'reddit.com' ||
+    hostname.endsWith('.reddit.com');
+}
+
 function isEditableTarget(target) {
-  return Boolean(target.closest?.('textarea, input, select, [contenteditable="true"], [contenteditable=""]'));
+  const element = target?.nodeType === Node.ELEMENT_NODE ? target : target?.parentElement;
+  return Boolean(element?.closest?.('textarea, input, select, [contenteditable="true"], [contenteditable=""]'));
 }
 
 function isExtensionContextValid() {
@@ -713,6 +777,10 @@ chrome.storage.sync.get({
   floatingButton: 'visible',
   selectionComposer: 'visible'
 }, (settings) => {
+  if (!shouldOfferGenericPageUi()) {
+    return;
+  }
+
   if (settings.floatingButton === 'visible') {
     addWebPageButton();
   }

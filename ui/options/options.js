@@ -12,12 +12,14 @@ document.addEventListener('DOMContentLoaded', () => {
       theme: 'auto',
       floatingButton: 'visible',
       selectionComposer: 'visible',
+      promptHistory: 'enabled',
       aiModel: providerRegistry.DEFAULT_PROVIDER,
       contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE
     }, (items) => {
       checkRadio('theme', items.theme);
       checkRadio('floating-button', items.floatingButton);
       checkRadio('selection-composer', items.selectionComposer);
+      checkRadio('prompt-history', items.promptHistory);
       checkRadio('ai-model', providerRegistry.getProvider(items.aiModel).id);
       checkRadio('content-source', providerRegistry.getContentSource(items.contentSource).id);
       applyTheme(items.theme);
@@ -27,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('save-btn').addEventListener('click', saveOptions);
+  document.getElementById('clear-history-btn').addEventListener('click', clearHandoffHistory);
 
   document.querySelectorAll('input[name="theme"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
@@ -129,7 +132,8 @@ function initializePromptStorage() {
 function saveOptions() {
   const theme = document.querySelector('input[name="theme"]:checked').value;
   const floatingButton = document.querySelector('input[name="floating-button"]:checked').value;
-  const selectionComposer = document.querySelector('input[name="selection-composer"]:checked').value;
+  const selectionComposer = document.querySelector('input[name="selection-composer"]:checked')?.value || 'visible';
+  const promptHistory = document.querySelector('input[name="prompt-history"]:checked')?.value || 'enabled';
   const aiModel = document.querySelector('input[name="ai-model"]:checked').value;
   const contentSource = document.querySelector('input[name="content-source"]:checked').value;
 
@@ -137,9 +141,17 @@ function saveOptions() {
     theme,
     floatingButton,
     selectionComposer,
+    promptHistory,
     aiModel,
     contentSource
   }, () => {
+    if (promptHistory === 'disabled') {
+      chrome.storage.local.remove('cindraRecentSummaries', () => {
+        showStatus('Settings saved. Prompt history cleared.', 'success');
+      });
+      return;
+    }
+
     showStatus('Settings saved.', 'success');
   });
 }
@@ -305,6 +317,12 @@ function deletePrompt(promptId) {
       loadSavedPrompts();
       showStatus('Prompt deleted.', 'success');
     });
+  });
+}
+
+function clearHandoffHistory() {
+  chrome.storage.local.remove('cindraRecentSummaries', () => {
+    showStatus('Handoff history cleared.', 'success');
   });
 }
 

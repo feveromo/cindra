@@ -4,10 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cindra Summary Settings</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <link rel="stylesheet" href="../styles.css" />
     <link rel="stylesheet" href="options.css" />
   </head>
@@ -170,6 +166,39 @@
                 />
                 <span class="radio-label">Hidden</span>
               </label>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-copy">
+              <span class="setting-label">Prompt History</span>
+              <p class="setting-description">
+                Save the full generated prompt so the popup can copy or resend
+                the most recent handoff. Turning this off clears saved handoffs.
+              </p>
+            </div>
+            <div class="setting-controls">
+              <label class="radio-container">
+                <input
+                  type="radio"
+                  name="prompt-history"
+                  id="enabled-prompt-history"
+                  value="enabled"
+                />
+                <span class="radio-label">Save prompts</span>
+              </label>
+              <label class="radio-container">
+                <input
+                  type="radio"
+                  name="prompt-history"
+                  id="disabled-prompt-history"
+                  value="disabled"
+                />
+                <span class="radio-label">Don't save</span>
+              </label>
+              <button id="clear-history-btn" class="secondary-btn" type="button">
+                Clear History
+              </button>
             </div>
           </div>
         </div>

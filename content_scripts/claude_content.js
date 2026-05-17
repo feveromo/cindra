@@ -1,3 +1,11 @@
+(() => {
+  if (globalThis.__CINDRA_DEBUG__) return;
+  if (!globalThis.__CINDRA_LOG_MUTED__) {
+    globalThis.__CINDRA_LOG_MUTED__ = true;
+    console.log = () => {};
+  }
+})();
+
 console.log('Claude content script loaded');
 
 let promptSubmitted = false;

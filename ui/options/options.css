@@ -1,3 +1,6 @@
+/* Cindra Settings — Raycast system, options-page layout only.
+   Tokens, cards, inputs, buttons, keycaps live in ../styles.css. */
+
 body {
   padding: 28px 20px 18px;
 }
@@ -5,7 +8,7 @@ body {
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .intro-grid {
@@ -16,7 +19,8 @@ body {
 
 .intro-card,
 .settings-section {
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
   background: var(--surface);
 }
 
@@ -25,7 +29,7 @@ body {
 }
 
 .intro-card-accent {
-  background: var(--surface-muted);
+  background: var(--surface-3);
 }
 
 .shortcut-row {
@@ -33,7 +37,7 @@ body {
   align-items: center;
   gap: 8px;
   margin: 10px 0 12px;
-  color: var(--text);
+  color: var(--ink);
 }
 
 .settings-container {
@@ -51,7 +55,7 @@ body {
   grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
   gap: 18px;
   padding: 18px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--hairline-soft);
 }
 
 .setting-item:first-of-type {
@@ -70,17 +74,16 @@ body {
 }
 
 .setting-label {
-  color: var(--text);
+  color: var(--ink);
   font-size: 14px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 
 .setting-description {
-  color: var(--text-muted);
+  color: var(--mute);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 .setting-controls {
@@ -94,19 +97,6 @@ body {
   grid-template-columns: repeat(2, minmax(170px, 1fr));
 }
 
-.key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34px;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-strong);
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
 .prompts-list {
   display: flex;
   flex-direction: column;
@@ -118,9 +108,16 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-muted);
+  padding: 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.prompt-item:hover {
+  border-color: var(--hairline-strong);
+  background: var(--surface-3);
 }
 
 .prompt-info {
@@ -129,15 +126,15 @@ body {
 }
 
 .prompt-name {
-  margin-bottom: 5px;
-  font-size: 14px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
 }
 
 .prompt-preview {
-  color: var(--text-muted);
+  color: var(--mute);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -148,24 +145,27 @@ body {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .icon-btn.delete {
-  color: var(--danger);
+  color: var(--red);
 }
 
 .icon-btn.delete:hover {
-  border-color: var(--danger);
+  border-color: var(--red);
+  background: rgba(255, 97, 97, 0.1);
 }
 
+/* ---------- Modal ---------- */
 .modal {
   display: none;
   position: fixed;
   z-index: 1000;
   inset: 0;
   padding: 20px;
-  background: rgba(22, 24, 26, 0.46);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
 }
 
 .modal.active {
@@ -176,8 +176,10 @@ body {
 
 .modal-content {
   width: min(100%, 640px);
-  border: 1px solid var(--line-strong);
-  background: var(--surface-strong);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  overflow: hidden;
 }
 
 .modal-header,
@@ -187,29 +189,36 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--hairline-soft);
 }
 
 .modal-header h3 {
-  font-size: 18px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .modal-close {
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--mute);
   font: inherit;
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .modal-close:hover {
-  border-color: var(--accent);
+  border-color: var(--hairline-strong);
+  color: var(--ink);
 }
 
 .modal-body {
@@ -227,9 +236,10 @@ body {
 .form-group label {
   display: inline-block;
   margin-bottom: 8px;
-  color: var(--accent);
-  font-size: 11px;
-  letter-spacing: 0.1em;
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -239,20 +249,26 @@ body {
 
 .modal-footer {
   justify-content: flex-end;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--hairline-soft);
   border-bottom: none;
+}
+
+.modal-footer .secondary-btn {
+  border-color: var(--hairline);
 }
 
 .empty-state {
   padding: 22px;
-  border: 1px dashed var(--line-strong);
-  background: var(--surface-muted);
-  color: var(--text-muted);
+  border: 1px dashed var(--hairline-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--mute);
   text-align: center;
   font-size: 12px;
   line-height: 1.6;
 }
 
+/* ---------- Footer actions ---------- */
 .actions {
   flex-direction: row;
   align-items: center;
@@ -263,18 +279,20 @@ body {
 
 #save-btn {
   width: auto;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .status {
   flex: 1;
   text-align: right;
+  font-size: 13px;
 }
 
 .footer {
   padding-top: 0;
 }
 
+/* ---------- Responsive ---------- */
 @media (max-width: 920px) {
   .intro-grid,
   .setting-item {

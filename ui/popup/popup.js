@@ -4,6 +4,11 @@ const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points wi
 document.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('popup-body');
 
+  const versionEl = document.getElementById('version-pill');
+  if (versionEl) {
+    versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+  }
+
   renderProviderOptions();
   renderContentSourceOptions();
 
@@ -153,11 +158,14 @@ function saveSettings() {
 }
 
 function applyTheme(theme) {
-  if (theme === 'auto') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
+  const resolved = theme === 'auto'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.setAttribute('data-theme', resolved);
+  try {
+    localStorage.setItem('cindra-theme', resolved);
+  } catch (_) {
+    /* storage unavailable */
   }
 }
 

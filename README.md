@@ -56,8 +56,7 @@ Cindra Summary is a Chrome extension that sends the current page, YouTube transc
 
 ## Known limitations
 
-- PDF extraction is not implemented yet
-- Very long pages may be trimmed in the middle to stay within browser and provider limits
+- Very long pages may be trimmed in the middle to stay within browser and provider limits; some providers (e.g. Perplexity) have a stricter per-query character limit, in which case the content is trimmed further before the handoff
 - Provider integrations depend on each site's live DOM, so breakage can happen when those UIs change
 
 ## Installation
@@ -90,20 +89,22 @@ You can also use `Ctrl + X + X` on a page, the floating button if it is enabled 
 cindra/
 ├── background/          # MV3 service worker and routing logic
 ├── content_scripts/     # Site-specific integrations and generic page shortcut UI
+│   └── lib/             # Shared CindraInject helpers (loaded before each provider script)
 ├── lib/                 # Shared provider/source registry
 ├── images/              # Extension icons
 ├── ui/
 │   ├── options/         # Settings page
-│   └── popup/           # Popup UI
+│   ├── popup/           # Popup UI
+│   └── theme.js         # Shared CindraTheme helper (FOUC guard + theme apply)
 └── manifest.json
 ```
 
 ## Adding a provider
 
 1. Add a content script in `content_scripts/`
-2. Register it in `manifest.json`
-3. Add the provider metadata to `lib/providers.js`
-4. Add any provider-specific insertion logic to the content script
+2. Register it in `manifest.json`, listing `content_scripts/lib/inject.js` first so the shared helpers are available
+3. Add the provider metadata to `lib/providers.js` (set `maxContentChars` if the destination enforces a per-query limit)
+4. In the content script, use the shared `globalThis.CindraInject` helpers (`waitForElement`, `insertTextIntoTextarea`, `robustClick`, `normalizeWhitespace`) instead of redefining them; add provider-specific insertion logic only where the shared helpers do not fit
 
 ## License
 

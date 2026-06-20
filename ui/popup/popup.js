@@ -133,7 +133,7 @@ function loadSettings() {
 
     promptSelector.addEventListener('change', onPromptSelected);
 
-    applyTheme(items.theme);
+    CindraTheme.applyTheme(items.theme);
   });
 }
 
@@ -155,18 +155,6 @@ function saveSettings() {
     aiModel: document.getElementById('ai-model').value,
     contentSource: document.getElementById('content-source').value
   });
-}
-
-function applyTheme(theme) {
-  const resolved = theme === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
-  document.documentElement.setAttribute('data-theme', resolved);
-  try {
-    localStorage.setItem('cindra-theme', resolved);
-  } catch (_) {
-    /* storage unavailable */
-  }
 }
 
 function summarizeCurrentPage() {

@@ -1,33 +1,17 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('ChatGPT content script loaded');
-
 let promptSubmitted = false;
 let isSubmitting = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in ChatGPT content script.');
-
   if (message.action === 'insertPrompt') {
     isSubmitting = false;
     promptSubmitted = false;
 
-    const formattedPrompt = formatPromptForChatGPT(message.prompt);
-    insertPromptAndSubmit(formattedPrompt, message.title);
+    const formattedPrompt = message.prompt;
+    insertPromptAndSubmit(formattedPrompt);
     sendResponse({ status: 'Processing prompt' });
     return true;
   }
 });
-
-function formatPromptForChatGPT(prompt) {
-  return prompt;
-}
 
 // Set prompt text on either a textarea or contenteditable editor while preserving line breaks
 function setPromptOnEditor(editor, prompt) {
@@ -48,81 +32,19 @@ function setPromptOnEditor(editor, prompt) {
   }
 }
 
-function waitForElement(selector, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    if (Array.isArray(selector)) {
-      for (const sel of selector) {
-        const element = document.querySelector(sel);
-        if (element) {
-          console.log(`Element found immediately: ${sel}`);
-          return resolve(element);
-        }
-      }
-
-      console.log(`Waiting for elements: ${selector.join(', ')}`);
-
-      const startTime = Date.now();
-      const checkInterval = setInterval(() => {
-        for (const sel of selector) {
-          const element = document.querySelector(sel);
-          if (element) {
-            clearInterval(checkInterval);
-            console.log(`Element found: ${sel}`);
-            resolve(element);
-            return;
-          }
-        }
-
-        if (Date.now() - startTime > timeout) {
-          clearInterval(checkInterval);
-          reject(new Error(`Timeout waiting for elements: ${selector.join(', ')}`));
-        }
-      }, 100);
-      return;
-    }
-
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log(`Element found immediately: ${selector}`);
-      return resolve(element);
-    }
-
-    console.log(`Waiting for element: ${selector}`);
-
-    const startTime = Date.now();
-    const checkInterval = setInterval(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        clearInterval(checkInterval);
-        console.log(`Element found: ${selector}`);
-        resolve(element);
-        return;
-      }
-
-      if (Date.now() - startTime > timeout) {
-        clearInterval(checkInterval);
-        reject(new Error(`Timeout waiting for element: ${selector}`));
-      }
-    }, 100);
-  });
-}
-
-function insertPromptAndSubmit(prompt, title) {
+function insertPromptAndSubmit(prompt) {
   if (!prompt) {
     console.warn('Received empty prompt, not inserting');
     return;
   }
 
   if (isSubmitting || promptSubmitted) {
-    console.log('Already submitting or submitted, ignoring duplicate call');
     return;
   }
 
   isSubmitting = true;
 
-  console.log('Attempting to insert prompt into ChatGPT');
-
-  waitForElement([
+  CindraInject.waitForElement([
     '#prompt-textarea',
     'textarea[data-id="root"]',
     'textarea.w-full',
@@ -130,8 +52,6 @@ function insertPromptAndSubmit(prompt, title) {
     'div[contenteditable="true"].w-full'
   ])
     .then(textarea => {
-      console.log('Textarea found:', textarea);
-
       textarea.focus();
       setPromptOnEditor(textarea, prompt);
 
@@ -148,12 +68,10 @@ function insertPromptAndSubmit(prompt, title) {
         textarea.dispatchEvent(new Event('change', { bubbles: true }));
       }
 
-      console.log('Content inserted');
-
       return new Promise(resolve => setTimeout(() => resolve(textarea), 500));
     })
     .then(textarea => {
-      return waitForElement([
+      return CindraInject.waitForElement([
         'button[data-testid="send-button"]:not([disabled])',
         'button[type="submit"]:not([disabled])',
         'button.text-white:not([disabled])',
@@ -163,16 +81,12 @@ function insertPromptAndSubmit(prompt, title) {
       ]);
     })
     .then(submitButton => {
-      console.log('Submit button found, clicking:', submitButton);
-
       submitButton.click();
 
       promptSubmitted = true;
       isSubmitting = false;
 
-      chrome.storage.local.remove(['pendingChatGPTPrompt', 'pendingChatGPTTitle']);
-
-      console.log('Prompt submitted to ChatGPT');
+      chrome.storage.local.remove(['pendingChatGPTPrompt']);
     })
     .catch(error => {
       isSubmitting = false;
@@ -180,7 +94,6 @@ function insertPromptAndSubmit(prompt, title) {
       console.error('Error in insertPromptAndSubmit:', error.message);
 
       try {
-        console.log('Trying Enter key method');
         const textarea = document.querySelector('#prompt-textarea') ||
                         document.querySelector('textarea[data-id="root"]') ||
                         document.querySelector('div[contenteditable="true"]');
@@ -211,13 +124,10 @@ function insertPromptAndSubmit(prompt, title) {
           });
 
           textarea.dispatchEvent(enterEvent);
-          console.log('Enter key simulated');
 
           promptSubmitted = true;
 
-          chrome.storage.local.remove(['pendingChatGPTPrompt', 'pendingChatGPTTitle']);
-
-          console.log('Prompt submitted with alternative method');
+          chrome.storage.local.remove(['pendingChatGPTPrompt']);
         } else {
           console.error('Could not find textarea. Please submit manually.');
         }
@@ -233,21 +143,17 @@ function checkForPendingPrompts() {
     return;
   }
 
-  console.log('Checking for pending prompts for ChatGPT');
-
-  chrome.storage.local.get(['pendingChatGPTPrompt', 'pendingChatGPTTitle', 'chatgptPromptTimestamp'], function(result) {
+  chrome.storage.local.get(['pendingChatGPTPrompt', 'chatgptPromptTimestamp'], function(result) {
     if (result.pendingChatGPTPrompt) {
       const currentTime = Date.now();
       const promptTime = result.chatgptPromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
 
       if (currentTime - promptTime < twoMinutesInMs) {
-        console.log('Found fresh pending prompt for ChatGPT, inserting');
-        const formattedPrompt = formatPromptForChatGPT(result.pendingChatGPTPrompt);
-        insertPromptAndSubmit(formattedPrompt, result.pendingChatGPTTitle);
+        const formattedPrompt = result.pendingChatGPTPrompt;
+        insertPromptAndSubmit(formattedPrompt);
       } else {
-        console.log('Found stale pending prompt for ChatGPT, ignoring');
-        chrome.storage.local.remove(['pendingChatGPTPrompt', 'pendingChatGPTTitle', 'chatgptPromptTimestamp']);
+        chrome.storage.local.remove(['pendingChatGPTPrompt', 'chatgptPromptTimestamp']);
       }
     }
   });

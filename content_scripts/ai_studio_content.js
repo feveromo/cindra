@@ -1,19 +1,7 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('AI Studio content script loaded');
-
 let promptSubmitted = false;
 let isSubmitting = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in AI Studio content script.');
-
   if (message.action === 'insertPrompt') {
     isSubmitting = false;
     promptSubmitted = false;
@@ -23,38 +11,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
-
-function waitForElement(selector, timeout = 30000) {
-  return new Promise((resolve, reject) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log(`Element found immediately: ${selector}`);
-      return resolve(element);
-    }
-
-    console.log(`Waiting for element: ${selector}`);
-
-    const timeoutId = setTimeout(() => {
-      observer.disconnect();
-      reject(new Error(`Timeout waiting for element: ${selector}`));
-    }, timeout);
-
-    const observer = new MutationObserver((mutations, observer) => {
-      const element = document.querySelector(selector);
-      if (element) {
-        clearTimeout(timeoutId);
-        observer.disconnect();
-        console.log(`Element found after waiting: ${selector}`);
-        resolve(element);
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-  });
-}
 
 function isGeneratingResponse() {
   const stopButton = document.querySelector('button.run-button.stop-generating');
@@ -71,13 +27,10 @@ function insertPromptAndSubmit(prompt, title) {
   }
 
   if (isSubmitting || promptSubmitted || isGeneratingResponse()) {
-    console.log('Already submitting or submitted, ignoring duplicate call');
     return;
   }
 
   isSubmitting = true;
-
-  console.log('Attempting to insert prompt into AI Studio');
 
   const textareaSelectors = [
     'textarea.textarea',
@@ -89,10 +42,9 @@ function insertPromptAndSubmit(prompt, title) {
   const findTextarea = async () => {
     for (const selector of textareaSelectors) {
       try {
-        const textarea = await waitForElement(selector, 1000);
+        const textarea = await CindraInject.waitForElement(selector, 1000);
         if (textarea) return textarea;
       } catch (e) {
-        console.log(`Textarea not found with selector: ${selector}`);
       }
     }
     throw new Error('Textarea not found');
@@ -100,10 +52,7 @@ function insertPromptAndSubmit(prompt, title) {
 
   findTextarea()
     .then(textarea => {
-      console.log('Textarea found, setting value');
-
       if (isGeneratingResponse()) {
-        console.log('Response already generating, not modifying textarea');
         promptSubmitted = true;
         isSubmitting = false;
         return Promise.reject(new Error('Already submitted'));
@@ -140,7 +89,6 @@ function insertPromptAndSubmit(prompt, title) {
     })
     .then(textarea => {
       if (promptSubmitted || isGeneratingResponse()) {
-        console.log('Already submitted or generation in progress, skipping button click');
         isSubmitting = false;
         return Promise.reject(new Error('Already submitted'));
       }
@@ -154,14 +102,12 @@ function insertPromptAndSubmit(prompt, title) {
       const findAndClickButton = async () => {
         for (const selector of runButtonSelectors) {
           try {
-            const button = await waitForElement(selector, 2000);
+            const button = await CindraInject.waitForElement(selector, 2000);
             if (button) {
-              console.log(`Found button with selector: ${selector}, clicking`);
               button.click();
               return true;
             }
           } catch (e) {
-            console.log(`Button not found with selector: ${selector}`);
           }
         }
         return false;
@@ -169,11 +115,8 @@ function insertPromptAndSubmit(prompt, title) {
 
       return findAndClickButton().then(buttonClicked => {
         if (buttonClicked) {
-          console.log('Run button clicked');
           promptSubmitted = true;
         } else {
-          console.log('No button found, trying keyboard shortcut');
-
           const enterEvent = new KeyboardEvent('keydown', {
             key: 'Enter',
             code: 'Enter',
@@ -186,7 +129,6 @@ function insertPromptAndSubmit(prompt, title) {
 
           textarea.focus();
           textarea.dispatchEvent(enterEvent);
-          console.log('Ctrl+Enter shortcut sent');
 
           return new Promise(resolve =>
             setTimeout(() => {
@@ -203,12 +145,8 @@ function insertPromptAndSubmit(prompt, title) {
     })
     .then(success => {
       if (success || promptSubmitted) {
-        console.log('Prompt submitted successfully');
-
         chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
       } else {
-        console.log('Neither button nor shortcut worked, trying direct DOM injection');
-
         // Run the final submit attempt in the page context so AI Studio sees native events.
         const script = document.createElement('script');
         script.textContent = `
@@ -256,17 +194,13 @@ function insertPromptAndSubmit(prompt, title) {
 
           if (isGeneratingResponse()) {
             promptSubmitted = true;
-            console.log('Prompt submission confirmed via injected script');
             chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
-          } else {
-            console.log('Submission failed even with injected script');
           }
         }, 300);
       }
     })
     .catch(error => {
       if (error.message === 'Already submitted' || promptSubmitted || isGeneratingResponse()) {
-        console.log('Submission skipped - already in progress or completed');
         isSubmitting = false;
         return;
       }
@@ -284,8 +218,6 @@ window.addEventListener('load', () => {
         window.location.pathname.includes('/app') ||
         window.location.href.includes('aistudio.google.com')) {
 
-      console.log('AI Studio page detected, checking for pending prompts');
-
       chrome.storage.local.get(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp'], function(result) {
         const prompt = result.pendingAIStudioPrompt;
         const title = result.pendingAIStudioTitle;
@@ -295,13 +227,11 @@ window.addEventListener('load', () => {
           const fiveMinutesInMs = 5 * 60 * 1000;
 
           if (currentTime - ts < fiveMinutesInMs) {
-            console.log('Found fresh pending prompt, inserting');
             // Remove before submitting so reloads do not submit the same prompt twice.
             chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp'], () => {
               insertPromptAndSubmit(prompt, title);
             });
           } else {
-            console.log('Found stale pending prompt, ignoring');
             chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
           }
         }

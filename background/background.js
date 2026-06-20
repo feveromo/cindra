@@ -158,11 +158,6 @@ function handleSummarize(tab, options = {}) {
       return;
     }
 
-    if (tab.url.toLowerCase().endsWith('.pdf')) {
-      handlePdfExtraction(tab);
-      return;
-    }
-
     extractPageContent(tab, config, 'page');
   });
 }
@@ -429,6 +424,9 @@ function getPageContent(contentSource = 'page') {
   }
 
   function normalizeExtractedText(text) {
+    // ponytail: duplicates normalizeCapturedText above, but getPageContent runs
+    // serialized in the page context via chrome.scripting.executeScript, which
+    // cannot close over the outer-scope helper. Inline copy is the only option.
     return text
       .replace(/\r\n?/g, '\n')
       .replace(/[ \t]+\n/g, '\n')
@@ -517,19 +515,13 @@ function extractYouTubeTranscript(tab, config, cacheKey, videoId) {
   });
 }
 
-function handlePdfExtraction(tab) {
-  openErrorTab('PDF extraction is not yet implemented.');
-}
-
 function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null, sourceType = 'page') {
   const provider = providerRegistry.getProvider(model);
-  const options = provider.id === 'chatgpt' ? { cleaner: cleanupContentFormattingChatGPT } : {};
-  const {
-    promptText,
-    cleanedContent,
-    contentTruncated,
-    originalContentLength
-  } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
+  const options = provider.id === 'chatgpt' ? { cleaner: (c) => cleanupContent(c, 'chatgpt') } : {};
+  if (provider.maxContentChars) {
+    options.maxContentChars = provider.maxContentChars;
+  }
+  const { promptText } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
   const recentSummary = createRecentSummary(provider.id, promptText, title, url, sourceType);
 
   saveRecentSummary(recentSummary);
@@ -538,11 +530,7 @@ function sendToSelectedModel(model, prompt, content, title, url = null, channel 
     title,
     url,
     sourceType,
-    summaryId: recentSummary.id,
-    promptLength: promptText.length,
-    contentLength: cleanedContent.length,
-    originalContentLength,
-    contentTruncated
+    summaryId: recentSummary.id
   });
 
   openPreparedPrompt(provider.id, promptText, title, {
@@ -734,7 +722,6 @@ function createRecentSummary(model, promptText, title, url, sourceType) {
     id: 'summary_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
     model,
     promptText,
-    promptLength: promptText.length,
     title: title || 'Untitled',
     url: url || '',
     sourceType: sourceType || 'page',
@@ -797,7 +784,14 @@ function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
   });
 }
 
-function cleanupContentFormatting(content) {
+// Unifies the former cleanupContentFormatting / cleanupContentFormattingThreads /
+// cleanupContentFormattingChatGPT. Each mode reproduces its predecessor exactly:
+//   'flat'     \u2014 collapse every run to single spaces (no line breaks).
+//   'threads'  \u2014 collapse but preserve paragraph breaks and `\n---\n` separators.
+//   'chatgpt'  \u2014 preserve breaks like threads, with chatgpt's marker handling.
+// `stripMarker` removes the floating-button label where present; `escapeQuotes`
+// matches the legacy per-function trailing behavior.
+function cleanupContent(content, mode, { stripMarker = true, escapeQuotes = false } = {}) {
   if (!content) return '';
 
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -808,7 +802,9 @@ function cleanupContentFormatting(content) {
     return placeholder;
   });
 
-  protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
+  if (stripMarker) {
+    protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
+  }
 
   let cleaned = protectedContent
     .replace(/&nbsp;/g, ' ')
@@ -816,98 +812,50 @@ function cleanupContentFormatting(content) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\u00A0/g, ' ')
-    .replace(/(\r\n|\n|\r)+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([.!?])\s*/g, '$1 ')
-    .replace(/([.!?])\s{2,}/g, '$1 ')
-    .trim();
+    .replace(/&#39;/g, "'");
+
+  if (mode === 'flat') {
+    cleaned = cleaned
+      .replace(/\u00A0/g, ' ')
+      .replace(/(\r\n|\n|\r)+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*([.!?])\s*/g, '$1 ')
+      .replace(/([.!?])\s{2,}/g, '$1 ')
+      .trim();
+  } else if (mode === 'threads') {
+    cleaned = cleaned
+      .replace(/\n---\n/g, '__POST_SEP__')
+      .replace(/\n\n/g, '__BLANK_LINE__')
+      .replace(/(\r\n|\n|\r)+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s*([.!?])\s*/g, '$1 ')
+      .replace(/([.!?])\s{2,}/g, '$1 ')
+      .trim()
+      .replace(/__BLANK_LINE__/g, '\n\n')
+      .replace(/__POST_SEP__/g, '\n---\n');
+  } else {
+    cleaned = cleaned
+      .replace(/\u00A0/g, ' ')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
+      .replace(/\n{2,}/g, '\n__PARA_BREAK__\n')
+      .replace(/\n/g, ' ')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\s*([.!?])\s*/g, '$1 ')
+      .replace(/([.!?])\s{2,}/g, '$1 ')
+      .trim()
+      .replace(/\s*__PARA_BREAK__\s*/g, '\n\n')
+      .replace(/\s*__POST_SEP__\s*/g, '\n---\n\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
 
   urls.forEach((url, index) => {
     cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
   });
 
-  return cleaned.replace(/"/g, '\\"');
-}
-
-function cleanupContentFormattingThreads(content) {
-  if (!content) return '';
-
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const urls = [];
-  let protectedContent = content.replace(urlRegex, (match) => {
-    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
-    urls.push(match);
-    return placeholder;
-  });
-
-  let cleaned = protectedContent
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n---\n/g, '__POST_SEP__')
-    .replace(/\n\n/g, '__BLANK_LINE__');
-
-  cleaned = cleaned
-    .replace(/(\r\n|\n|\r)+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\u00A0/g, ' ')
-    .replace(/\s*([.!?])\s*/g, '$1 ')
-    .replace(/([.!?])\s{2,}/g, '$1 ')
-    .trim()
-    .replace(/__BLANK_LINE__/g, '\n\n')
-    .replace(/__POST_SEP__/g, '\n---\n');
-
-  urls.forEach((url, index) => {
-    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
-  });
-
-  return cleaned.replace(/"/g, '\\"');
-}
-
-function cleanupContentFormattingChatGPT(content) {
-  if (!content) return '';
-
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const urls = [];
-  let protectedContent = content.replace(urlRegex, (match) => {
-    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
-    urls.push(match);
-    return placeholder;
-  });
-
-  protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
-
-  let cleaned = protectedContent
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\u00A0/g, ' ')
-    .replace(/\r\n?/g, '\n')
-    .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
-    .replace(/\n{2,}/g, '\n__PARA_BREAK__\n')
-    .replace(/\n/g, ' ')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\s*([.!?])\s*/g, '$1 ')
-    .replace(/([.!?])\s{2,}/g, '$1 ')
-    .trim()
-    .replace(/\s*__PARA_BREAK__\s*/g, '\n\n')
-    .replace(/\s*__POST_SEP__\s*/g, '\n---\n\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-
-  urls.forEach((url, index) => {
-    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
-  });
-
-  return cleaned;
+  return escapeQuotes ? cleaned.replace(/"/g, '\\"') : cleaned;
 }
 
 function buildXmlSection(tagName, sectionContent) {
@@ -921,34 +869,32 @@ function cleanSummaryContent(content, cleaner = null) {
   }
 
   return /\n---\n/.test(content)
-    ? cleanupContentFormattingThreads(content)
-    : cleanupContentFormatting(content);
+    ? cleanupContent(content, 'threads', { escapeQuotes: true, stripMarker: false })
+    : cleanupContent(content, 'flat', { escapeQuotes: true });
 }
 
-function limitPromptContent(content) {
+function limitPromptContent(content, maxChars = MAX_PROMPT_CONTENT_CHARS) {
   const text = content || '';
-  if (text.length <= MAX_PROMPT_CONTENT_CHARS) {
-    return {
-      text,
-      truncated: false,
-      originalLength: text.length
-    };
+  if (text.length <= maxChars) {
+    return { text };
   }
 
-  const head = text.slice(0, PROMPT_CONTENT_HEAD_CHARS).trimEnd();
-  const tail = text.slice(-PROMPT_CONTENT_TAIL_CHARS).trimStart();
+  // Split the budget proportionally to the global head/tail ratio so both a
+  // 120k default and a 3.5k provider cap keep the same head-heavy shape.
+  const ratio = PROMPT_CONTENT_TAIL_CHARS / (PROMPT_CONTENT_HEAD_CHARS + PROMPT_CONTENT_TAIL_CHARS);
+  const tailBudget = Math.floor(maxChars * ratio);
+  const headBudget = maxChars - tailBudget;
+
+  const head = text.slice(0, headBudget).trimEnd();
+  const tail = text.slice(-tailBudget).trimStart();
   const omitted = text.length - head.length - tail.length;
   const notice = `[Cindra note: ${omitted.toLocaleString()} characters were omitted from the middle to keep this handoff within browser and provider limits.]`;
 
-  return {
-    text: `${head}\n\n${notice}\n\n${tail}`,
-    truncated: true,
-    originalLength: text.length
-  };
+  return { text: `${head}\n\n${notice}\n\n${tail}` };
 }
 
 function buildSummaryPrompt(prompt, content, title, url = null, channel = null, description = null, options = {}) {
-  const limitedContent = limitPromptContent(cleanSummaryContent(content, options.cleaner));
+  const limitedContent = limitPromptContent(cleanSummaryContent(content, options.cleaner), options.maxContentChars);
   const cleanedContent = limitedContent.text;
   const sections = [
     buildXmlSection('Task', prompt || ''),
@@ -975,9 +921,7 @@ function buildSummaryPrompt(prompt, content, title, url = null, channel = null, 
 
   return {
     promptText: sections.join(options.sectionSeparator || '\n\n'),
-    cleanedContent,
-    contentTruncated: limitedContent.truncated,
-    originalContentLength: limitedContent.originalLength
+    cleanedContent
   };
 }
 

@@ -4,15 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cindra Summary Settings</title>
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('cindra-theme');
-          if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-theme', t);
-        } catch (_) {}
-      })();
-    </script>
+    <script src="../theme.js"></script>
     <link rel="stylesheet" href="../styles.css" />
     <link rel="stylesheet" href="options.css" />
   </head>

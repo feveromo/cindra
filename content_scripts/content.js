@@ -1,11 +1,3 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
 let ctrlPressed = false;
 let xPressed = false;
 let lastKeyDownTime = 0;
@@ -38,7 +30,6 @@ try {
   document.addEventListener('keydown', handleShortcut);
 } catch (error) {
   if (error.message.includes('Extension context invalidated')) {
-    console.log('Extension context was invalidated, removing event listener');
     document.removeEventListener('keydown', handleShortcut);
   }
 }
@@ -46,7 +37,6 @@ try {
 function handleShortcut(e) {
   // Hot reloads can invalidate the extension context while this page is still open.
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
-    console.log('Extension context invalid, removing event listener');
     document.removeEventListener('keydown', handleShortcut);
     return;
   }
@@ -77,7 +67,6 @@ function handleShortcut(e) {
         triggerSummarize();
       } catch (error) {
         if (error.message.includes('Extension context invalidated')) {
-          console.log('Extension context invalid during summarize, removing listener');
           document.removeEventListener('keydown', handleShortcut);
         }
       }
@@ -112,7 +101,6 @@ document.addEventListener('keyup', (e) => {
 function triggerSummarize() {
   // Hot reloads can invalidate the extension context while this page is still open.
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
-    console.log('Extension context invalid, cannot trigger summarize');
     return;
   }
 
@@ -141,9 +129,7 @@ function triggerSummarize() {
       });
     });
   } catch (error) {
-    if (error.message.includes('Extension context invalidated')) {
-      console.log('Extension context invalid during settings retrieval');
-    }
+    // Extension context invalidated during hot reload — nothing to do.
   }
 }
 
@@ -180,11 +166,7 @@ function shouldCapturePageForAutoSource() {
 }
 
 function getSelectedPageText() {
-  return (window.getSelection?.().toString() || '')
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return CindraInject.normalizeWhitespace(window.getSelection?.().toString() || '');
 }
 
 function getCapturedPageData() {
@@ -240,17 +222,8 @@ function getCapturedPageData() {
 
   return {
     description,
-    content: normalizeCapturedContent(clone.innerText || '')
+    content: CindraInject.normalizeWhitespace(clone.innerText || '')
   };
-}
-
-function normalizeCapturedContent(text) {
-  return text
-    .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
 }
 
 function initializeSelectionComposer() {
@@ -674,8 +647,7 @@ function sendSelectionToAi(questionText) {
       summaryPrompt,
       aiModel: settings.aiModel,
       contentSource: 'selection',
-      selectedText: selectedTextForComposer,
-      selectionQuestion: question
+      selectedText: selectedTextForComposer
     });
 
     const providerName = PROVIDER_LABELS[settings.aiModel] || 'AI';
@@ -851,10 +823,6 @@ chrome.storage.sync.get({
 });
 
 function addWebPageButton() {
-  if (window.location.href.toLowerCase().endsWith('.pdf')) {
-    return;
-  }
-
   const floatingButton = document.createElement('div');
   floatingButton.className = 'web-summary-button';
   floatingButton.style.cssText = `

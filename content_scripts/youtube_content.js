@@ -1,13 +1,3 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('YouTube content script loaded');
-
 let isExtracting = false;
 let hasExtracted = false;
 
@@ -93,10 +83,8 @@ function addCopyTranscriptButton() {
   // YouTube shifts the action row often, so try stable insertion points in order.
   const subscribeButton = document.querySelector('#subscribe-button');
   if (subscribeButton) {
-    console.log('Found subscribe button, inserting after it');
     if (subscribeButton.nextSibling && subscribeButton.nextSibling.classList &&
         subscribeButton.nextSibling.classList.contains('copy-transcript-button')) {
-      console.log('Button already exists after subscribe button');
       return;
     }
     subscribeButton.parentNode.insertBefore(button, subscribeButton.nextSibling);
@@ -105,31 +93,25 @@ function addCopyTranscriptButton() {
 
   const topRow = document.querySelector('#above-the-fold #top-row');
   if (topRow) {
-    console.log('Found top-row, looking for subscribe button within');
     const subscribeContainer = topRow.querySelector('#subscribe-button');
     if (subscribeContainer) {
       if (subscribeContainer.nextSibling && subscribeContainer.nextSibling.classList &&
           subscribeContainer.nextSibling.classList.contains('copy-transcript-button')) {
-        console.log('Button already exists after subscribe container');
         return;
       }
-      console.log('Found subscribe container, inserting after it');
       topRow.insertBefore(button, subscribeContainer.nextSibling);
     } else {
-      console.log('No subscribe container found, appending to top-row');
       topRow.appendChild(button);
     }
     return;
   }
 
-  console.log('Trying title element fallback');
   const titleElement = document.querySelector('#above-the-fold #title h1');
   if (titleElement) {
     titleElement.parentNode.insertBefore(button, titleElement.nextSibling);
     return;
   }
 
-  console.log('Trying above-the-fold fallback');
   const aboveTheFold = document.querySelector('#above-the-fold');
   if (aboveTheFold) {
     const title = aboveTheFold.querySelector('#title');
@@ -141,7 +123,6 @@ function addCopyTranscriptButton() {
     return;
   }
 
-  console.log('Trying actions fallback');
   const actionsDiv = document.querySelector('#actions');
   if (actionsDiv) {
     const actionsInner = actionsDiv.querySelector('#actions-inner');
@@ -153,12 +134,9 @@ function addCopyTranscriptButton() {
     return;
   }
 
-  console.log('Trying ytd-watch-metadata fallback');
   const watchMetadata = document.querySelector('ytd-watch-metadata');
   if (watchMetadata) {
     watchMetadata.insertBefore(button, watchMetadata.firstChild);
-  } else {
-    console.log('Could not find any suitable insertion point for the button');
   }
 }
 
@@ -219,8 +197,6 @@ initializeCopyButton();
 setupMutationObserver();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in YouTube content script.');
-
   if (message.action === 'extractTranscript') {
     isExtracting = false;
     hasExtracted = false;
@@ -357,10 +333,6 @@ function getYouTubeTranscript() {
         return;
       }
 
-      console.log('Attempting to extract transcript for video:', videoId);
-      console.log('Channel:', channelName);
-      console.log('Description length:', videoDescription ? videoDescription.length : 0);
-
       const extractionTimeout = 8000;
 
       const timeoutPromise = new Promise(resolve => {
@@ -377,7 +349,6 @@ function getYouTubeTranscript() {
         try {
           let transcriptText = getExistingTranscriptFromDOM();
           if (transcriptText) {
-            console.log('Transcript panel already open, extracted content');
             resolve({
               source: 'dom-existing',
               content: transcriptText
@@ -387,7 +358,6 @@ function getYouTubeTranscript() {
 
           const transcriptButton = findTranscriptButton();
           if (transcriptButton) {
-            console.log('Found transcript button, attempting to open transcript panel');
             transcriptButton.click();
 
             // YouTube may lazy-load segments after the panel opens.
@@ -397,7 +367,6 @@ function getYouTubeTranscript() {
               await new Promise(r => setTimeout(r, 350));
               transcriptText = getExistingTranscriptFromDOM();
               if (transcriptText) {
-                console.log('Successfully extracted transcript after opening panel');
                 resolve({
                   source: 'dom-clicked',
                   content: transcriptText
@@ -436,7 +405,6 @@ function getYouTubeTranscript() {
             if (captionTracks && captionTracks.length > 0) {
               const transcriptData = await getTranscriptContent(videoId, captionTracks);
               if (transcriptData) {
-                console.log('Successfully extracted transcript from player data');
                 resolve({
                   source: 'player-data',
                   content: transcriptData
@@ -490,7 +458,6 @@ function getYouTubeTranscript() {
               const data = await response.json();
               const transcriptData = extractTranscriptFromApiResponse(data);
               if (transcriptData) {
-                console.log('Successfully extracted transcript from API');
                 resolve({
                   source: 'api',
                   content: transcriptData
@@ -519,7 +486,6 @@ function getYouTubeTranscript() {
             if (captionTracks && captionTracks.length > 0) {
               const transcriptData = await getTranscriptContent(videoId, captionTracks);
               if (transcriptData) {
-                console.log('Successfully extracted transcript from window.ytInitialPlayerResponse');
                 resolve({
                   source: 'window-data',
                   content: transcriptData
@@ -641,7 +607,6 @@ function findTranscriptButton() {
   for (const label of possibleLabels) {
     const btn = document.querySelector(`button[aria-label="${label}"]`);
     if (btn) {
-      console.log('Found transcript button via aria-label:', label);
       return btn;
     }
   }
@@ -650,7 +615,6 @@ function findTranscriptButton() {
   for (const item of menuItems) {
     const text = item.textContent?.trim();
     if (text && possibleLabels.some(label => text.toLowerCase() === label.toLowerCase())) {
-      console.log('Found transcript menu item:', text);
       return item;
     }
   }
@@ -1084,7 +1048,6 @@ function getExistingTranscriptFromDOM() {
     // Current transcript panels render each row as transcript-segment-view-model.
     const newSegments = transcriptPanel.querySelectorAll('transcript-segment-view-model');
     if (newSegments.length > 0) {
-      console.log('Found new YouTube transcript UI segments:', newSegments.length);
       let transcriptText = 'Transcript:\n\n';
       let currentParagraph = '';
 

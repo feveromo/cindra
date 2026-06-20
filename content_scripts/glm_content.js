@@ -1,19 +1,8 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('GLM content script loaded');
-
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'insertPrompt') {
         if (isProcessing) {
-            console.log('GLM: Already processing, skipping request');
             sendResponse({ success: false, error: 'Already processing' });
             return true;
         }
@@ -36,71 +25,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-async function waitForElement(selector, textContent = null, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-        const startTime = Date.now();
-
-        function checkElement() {
-            const element = document.querySelector(selector);
-            if (element && (!textContent || element.textContent.trim() === textContent)) {
-                resolve(element);
-                return;
-            }
-
-            if (Date.now() - startTime < timeout) {
-                setTimeout(checkElement, 250);
-            } else {
-                reject(new Error(`Element not found: ${selector}${textContent ? ` with text "${textContent}"` : ''}`));
-            }
-        }
-
-        checkElement();
-    });
-}
-
-function insertTextIntoTextarea(element, text) {
-    element.focus();
-    element.value = text;
-
-    element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
-function robustClick(element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    // GLM's handlers are more reliable with the full mouse event sequence.
-    const mouseEvents = ['mousedown', 'mouseup', 'click'];
-    mouseEvents.forEach(eventType => {
-        element.dispatchEvent(new MouseEvent(eventType, {
-            view: window,
-            bubbles: true,
-            cancelable: true
-        }));
-    });
-}
-
 async function insertPromptAndSubmit(prompt) {
     try {
-        console.log('GLM: Looking for chat input...');
-        const inputField = await waitForElement('#chat-input');
-        console.log('GLM: Found chat input');
+        const inputField = await CindraInject.waitForElement('#chat-input');
 
-        insertTextIntoTextarea(inputField, prompt);
-        console.log('GLM: Inserted prompt into input field');
+        CindraInject.insertTextIntoTextarea(inputField, prompt);
 
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        console.log('GLM: Looking for send button...');
-        const sendButton = await waitForElement('#send-message-button:not([disabled])');
-        console.log('GLM: Found enabled send button');
+        const sendButton = await CindraInject.waitForElement('#send-message-button:not([disabled])');
 
-        robustClick(sendButton);
-        console.log('GLM: Clicked send button');
+        CindraInject.robustClick(sendButton);
 
-        chrome.storage.local.remove(['pendingGLMPrompt', 'glmPromptTimestamp'], () => {
-            console.log('GLM: Cleared pending prompt from storage');
-        });
+        chrome.storage.local.remove(['pendingGLMPrompt', 'glmPromptTimestamp'], () => {});
 
     } catch (error) {
         console.error('GLM: Error in insertPromptAndSubmit:', error);
@@ -115,7 +52,6 @@ function checkPendingPrompt() {
             const now = Date.now();
 
             if ((now - timestamp) < 60000) {
-                console.log('GLM: Found pending prompt, processing...');
                 const promptToProcess = result.pendingGLMPrompt;
 
                 // Claim the prompt before processing to prevent duplicate sends.
@@ -132,7 +68,6 @@ function checkPendingPrompt() {
                         });
                 });
             } else {
-                console.log('GLM: Pending prompt is too old, ignoring');
                 chrome.storage.local.remove(['pendingGLMPrompt', 'glmPromptTimestamp']);
             }
         }

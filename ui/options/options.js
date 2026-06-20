@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
       checkRadio('prompt-history', items.promptHistory);
       checkRadio('ai-model', providerRegistry.getProvider(items.aiModel).id);
       checkRadio('content-source', providerRegistry.getContentSource(items.contentSource).id);
-      applyTheme(items.theme);
+      CindraTheme.applyTheme(items.theme);
     });
 
     loadSavedPrompts();
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('input[name="theme"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
-      applyTheme(e.target.value);
+      CindraTheme.applyTheme(e.target.value);
     });
   });
 
@@ -159,18 +159,6 @@ function saveOptions() {
 
     showStatus('Settings saved.', 'success');
   });
-}
-
-function applyTheme(theme) {
-  const resolved = theme === 'auto'
-    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    : theme;
-  document.documentElement.setAttribute('data-theme', resolved);
-  try {
-    localStorage.setItem('cindra-theme', resolved);
-  } catch (_) {
-    /* storage unavailable */
-  }
 }
 
 function generateId() {

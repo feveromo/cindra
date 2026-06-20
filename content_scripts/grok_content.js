@@ -1,104 +1,30 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('Grok content script loaded');
-
 let promptSubmitted = false;
 let isSubmitting = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in Grok content script.');
-
   if (message.action === 'insertPrompt') {
     isSubmitting = false;
     promptSubmitted = false;
 
-    insertPromptAndSubmit(message.prompt, message.title);
+    insertPromptAndSubmit(message.prompt);
     sendResponse({ status: 'Processing prompt' });
     return true;
   }
 });
 
-function waitForElement(selector, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    if (Array.isArray(selector)) {
-      for (const sel of selector) {
-        const element = document.querySelector(sel);
-        if (element) {
-          console.log(`Element found immediately: ${sel}`);
-          return resolve(element);
-        }
-      }
-
-      console.log(`Waiting for elements: ${selector.join(', ')}`);
-
-      const startTime = Date.now();
-      const checkInterval = setInterval(() => {
-        for (const sel of selector) {
-          const element = document.querySelector(sel);
-          if (element) {
-            clearInterval(checkInterval);
-            console.log(`Element found: ${sel}`);
-            resolve(element);
-            return;
-          }
-        }
-
-        if (Date.now() - startTime > timeout) {
-          clearInterval(checkInterval);
-          reject(new Error(`Timeout waiting for elements: ${selector.join(', ')}`));
-        }
-      }, 100);
-      return;
-    }
-
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log(`Element found immediately: ${selector}`);
-      return resolve(element);
-    }
-
-    console.log(`Waiting for element: ${selector}`);
-
-    const startTime = Date.now();
-    const checkInterval = setInterval(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        clearInterval(checkInterval);
-        console.log(`Element found: ${selector}`);
-        resolve(element);
-        return;
-      }
-
-      if (Date.now() - startTime > timeout) {
-        clearInterval(checkInterval);
-        reject(new Error(`Timeout waiting for element: ${selector}`));
-      }
-    }, 100);
-  });
-}
-
-function insertPromptAndSubmit(prompt, title) {
+function insertPromptAndSubmit(prompt) {
   if (!prompt) {
     console.warn('Received empty prompt, not inserting');
     return;
   }
 
   if (isSubmitting || promptSubmitted) {
-    console.log('Already submitting or submitted, ignoring duplicate call');
     return;
   }
 
   isSubmitting = true;
 
-  console.log('Attempting to insert prompt into Grok');
-
-  waitForElement([
+  CindraInject.waitForElement([
     'div.tiptap.ProseMirror[contenteditable="true"]',
     'div.ProseMirror[contenteditable="true"]',
     'div[contenteditable="true"].tiptap',
@@ -106,8 +32,6 @@ function insertPromptAndSubmit(prompt, title) {
     'textarea[dir="auto"]'
   ])
     .then(inputEl => {
-      console.log('Input element found:', inputEl);
-
       const isEditableDiv = inputEl.getAttribute && inputEl.getAttribute('contenteditable') === 'true';
 
       if (isEditableDiv) {
@@ -139,32 +63,22 @@ function insertPromptAndSubmit(prompt, title) {
         } catch (_) {
           inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         }
-
-        console.log('Content inserted into ProseMirror, length:', (inputEl.textContent || '').length);
       } else {
-        inputEl.value = '';
-        inputEl.focus();
-        inputEl.value = prompt;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-
-        console.log('Content inserted into textarea, length:', inputEl.value.length);
+        CindraInject.insertTextIntoTextarea(inputEl, prompt);
       }
 
       return new Promise(resolve => setTimeout(resolve, 600));
     })
     .then(() => {
-      return waitForElement([
+      return CindraInject.waitForElement([
         'button[aria-label="Submit"]:not([disabled])',
         'button[type="submit"]:not([disabled])'
       ], 1500).catch(() => null);
     })
     .then(submitButton => {
       if (submitButton) {
-        console.log('Submit button found, clicking:', submitButton);
         submitButton.click();
       } else {
-        console.log('Submit button not found; attempting Enter key submit');
         const editor = document.querySelector('div[contenteditable="true"]') || document.querySelector('textarea[dir="auto"]');
         if (editor) {
           editor.focus();
@@ -193,9 +107,7 @@ function insertPromptAndSubmit(prompt, title) {
       promptSubmitted = true;
       isSubmitting = false;
 
-      chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp']);
-
-      console.log('Prompt submitted to Grok');
+      chrome.storage.local.remove(['pendingGrokPrompt', 'grokPromptTimestamp']);
     })
     .catch(error => {
       isSubmitting = false;
@@ -203,7 +115,6 @@ function insertPromptAndSubmit(prompt, title) {
       console.error('Error in insertPromptAndSubmit:', error.message);
 
       try {
-        console.log('Trying Enter key method');
         const editor = document.querySelector('div[contenteditable="true"]') || document.querySelector('textarea[dir="auto"]');
 
         if (editor) {
@@ -236,13 +147,10 @@ function insertPromptAndSubmit(prompt, title) {
           });
 
           editor.dispatchEvent(enterEvent);
-          console.log('Enter key simulated');
 
           promptSubmitted = true;
 
-          chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp']);
-
-          console.log('Prompt submitted with alternative method');
+          chrome.storage.local.remove(['pendingGrokPrompt', 'grokPromptTimestamp']);
         } else {
           console.error('Could not find input field. Please submit manually.');
         }
@@ -258,20 +166,16 @@ function checkForPendingPrompts() {
     return;
   }
 
-  console.log('Checking for pending prompts for Grok');
-
-  chrome.storage.local.get(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp'], function(result) {
+  chrome.storage.local.get(['pendingGrokPrompt', 'grokPromptTimestamp'], function(result) {
     if (result.pendingGrokPrompt) {
       const currentTime = Date.now();
       const promptTime = result.grokPromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
 
       if (currentTime - promptTime < twoMinutesInMs) {
-        console.log('Found fresh pending prompt for Grok, inserting');
-        insertPromptAndSubmit(result.pendingGrokPrompt, result.pendingGrokTitle);
+        insertPromptAndSubmit(result.pendingGrokPrompt);
       } else {
-        console.log('Found stale pending prompt for Grok, ignoring');
-        chrome.storage.local.remove(['pendingGrokPrompt', 'pendingGrokTitle', 'grokPromptTimestamp']);
+        chrome.storage.local.remove(['pendingGrokPrompt', 'grokPromptTimestamp']);
       }
     }
   });

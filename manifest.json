@@ -52,6 +52,7 @@
         "<all_urls>"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/content.js"
       ]
     },
@@ -60,6 +61,7 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/ai_studio_content.js"
       ]
     },
@@ -68,6 +70,7 @@
         "*://*.perplexity.ai/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/perplexity_content.js"
       ]
     },
@@ -76,6 +79,7 @@
         "*://grok.com/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/grok_content.js"
       ]
     },
@@ -84,6 +88,7 @@
         "*://claude.ai/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/claude_content.js"
       ]
     },
@@ -94,6 +99,7 @@
         "*://chat.com/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/chatgpt_content.js"
       ]
     },
@@ -102,6 +108,7 @@
         "https://gemini.google.com/app/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/gemini_content.js"
       ]
     },
@@ -128,6 +135,7 @@
         "https://learning.google.com/experiments/learn-about*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/google_learning_content.js"
       ]
     },
@@ -136,6 +144,7 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/deepseek_content.js"
       ]
     },
@@ -144,6 +153,7 @@
         "https://chat.z.ai/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/glm_content.js"
       ]
     },
@@ -153,6 +163,7 @@
         "https://www.kimi.com/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/kimi_content.js"
       ]
     },
@@ -161,6 +172,7 @@
         "https://huggingface.co/chat/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/huggingchat_content.js"
       ]
     },
@@ -169,6 +181,7 @@
         "https://chat.qwen.ai/*"
       ],
       "js": [
+        "content_scripts/lib/inject.js",
         "content_scripts/qwen_content.js"
       ]
     }

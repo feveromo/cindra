@@ -1,29 +1,15 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('HuggingChat content script loaded');
-
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message in HuggingChat content script.');
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
-      console.log('Already processing, ignoring message.');
       sendResponse({ success: false, error: 'Already processing' });
       return true;
     }
     isProcessing = true;
-    console.log('Setting isProcessing = true (onMessage)');
 
     insertPromptAndSubmit(message.prompt)
       .then(() => {
-        console.log('Prompt inserted and submitted successfully via message.');
         sendResponse({ success: true });
       })
       .catch(error => {
@@ -32,109 +18,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .finally(() => {
         isProcessing = false;
-        console.log('Processing finished, resetting isProcessing flag to false (onMessage finally).');
       });
     return true;
   }
 });
 
-function waitForElement(selector, textContent = null, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const intervalTime = 100;
-    let elapsedTime = 0;
-
-    const interval = setInterval(() => {
-      let element = document.querySelector(selector);
-      if (element && textContent) {
-        if (element.textContent.trim() !== textContent) {
-          element = null;
-        }
-      }
-
-      if (element) {
-        clearInterval(interval);
-        resolve(element);
-      } else {
-        elapsedTime += intervalTime;
-        if (elapsedTime >= timeout) {
-          clearInterval(interval);
-          let errorMsg = `Element not found after ${timeout}ms: ${selector}`;
-          if (textContent) {
-            errorMsg += ` with textContent "${textContent}"`;
-          }
-          reject(new Error(errorMsg));
-        }
-      }
-    }, intervalTime);
-  });
-}
-
-function insertTextIntoTextarea(textarea, text) {
-  textarea.focus();
-  textarea.value = text;
-  textarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  textarea.dispatchEvent(new Event('change', { bubbles: true }));
-  console.log('Text inserted into textarea and events dispatched.');
-}
-
-function robustClick(element) {
-  if (!element) return;
-  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  const mousedownEvent = new MouseEvent('mousedown', {
-    bubbles: true,
-    cancelable: true,
-    view: window
-  });
-  const mouseupEvent = new MouseEvent('mouseup', {
-    bubbles: true,
-    cancelable: true,
-    view: window
-  });
-  const clickEvent = new MouseEvent('click', {
-    bubbles: true,
-    cancelable: true,
-    view: window
-  });
-
-  element.dispatchEvent(mousedownEvent);
-  element.dispatchEvent(mouseupEvent);
-  element.dispatchEvent(clickEvent);
-  console.log('Robust click events dispatched on:', element);
-}
-
 async function insertPromptAndSubmit(prompt) {
   try {
-    console.log('Looking for input field for HuggingChat...');
-
-    const allTextareas = document.querySelectorAll('textarea');
-    console.log(`Found ${allTextareas.length} textarea elements on the page`);
-    allTextareas.forEach((textarea, index) => {
-      console.log(`Textarea ${index}: placeholder="${textarea.placeholder}", aria-label="${textarea.getAttribute('aria-label')}"`);
-    });
-
     const inputSelector = 'textarea[placeholder="Ask anything"]';
-    const inputField = await waitForElement(inputSelector);
-    console.log('Input field found:', inputField);
+    const inputField = await CindraInject.waitForElement(inputSelector);
 
-    insertTextIntoTextarea(inputField, prompt);
-    console.log('Prompt text inserted into HuggingChat input.');
+    CindraInject.insertTextIntoTextarea(inputField, prompt);
 
     await new Promise(resolve => setTimeout(resolve, 750));
 
-    console.log('Looking for send button for HuggingChat...');
     const sendButtonSelector = 'button[type="submit"][aria-label="Send message"]:not([disabled])';
-    const sendButton = await waitForElement(sendButtonSelector);
-    console.log('Send button found and enabled:', sendButton);
+    const sendButton = await CindraInject.waitForElement(sendButtonSelector);
 
-    robustClick(sendButton);
-    console.log('Robust send button click attempted.');
+    CindraInject.robustClick(sendButton);
 
     chrome.storage.local.remove(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp'], () => {
       if (chrome.runtime.lastError) {
         console.error('Error clearing pending HuggingChat prompt:', chrome.runtime.lastError);
-      } else {
-        console.log('Cleared pending HuggingChat prompt from storage after successful submission.');
       }
     });
 
@@ -146,10 +51,8 @@ async function insertPromptAndSubmit(prompt) {
 
 function checkPendingPrompt() {
   if (isProcessing) {
-    console.log('Processing already in progress, skipping pending HuggingChat prompt check.');
     return;
   }
-  console.log('Checking for pending HuggingChat prompt...');
   chrome.storage.local.get(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp'], (result) => {
     if (chrome.runtime.lastError) {
       console.error('Error getting pending HuggingChat prompt:', chrome.runtime.lastError);
@@ -157,7 +60,6 @@ function checkPendingPrompt() {
     }
 
     if (isProcessing) {
-      console.log('Processing started while waiting for storage, skipping pending HuggingChat prompt.');
       return;
     }
 
@@ -167,34 +69,26 @@ function checkPendingPrompt() {
       const promptAge = Date.now() - timestamp;
 
       if (promptAge < 60000) {
-        console.log('Found pending HuggingChat prompt from storage.');
         isProcessing = true;
-        console.log('Setting isProcessing = true (checkPendingPrompt)');
 
         chrome.storage.local.remove(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp'], () => {
           if (chrome.runtime.lastError) {
             console.error('Error clearing pending HuggingChat prompt before processing:', chrome.runtime.lastError);
             isProcessing = false;
-            console.log('Resetting isProcessing due to clear error (checkPendingPrompt).');
             return;
           }
-          console.log('Cleared pending HuggingChat prompt from storage before processing.');
           insertPromptAndSubmit(promptToProcess)
-            .then(() => console.log('Pending HuggingChat prompt processed successfully.'))
+            .then(() => {})
             .catch(error => {
               console.error('Error processing pending HuggingChat prompt:', error);
             })
             .finally(() => {
                 isProcessing = false;
-                console.log('Processing finished, resetting isProcessing flag to false (checkPendingPrompt finally).');
             });
         });
       } else {
-        console.log('Pending HuggingChat prompt is too old, discarding.');
         chrome.storage.local.remove(['pendingHuggingChatPrompt', 'huggingChatPromptTimestamp']);
       }
-    } else {
-      console.log('No pending HuggingChat prompt found in storage.');
     }
   });
 }

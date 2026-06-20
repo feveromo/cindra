@@ -1,13 +1,3 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('Reddit content script loaded');
-
 function extractRedditComments() {
   const comments = [];
   const commentElements = document.querySelectorAll('shreddit-comment');
@@ -97,7 +87,6 @@ function extractRedditComments() {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'extractRedditContent') {
-    console.log('Extracting Reddit content (new UI selectors)...');
     const content = extractRedditComments();
     sendResponse({ success: true, content: content });
     return true;

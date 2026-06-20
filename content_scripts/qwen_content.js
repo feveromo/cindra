@@ -1,19 +1,8 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('Qwen content script loaded');
-
 let isProcessing = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'insertPrompt') {
     if (isProcessing) {
-      console.log('Qwen: Already processing, ignoring request');
       sendResponse({ success: false, error: 'Already processing' });
       return true;
     }
@@ -21,7 +10,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     isProcessing = true;
     insertPromptAndSubmit(message.prompt)
       .then(() => {
-        console.log('Qwen: Successfully inserted and submitted prompt');
         sendResponse({ success: true });
       })
       .catch((err) => {
@@ -34,58 +22,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
-
-function waitForElement(selector, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const tryFind = (sel) => document.querySelector(sel);
-
-    if (Array.isArray(selector)) {
-      for (const sel of selector) {
-        const el = tryFind(sel);
-        if (el) return resolve(el);
-      }
-      const start = Date.now();
-      const iv = setInterval(() => {
-        for (const sel of selector) {
-          const el = tryFind(sel);
-          if (el) {
-            clearInterval(iv);
-            resolve(el);
-            return;
-          }
-        }
-        if (Date.now() - start > timeout) {
-          clearInterval(iv);
-          reject(new Error(`Timeout waiting for elements: ${selector.join(', ')}`));
-        }
-      }, 100);
-      return;
-    }
-
-    const el = tryFind(selector);
-    if (el) return resolve(el);
-    const start = Date.now();
-    const iv = setInterval(() => {
-      const el2 = tryFind(selector);
-      if (el2) {
-        clearInterval(iv);
-        resolve(el2);
-        return;
-      }
-      if (Date.now() - start > timeout) {
-        clearInterval(iv);
-        reject(new Error(`Timeout waiting for element: ${selector}`));
-      }
-    }, 100);
-  });
-}
-
-function insertTextIntoTextarea(textarea, text) {
-  textarea.focus();
-  textarea.value = text;
-  textarea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  textarea.dispatchEvent(new Event('change', { bubbles: true }));
-}
 
 function insertTextIntoEditableDiv(div, text) {
   div.focus();
@@ -103,14 +39,6 @@ function insertTextIntoEditableDiv(div, text) {
   }
 }
 
-function robustClick(element) {
-  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  ['mousedown', 'mouseup', 'click'].forEach(type => {
-    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, view: window });
-    element.dispatchEvent(ev);
-  });
-}
-
 function parsePromptSections(prompt) {
   const contentStartTag = '<Content>';
   const contentEndTag = '</Content>';
@@ -119,7 +47,6 @@ function parsePromptSections(prompt) {
   const contentEndIndex = prompt.indexOf(contentEndTag);
 
   if (contentStartIndex === -1 || contentEndIndex === -1) {
-    console.log('Qwen: No Content tags found in prompt, treating entire prompt as instruction');
     return {
       instructionPart: prompt,
       contentPart: ''
@@ -153,9 +80,8 @@ function pasteTextAsFile(element, text) {
     });
     element.dispatchEvent(pasteEvent);
   } catch (e) {
-    console.log('Qwen: Synthetic paste failed (non-fatal):', e);
     if (element.tagName && element.tagName.toLowerCase() === 'textarea') {
-      insertTextIntoTextarea(element, text);
+      CindraInject.insertTextIntoTextarea(element, text);
     } else {
       insertTextIntoEditableDiv(element, text);
     }
@@ -167,7 +93,7 @@ function pasteTextAsFile(element, text) {
 async function insertPromptAndSubmit(prompt) {
   if (!prompt) throw new Error('No prompt provided');
 
-  const input = await waitForElement([
+  const input = await CindraInject.waitForElement([
     'textarea#chat-input',
     'textarea[placeholder="How can I help you today?"]',
     'textarea.text-area-box-web',
@@ -178,13 +104,11 @@ async function insertPromptAndSubmit(prompt) {
 
   // Qwen handles very large prompts better when the content is pasted as a file.
   if (isLargeFile) {
-    console.log('Qwen: Prompt exceeds 40960 characters, splitting prompt for file upload');
     const { instructionPart, contentPart } = parsePromptSections(prompt);
 
     if (instructionPart) {
-      console.log('Qwen: Inserting instruction part into text input');
       if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
-        insertTextIntoTextarea(input, instructionPart);
+        CindraInject.insertTextIntoTextarea(input, instructionPart);
       } else {
         insertTextIntoEditableDiv(input, instructionPart);
       }
@@ -192,7 +116,6 @@ async function insertPromptAndSubmit(prompt) {
     }
 
     if (contentPart) {
-      console.log('Qwen: Pasting content part as file');
       pasteTextAsFile(input, contentPart);
       await new Promise(r => setTimeout(r, 1500));
     } else {
@@ -201,14 +124,14 @@ async function insertPromptAndSubmit(prompt) {
     }
   } else {
     if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
-      insertTextIntoTextarea(input, prompt);
+      CindraInject.insertTextIntoTextarea(input, prompt);
     } else {
       insertTextIntoEditableDiv(input, prompt);
     }
     await new Promise(r => setTimeout(r, 800));
   }
 
-  const sendButton = await waitForElement([
+  const sendButton = await CindraInject.waitForElement([
     'button[type="submit"]:not([disabled])',
     'button[aria-label*="Send" i]:not([disabled])',
     '#open-omni-button + button[type="submit"]:not([disabled])'
@@ -218,7 +141,7 @@ async function insertPromptAndSubmit(prompt) {
     if (isLargeFile) {
       await new Promise(r => setTimeout(r, 750));
     }
-    robustClick(sendButton);
+    CindraInject.robustClick(sendButton);
     setTimeout(() => sendButton.click(), 150);
   } else {
     const editor = input;
@@ -229,9 +152,7 @@ async function insertPromptAndSubmit(prompt) {
     editor.dispatchEvent(ku);
   }
 
-  chrome.storage.local.remove(['pendingQwenPrompt', 'qwenPromptTimestamp'], () => {
-    console.log('Qwen: Cleared stored prompt');
-  });
+  chrome.storage.local.remove(['pendingQwenPrompt', 'qwenPromptTimestamp'], () => {});
 }
 
 function checkPendingPrompt() {
@@ -259,5 +180,3 @@ if (document.readyState === 'loading') {
 } else {
   setTimeout(checkPendingPrompt, 250);
 }
-
-

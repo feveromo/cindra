@@ -1,85 +1,35 @@
-(() => {
-  if (globalThis.__CINDRA_DEBUG__) return;
-  if (!globalThis.__CINDRA_LOG_MUTED__) {
-    globalThis.__CINDRA_LOG_MUTED__ = true;
-    console.log = () => {};
-  }
-})();
-
-console.log('Claude content script loaded');
-
 let promptSubmitted = false;
 let isSubmitting = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message received in Claude content script.');
-
   if (message.action === 'insertPrompt') {
     isSubmitting = false;
     promptSubmitted = false;
 
-    const formattedPrompt = formatPromptForClaude(message.prompt);
-    insertPromptAndSubmit(formattedPrompt, message.title);
+    insertPromptAndSubmit(message.prompt);
     sendResponse({ status: 'Processing prompt' });
     return true;
   }
 });
 
-function formatPromptForClaude(prompt) {
-  return prompt;
-}
-
-function waitForElement(selector, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log(`Element found immediately: ${selector}`);
-      return resolve(element);
-    }
-
-    console.log(`Waiting for element: ${selector}`);
-
-    const startTime = Date.now();
-    const checkInterval = setInterval(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        clearInterval(checkInterval);
-        console.log(`Element found: ${selector}`);
-        resolve(element);
-        return;
-      }
-
-      if (Date.now() - startTime > timeout) {
-        clearInterval(checkInterval);
-        reject(new Error(`Timeout waiting for element: ${selector}`));
-      }
-    }, 100);
-  });
-}
-
-function insertPromptAndSubmit(prompt, title) {
+function insertPromptAndSubmit(prompt) {
   if (!prompt) {
     console.warn('Received empty prompt, not inserting');
     return;
   }
 
   if (isSubmitting || promptSubmitted) {
-    console.log('Already submitting or submitted, ignoring duplicate call');
     return;
   }
 
   isSubmitting = true;
 
-  console.log('Attempting to insert prompt into Claude');
-
-  waitForElement([
+  CindraInject.waitForElement([
     'div[contenteditable="true"].ProseMirror',
     'div[contenteditable="true"]#prompt-textarea',
     'div[contenteditable="true"].w-full'
   ])
     .then(editor => {
-      console.log('Editor found:', editor);
-
       editor.focus();
 
       document.execCommand('selectAll', false, null);
@@ -89,8 +39,6 @@ function insertPromptAndSubmit(prompt, title) {
       const inserted = document.execCommand('insertText', false, prompt);
 
       if (!inserted) {
-        console.log('execCommand failed, trying clipboard paste method');
-
         const dataTransfer = new DataTransfer();
         dataTransfer.setData('text/plain', prompt);
 
@@ -110,26 +58,20 @@ function insertPromptAndSubmit(prompt, title) {
         data: prompt
       }));
 
-      console.log('Content inserted, content length:', editor.textContent.length);
-
       return new Promise(resolve => setTimeout(() => resolve(editor), 300));
     })
     .then(editor => {
-      return waitForElement(
+      return CindraInject.waitForElement(
         'button[aria-label="Send message"]:not(:disabled)'
       );
     })
     .then(submitButton => {
-      console.log('Submit button found, clicking:', submitButton);
-
       submitButton.click();
 
       promptSubmitted = true;
       isSubmitting = false;
 
-      chrome.storage.local.remove(['pendingClaudePrompt', 'pendingClaudeTitle']);
-
-      console.log('Prompt submitted to Claude');
+      chrome.storage.local.remove(['pendingClaudePrompt']);
     })
     .catch(error => {
       isSubmitting = false;
@@ -137,7 +79,6 @@ function insertPromptAndSubmit(prompt, title) {
       console.error('Error in insertPromptAndSubmit:', error.message);
 
       try {
-        console.log('Trying Enter key method');
         const editor = document.querySelector('div[contenteditable="true"]');
 
         if (editor) {
@@ -158,13 +99,10 @@ function insertPromptAndSubmit(prompt, title) {
           });
 
           editor.dispatchEvent(enterEvent);
-          console.log('Enter key simulated');
 
           promptSubmitted = true;
 
-          chrome.storage.local.remove(['pendingClaudePrompt', 'pendingClaudeTitle']);
-
-          console.log('Prompt submitted with alternative method');
+          chrome.storage.local.remove(['pendingClaudePrompt']);
         } else {
           console.error('Could not find editor. Please submit manually.');
         }
@@ -180,21 +118,16 @@ function checkForPendingPrompts() {
     return;
   }
 
-  console.log('Checking for pending prompts for Claude');
-
-  chrome.storage.local.get(['pendingClaudePrompt', 'pendingClaudeTitle', 'claudePromptTimestamp'], function (result) {
+  chrome.storage.local.get(['pendingClaudePrompt', 'claudePromptTimestamp'], function (result) {
     if (result.pendingClaudePrompt) {
       const currentTime = Date.now();
       const promptTime = result.claudePromptTimestamp || 0;
       const twoMinutesInMs = 2 * 60 * 1000;
 
       if (currentTime - promptTime < twoMinutesInMs) {
-        console.log('Found fresh pending prompt for Claude, inserting');
-        const formattedPrompt = formatPromptForClaude(result.pendingClaudePrompt);
-        insertPromptAndSubmit(formattedPrompt, result.pendingClaudeTitle);
+        insertPromptAndSubmit(result.pendingClaudePrompt);
       } else {
-        console.log('Found stale pending prompt for Claude, ignoring');
-        chrome.storage.local.remove(['pendingClaudePrompt', 'pendingClaudeTitle', 'claudePromptTimestamp']);
+        chrome.storage.local.remove(['pendingClaudePrompt', 'claudePromptTimestamp']);
       }
     }
   });

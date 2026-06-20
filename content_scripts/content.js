@@ -356,7 +356,7 @@ function showSelectionComposer(rect, selectedText) {
         :host {
           all: initial;
           color-scheme: light dark;
-          font-family: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+          font-family: 'Inter', 'Inter var', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
         }
 
         * {
@@ -364,10 +364,12 @@ function showSelectionComposer(rect, selectedText) {
         }
 
         .panel {
-          border: 1px solid rgba(43, 45, 47, 0.34);
-          background: #fbf7ef;
-          color: #222426;
-          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+          border: 1px solid #242728;
+          border-radius: 10px;
+          background: #0d0d0d;
+          color: #cdcdcd;
+          box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+          overflow: hidden;
         }
 
         .header,
@@ -380,32 +382,39 @@ function showSelectionComposer(rect, selectedText) {
         }
 
         .header {
-          border-bottom: 1px solid rgba(43, 45, 47, 0.18);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .title {
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          letter-spacing: -0.005em;
+          color: #f4f4f6;
         }
 
         .meta {
           margin-top: 2px;
-          color: #666155;
-          font-size: 11px;
+          color: #9c9c9d;
+          font-size: 12px;
           line-height: 1.4;
         }
 
         .close {
           width: 30px;
           height: 30px;
-          border: 1px solid rgba(43, 45, 47, 0.18);
-          background: #ebe3d4;
-          color: #222426;
+          border: 1px solid #242728;
+          border-radius: 6px;
+          background: #101111;
+          color: #9c9c9d;
           cursor: pointer;
           font: inherit;
-          font-size: 16px;
+          font-size: 18px;
+          line-height: 1;
+        }
+
+        .close:hover {
+          border-color: rgba(255, 255, 255, 0.16);
+          color: #f4f4f6;
         }
 
         .body {
@@ -416,89 +425,140 @@ function showSelectionComposer(rect, selectedText) {
           width: 100%;
           min-height: 92px;
           resize: vertical;
-          border: 1px solid rgba(43, 45, 47, 0.34);
-          background: #ffffff;
-          color: #222426;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          color: #f4f4f6;
           padding: 10px;
           font: inherit;
-          font-size: 12px;
+          font-size: 13px;
           line-height: 1.5;
+          letter-spacing: 0.2px;
           outline: none;
         }
 
+        textarea::placeholder {
+          color: #6a6b6c;
+        }
+
         textarea:focus {
-          border-color: #c79666;
-          box-shadow: 0 0 0 3px rgba(199, 150, 102, 0.22);
+          border-color: rgba(255, 255, 255, 0.16);
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
         }
 
         .actions {
-          border-top: 1px solid rgba(43, 45, 47, 0.18);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
           padding-top: 0;
         }
 
         button {
           min-height: 36px;
-          border: 1px solid rgba(43, 45, 47, 0.34);
-          padding: 8px 10px;
+          border: 1px solid transparent;
+          border-radius: 8px;
+          padding: 0 14px;
           font: inherit;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
+          font-size: 13px;
+          font-weight: 500;
+          letter-spacing: -0.005em;
           cursor: pointer;
         }
 
         .secondary {
-          background: #fbf7ef;
-          color: #222426;
+          border-color: #242728;
+          background: transparent;
+          color: #f4f4f6;
+        }
+
+        .secondary:hover {
+          background: #121212;
+          border-color: rgba(255, 255, 255, 0.16);
         }
 
         .primary {
-          background: #232527;
-          color: #f8f4eb;
+          background: #ffffff;
+          color: #000000;
+        }
+
+        .primary:hover {
+          background: #e8e8e8;
         }
 
         .status {
           min-height: 18px;
           padding: 0 12px 10px;
-          color: #666155;
-          font-size: 11px;
+          color: #9c9c9d;
+          font-size: 12px;
           line-height: 1.4;
         }
 
-        @media (prefers-color-scheme: dark) {
+        @media (prefers-color-scheme: light) {
           .panel {
-            border-color: rgba(242, 234, 220, 0.3);
-            background: #3a3c3f;
-            color: #f4efe4;
+            border-color: rgba(0, 0, 0, 0.12);
+            background: #ffffff;
+            color: #3a3a3c;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
           }
 
-          .header,
-          .actions {
-            border-color: rgba(242, 234, 220, 0.12);
+          .header {
+            border-color: rgba(0, 0, 0, 0.06);
+          }
+
+          .title {
+            color: #0a0a0a;
           }
 
           .meta,
           .status {
-            color: #bfb5a5;
+            color: #6b6b6e;
           }
 
-          .close,
-          .secondary {
-            border-color: rgba(242, 234, 220, 0.3);
-            background: #343639;
-            color: #f4efe4;
+          .close {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: #f1f1f2;
+            color: #6b6b6e;
+          }
+
+          .close:hover {
+            border-color: rgba(0, 0, 0, 0.2);
+            color: #0a0a0a;
           }
 
           textarea {
-            border-color: rgba(242, 234, 220, 0.3);
-            background: #424447;
-            color: #f4efe4;
+            border-color: rgba(0, 0, 0, 0.06);
+            background: rgba(0, 0, 0, 0.04);
+            color: #0a0a0a;
+          }
+
+          textarea::placeholder {
+            color: #9a9a9d;
+          }
+
+          textarea:focus {
+            border-color: rgba(0, 0, 0, 0.2);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+          }
+
+          .actions {
+            border-color: rgba(0, 0, 0, 0.06);
+          }
+
+          .secondary {
+            border-color: rgba(0, 0, 0, 0.12);
+            color: #0a0a0a;
+          }
+
+          .secondary:hover {
+            background: #e9e9ea;
+            border-color: rgba(0, 0, 0, 0.2);
           }
 
           .primary {
-            background: #f0eadf;
-            color: #2a2c2f;
+            background: #0a0a0a;
+            color: #ffffff;
+          }
+
+          .primary:hover {
+            background: #2a2a2c;
           }
         }
       </style>

@@ -1,3 +1,40 @@
-AGENTS.md
-.pi
-.playwright-mcp/
+# Local agent and indexing metadata
+/AGENTS.md
+/.codegraph
+/.pi/
+/.playwright-mcp/
+
+# Dependencies and package-manager caches
+node_modules/
+.pnpm-store/
+
+# Test and coverage output
+test-results/
+playwright-report/
+blob-report/
+coverage/
+.nyc_output/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs and temporary runtime files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+
+# Editor and operating-system metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

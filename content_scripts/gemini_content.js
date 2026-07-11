@@ -1,25 +1,3 @@
-let isProcessing = false;
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    if (isProcessing) {
-      sendResponse({ success: false, error: 'Already processing' });
-      return true;
-    }
-    isProcessing = true;
-
-    insertPromptAndSubmit(message.prompt)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch(error => {
-        console.error('Error inserting prompt via message:', error);
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
-  }
-});
-
 async function insertTextIntoEditableDiv(div, text) {
   div.focus();
 
@@ -66,7 +44,12 @@ async function insertTextIntoEditableDiv(div, text) {
 
 async function insertPromptAndSubmit(prompt) {
   try {
-    const inputSelector = 'div.ql-editor[contenteditable="true"][aria-label="Enter a prompt here"]';
+    const inputSelector = [
+      'div.ql-editor[contenteditable="true"][aria-label="Enter a prompt here"]',
+      'div.ql-editor[contenteditable="true"][aria-label="Enter a prompt for Gemini"]',
+      'div.ql-editor[contenteditable="true"][data-placeholder="Ask Gemini"]',
+      'rich-textarea div.ql-editor[contenteditable="true"]'
+    ];
     const inputField = await CindraInject.waitForElement(inputSelector);
 
     await insertTextIntoEditableDiv(inputField, prompt);
@@ -74,62 +57,26 @@ async function insertPromptAndSubmit(prompt) {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Gemini marks disabled state through aria-disabled rather than disabled.
-    const sendButtonSelector = 'button.send-button[aria-label="Send message"]:not([aria-disabled="true"])';
+    const sendButtonSelector = [
+      'button.send-button[aria-label="Send message"]:not([aria-disabled="true"])',
+      'button[aria-label="Send message"]:not([aria-disabled="true"]):not([disabled])',
+      'button[type="submit"][aria-label="Send message"]:not([aria-disabled="true"]):not([disabled])'
+    ];
     const sendButton = await CindraInject.waitForElement(sendButtonSelector);
 
-    sendButton.click();
-
-    // Failsafe in case checkPendingPrompt did not claim the prompt first.
-    chrome.storage.local.remove(['pendingGeminiPrompt', 'geminiPromptTimestamp'], () => {
-    });
+    CindraInject.robustClick(sendButton);
 
   } catch (error) {
     console.error('Error in insertPromptAndSubmit:', error);
     throw error;
-  } finally {
-    isProcessing = false;
   }
 }
 
-function checkPendingPrompt() {
-  if (isProcessing) {
-    return;
-  }
-  chrome.storage.local.get(['pendingGeminiPrompt', 'geminiPromptTimestamp'], (result) => {
-    // The message listener may start processing while storage is loading.
-    if (isProcessing) {
-      return;
-    }
-    if (result.pendingGeminiPrompt && result.geminiPromptTimestamp) {
-      const promptToProcess = result.pendingGeminiPrompt;
-      const timestamp = result.geminiPromptTimestamp;
-
-      const promptAge = Date.now() - result.geminiPromptTimestamp;
-
-      if (promptAge < 60000) {
-        isProcessing = true;
-
-        // Claim the prompt before submit so reloads do not send it twice.
-        chrome.storage.local.remove(['pendingGeminiPrompt', 'geminiPromptTimestamp'], () => {
-          insertPromptAndSubmit(promptToProcess)
-            .then(() => {})
-            .catch(error => {
-              console.error('Error processing pending prompt:', error);
-              if (isProcessing) {
-                console.warn('Resetting isProcessing flag in pending prompt catch block.');
-                isProcessing = false;
-              }
-            });
-        });
-      } else {
-        chrome.storage.local.remove(['pendingGeminiPrompt', 'geminiPromptTimestamp']);
-      }
-    }
-  });
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', checkPendingPrompt);
-} else {
-  checkPendingPrompt();
-}
+CindraProviderRuntime.register({
+  providerId: 'gemini',
+  legacyKeys: {
+    prompt: 'pendingGeminiPrompt',
+    timestamp: 'geminiPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

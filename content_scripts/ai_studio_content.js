@@ -1,17 +1,6 @@
 let promptSubmitted = false;
 let isSubmitting = false;
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    isSubmitting = false;
-    promptSubmitted = false;
-
-    insertPromptAndSubmit(message.prompt, message.title);
-    sendResponse({ status: 'Attempting to insert prompt' });
-    return true;
-  }
-});
-
 function isGeneratingResponse() {
   const stopButton = document.querySelector('button.run-button.stop-generating');
   const progressIndicator = document.querySelector('.response-container .progress-indicator');
@@ -22,35 +11,28 @@ function isGeneratingResponse() {
 
 function insertPromptAndSubmit(prompt, title) {
   if (!prompt) {
-    console.warn('Received empty prompt, not inserting');
-    return;
+    throw new Error('No prompt provided');
   }
 
-  if (isSubmitting || promptSubmitted || isGeneratingResponse()) {
-    return;
+  if (isSubmitting || isGeneratingResponse()) {
+    throw new Error('Google AI Studio is already processing a prompt.');
   }
 
+  promptSubmitted = false;
   isSubmitting = true;
 
   const textareaSelectors = [
+    'textarea[formcontrolname="promptText"]',
+    'textarea[aria-label="Enter a prompt"]',
     'textarea.textarea',
     'textarea.textarea.gmat-body-medium',
-    'div[contenteditable="true"]',
-    '.input-area textarea'
+    '.input-area textarea',
+    'div[contenteditable="true"]'
   ];
 
-  const findTextarea = async () => {
-    for (const selector of textareaSelectors) {
-      try {
-        const textarea = await CindraInject.waitForElement(selector, 1000);
-        if (textarea) return textarea;
-      } catch (e) {
-      }
-    }
-    throw new Error('Textarea not found');
-  };
+  const findTextarea = () => CindraInject.waitForElement(textareaSelectors, 2000);
 
-  findTextarea()
+  return findTextarea()
     .then(textarea => {
       if (isGeneratingResponse()) {
         promptSubmitted = true;
@@ -94,23 +76,21 @@ function insertPromptAndSubmit(prompt, title) {
       }
 
       const runButtonSelectors = [
-        'button.run-button:not(.disabled)',
-        'button[aria-label="Send message"]',
-        'button.send-button:not([disabled])'
+        'ms-run-button button[type="submit"]:not([aria-disabled="true"]):not([disabled])',
+        'button.ctrl-enter-submits[type="submit"]:not([aria-disabled="true"]):not([disabled])',
+        'button.run-button:not(.disabled):not([aria-disabled="true"])',
+        'button[aria-label="Send message"]:not([aria-disabled="true"]):not([disabled])',
+        'button.send-button:not([disabled]):not([aria-disabled="true"])'
       ];
 
       const findAndClickButton = async () => {
-        for (const selector of runButtonSelectors) {
-          try {
-            const button = await CindraInject.waitForElement(selector, 2000);
-            if (button) {
-              button.click();
-              return true;
-            }
-          } catch (e) {
-          }
+        try {
+          const button = await CindraInject.waitForElement(runButtonSelectors, 2000);
+          CindraInject.robustClick(button);
+          return true;
+        } catch (e) {
+          return false;
         }
-        return false;
       };
 
       return findAndClickButton().then(buttonClicked => {
@@ -144,59 +124,8 @@ function insertPromptAndSubmit(prompt, title) {
       });
     })
     .then(success => {
-      if (success || promptSubmitted) {
-        chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
-      } else {
-        // Run the final submit attempt in the page context so AI Studio sees native events.
-        const script = document.createElement('script');
-        script.textContent = `
-          (function() {
-            try {
-              const runButtons = [
-                document.querySelector('button.run-button:not(.disabled)'),
-                document.querySelector('button[aria-label="Send message"]'),
-                document.querySelector('button.send-button:not([disabled])')
-              ].filter(btn => btn !== null);
-
-              if (runButtons.length > 0) {
-                console.log('Found button through injected script, clicking');
-                runButtons[0].click();
-              } else {
-                console.log('No button found through injected script');
-
-                const textarea = document.querySelector('textarea.textarea') ||
-                                document.querySelector('div[contenteditable="true"]');
-                if (textarea) {
-                  console.log('Found textarea, sending keyboard event');
-                  textarea.focus();
-
-                  const enterEvent = new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    ctrlKey: true,
-                    bubbles: true,
-                    cancelable: true
-                  });
-                  textarea.dispatchEvent(enterEvent);
-                }
-              }
-            } catch (e) {
-              console.error('Error in injected script:', e);
-            }
-          })();
-        `;
-
-        document.body.appendChild(script);
-        setTimeout(() => {
-          script.remove();
-
-          if (isGeneratingResponse()) {
-            promptSubmitted = true;
-            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
-          }
-        }, 300);
+      if (!success && !promptSubmitted) {
+        throw new Error('Google AI Studio did not accept the submit action.');
       }
     })
     .catch(error => {
@@ -206,36 +135,20 @@ function insertPromptAndSubmit(prompt, title) {
       }
 
       console.error('Error in insertPromptAndSubmit:', error.message);
+      throw error;
     })
     .finally(() => {
       isSubmitting = false;
     });
 }
 
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    if (window.location.pathname.includes('/prompts/new_chat') ||
-        window.location.pathname.includes('/app') ||
-        window.location.href.includes('aistudio.google.com')) {
-
-      chrome.storage.local.get(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp'], function(result) {
-        const prompt = result.pendingAIStudioPrompt;
-        const title = result.pendingAIStudioTitle;
-        const ts = result.aiStudioPromptTimestamp || 0;
-        if (prompt) {
-          const currentTime = Date.now();
-          const fiveMinutesInMs = 5 * 60 * 1000;
-
-          if (currentTime - ts < fiveMinutesInMs) {
-            // Remove before submitting so reloads do not submit the same prompt twice.
-            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp'], () => {
-              insertPromptAndSubmit(prompt, title);
-            });
-          } else {
-            chrome.storage.local.remove(['pendingAIStudioPrompt', 'pendingAIStudioTitle', 'aiStudioPromptTimestamp']);
-          }
-        }
-      });
-    }
-  }, 800);
+CindraProviderRuntime.register({
+  providerId: 'google-ai-studio',
+  startupDelayMs: 800,
+  legacyKeys: {
+    prompt: 'pendingAIStudioPrompt',
+    timestamp: 'aiStudioPromptTimestamp',
+    title: 'pendingAIStudioTitle'
+  },
+  submitPrompt: insertPromptAndSubmit
 });

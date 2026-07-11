@@ -1,28 +1,3 @@
-let isProcessing = false;
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    if (isProcessing) {
-      sendResponse({ success: false, error: 'Already processing' });
-      return true;
-    }
-
-    isProcessing = true;
-    insertPromptAndSubmit(message.prompt)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((err) => {
-        console.error('Qwen: Error inserting prompt:', err);
-        sendResponse({ success: false, error: err?.message || String(err) });
-      })
-      .finally(() => {
-        isProcessing = false;
-      });
-    return true;
-  }
-});
-
 function insertTextIntoEditableDiv(div, text) {
   div.focus();
   div.innerHTML = '';
@@ -142,7 +117,6 @@ async function insertPromptAndSubmit(prompt) {
       await new Promise(r => setTimeout(r, 750));
     }
     CindraInject.robustClick(sendButton);
-    setTimeout(() => sendButton.click(), 150);
   } else {
     const editor = input;
     editor.focus();
@@ -152,31 +126,13 @@ async function insertPromptAndSubmit(prompt) {
     editor.dispatchEvent(ku);
   }
 
-  chrome.storage.local.remove(['pendingQwenPrompt', 'qwenPromptTimestamp'], () => {});
 }
 
-function checkPendingPrompt() {
-  if (isProcessing) return;
-  chrome.storage.local.get(['pendingQwenPrompt', 'qwenPromptTimestamp'], (result) => {
-    if (!result || !result.pendingQwenPrompt) return;
-    const ts = result.qwenPromptTimestamp || 0;
-    const fresh = (Date.now() - ts) < 60000;
-    if (!fresh) {
-      chrome.storage.local.remove(['pendingQwenPrompt', 'qwenPromptTimestamp']);
-      return;
-    }
-    const prompt = result.pendingQwenPrompt;
-    chrome.storage.local.remove(['pendingQwenPrompt', 'qwenPromptTimestamp'], () => {
-      isProcessing = true;
-      insertPromptAndSubmit(prompt)
-        .catch((e) => console.error('Qwen: Error processing pending prompt', e))
-        .finally(() => { isProcessing = false; });
-    });
-  });
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => setTimeout(checkPendingPrompt, 250));
-} else {
-  setTimeout(checkPendingPrompt, 250);
-}
+CindraProviderRuntime.register({
+  providerId: 'qwen',
+  legacyKeys: {
+    prompt: 'pendingQwenPrompt',
+    timestamp: 'qwenPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

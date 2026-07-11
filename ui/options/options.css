@@ -1,4 +1,4 @@
-/* Cindra Settings — Raycast system, options-page layout only.
+/* Cindra Settings: command-palette system, options-page layout only.
    Tokens, cards, inputs, buttons, keycaps live in ../styles.css. */
 
 body {
@@ -52,9 +52,10 @@ body {
 
 .setting-item {
   display: grid;
-  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px 0;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
   border-bottom: 1px solid var(--hairline-soft);
 }
 
@@ -89,12 +90,75 @@ body {
 .setting-controls {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
   gap: 8px;
 }
 
-#provider-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(170px, 1fr));
+.setting-controls-stack {
+  align-items: stretch;
+}
+
+.provider-select-wrap {
+  width: min(100%, 420px);
+}
+
+#ai-model {
+  min-height: 38px;
+  font-weight: 600;
+}
+
+.segmented-control {
+  display: inline-flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: max-content;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-lg);
+  background: var(--field-bg);
+}
+
+.setting-controls.segmented-control {
+  gap: 2px;
+}
+
+.segmented-control .radio-container {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  box-shadow: none;
+}
+
+.segmented-control .radio-container:hover {
+  background: var(--field-bg-hover);
+}
+
+.segmented-control .radio-container:has(input:checked) {
+  background: var(--segment-selected-bg);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--segment-selected-border);
+}
+
+.segmented-control .radio-container input {
+  width: 8px;
+  height: 8px;
+}
+
+.segmented-control .radio-container input:checked {
+  background: var(--ink);
+}
+
+.split-controls {
+  gap: 10px;
+}
+
+.split-controls .secondary-btn {
+  min-height: 40px;
 }
 
 .prompts-list {
@@ -272,9 +336,10 @@ body {
 .actions {
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 14px;
   margin: 0;
+  padding-top: 2px;
 }
 
 #save-btn {
@@ -299,8 +364,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  #provider-options {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  .provider-select-wrap {
+    width: 100%;
   }
 }
 
@@ -316,7 +381,25 @@ body {
 
   .actions {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+
+  .setting-controls.segmented-control,
+  .split-controls .segmented-control {
+    width: 100%;
+  }
+
+  .segmented-control .radio-container {
+    flex: 1 1 calc(50% - 2px);
+    justify-content: center;
+  }
+
+  .split-controls {
+    align-items: stretch;
+  }
+
+  .split-controls .secondary-btn {
+    width: 100%;
   }
 
   .status {

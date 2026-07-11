@@ -1,162 +1,70 @@
-let promptSubmitted = false;
-let isSubmitting = false;
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    isSubmitting = false;
-    promptSubmitted = false;
-
-    const formattedPrompt = message.prompt;
-    insertPromptAndSubmit(formattedPrompt);
-    sendResponse({ status: 'Processing prompt' });
-    return true;
-  }
-});
-
-// Set prompt text on either a textarea or contenteditable editor while preserving line breaks
-function setPromptOnEditor(editor, prompt) {
+function setPromptOnChatGptEditor(editor, prompt) {
   const isContentEditable = editor.getAttribute('contenteditable') === 'true';
+  editor.focus();
 
   if (isContentEditable) {
     editor.innerHTML = '';
-
-    const pre = document.createElement('pre');
-    pre.style.whiteSpace = 'pre-wrap';
-    pre.style.wordBreak = 'break-word';
-    pre.style.margin = '0';
-    pre.textContent = prompt;
-
-    editor.appendChild(pre);
-  } else {
-    editor.value = prompt;
+    const paragraph = document.createElement('p');
+    paragraph.style.whiteSpace = 'pre-wrap';
+    paragraph.textContent = prompt;
+    editor.appendChild(paragraph);
+    editor.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'insertText',
+      data: prompt
+    }));
+    return;
   }
+
+  CindraInject.insertTextIntoTextarea(editor, prompt);
 }
 
-function insertPromptAndSubmit(prompt) {
-  if (!prompt) {
-    console.warn('Received empty prompt, not inserting');
-    return;
-  }
+function submitChatGptWithEnter(editor) {
+  editor.focus();
+  editor.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Enter',
+    code: 'Enter',
+    keyCode: 13,
+    which: 13,
+    bubbles: true,
+    cancelable: true
+  }));
+}
 
-  if (isSubmitting || promptSubmitted) {
-    return;
-  }
+async function insertPromptAndSubmit(prompt) {
+  if (!prompt) throw new Error('No prompt provided');
 
-  isSubmitting = true;
-
-  CindraInject.waitForElement([
+  const editor = await CindraInject.waitForElement([
     '#prompt-textarea',
     'textarea[data-id="root"]',
     'textarea.w-full',
     'div[contenteditable="true"]#prompt-textarea',
     'div[contenteditable="true"].w-full'
-  ])
-    .then(textarea => {
-      textarea.focus();
-      setPromptOnEditor(textarea, prompt);
+  ]);
+  setPromptOnChatGptEditor(editor, prompt);
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-      if (textarea.getAttribute('contenteditable') === 'true') {
-        const inputEvent = new InputEvent('input', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: prompt
-        });
-        textarea.dispatchEvent(inputEvent);
-      } else {
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        textarea.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+  const submitButton = await CindraInject.waitForElement([
+    'button[data-testid="send-button"]:not([disabled])',
+    'button[type="submit"]:not([disabled])',
+    'button[aria-label*="Send" i]:not([disabled])'
+  ], 2500).catch(() => null);
 
-      return new Promise(resolve => setTimeout(() => resolve(textarea), 500));
-    })
-    .then(textarea => {
-      return CindraInject.waitForElement([
-        'button[data-testid="send-button"]:not([disabled])',
-        'button[type="submit"]:not([disabled])',
-        'button.text-white:not([disabled])',
-        'button.bg-black:not([disabled])',
-        'button.absolute.right-2:not([disabled])',
-        'button.absolute.right-1\\.5:not([disabled])'
-      ]);
-    })
-    .then(submitButton => {
-      submitButton.click();
-
-      promptSubmitted = true;
-      isSubmitting = false;
-
-      chrome.storage.local.remove(['pendingChatGPTPrompt']);
-    })
-    .catch(error => {
-      isSubmitting = false;
-
-      console.error('Error in insertPromptAndSubmit:', error.message);
-
-      try {
-        const textarea = document.querySelector('#prompt-textarea') ||
-                        document.querySelector('textarea[data-id="root"]') ||
-                        document.querySelector('div[contenteditable="true"]');
-
-        if (textarea) {
-          textarea.focus();
-          setPromptOnEditor(textarea, prompt);
-
-          if (textarea.getAttribute('contenteditable') === 'true') {
-            textarea.dispatchEvent(new InputEvent('input', {
-              bubbles: true,
-              cancelable: true,
-              inputType: 'insertText',
-              data: prompt
-            }));
-          } else {
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            textarea.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-
-          const enterEvent = new KeyboardEvent('keydown', {
-            key: 'Enter',
-            code: 'Enter',
-            keyCode: 13,
-            which: 13,
-            bubbles: true,
-            cancelable: true
-          });
-
-          textarea.dispatchEvent(enterEvent);
-
-          promptSubmitted = true;
-
-          chrome.storage.local.remove(['pendingChatGPTPrompt']);
-        } else {
-          console.error('Could not find textarea. Please submit manually.');
-        }
-      } catch (e) {
-        console.error('Alternative method failed:', e);
-        console.error('All submission methods failed. Please submit manually.');
-      }
-    });
-}
-
-function checkForPendingPrompts() {
-  if (isSubmitting || promptSubmitted) {
+  if (submitButton) {
+    CindraInject.robustClick(submitButton);
     return;
   }
 
-  chrome.storage.local.get(['pendingChatGPTPrompt', 'chatgptPromptTimestamp'], function(result) {
-    if (result.pendingChatGPTPrompt) {
-      const currentTime = Date.now();
-      const promptTime = result.chatgptPromptTimestamp || 0;
-      const twoMinutesInMs = 2 * 60 * 1000;
-
-      if (currentTime - promptTime < twoMinutesInMs) {
-        const formattedPrompt = result.pendingChatGPTPrompt;
-        insertPromptAndSubmit(formattedPrompt);
-      } else {
-        chrome.storage.local.remove(['pendingChatGPTPrompt', 'chatgptPromptTimestamp']);
-      }
-    }
-  });
+  submitChatGptWithEnter(editor);
 }
 
-setTimeout(checkForPendingPrompts, 2000);
+CindraProviderRuntime.register({
+  providerId: 'chatgpt',
+  startupDelayMs: 1000,
+  legacyKeys: {
+    prompt: 'pendingChatGPTPrompt',
+    timestamp: 'chatgptPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

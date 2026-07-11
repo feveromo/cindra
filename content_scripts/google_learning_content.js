@@ -1,28 +1,3 @@
-let isProcessing = false;
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    if (isProcessing) {
-      sendResponse({ success: false, error: 'Already processing' });
-      return true;
-    }
-    isProcessing = true;
-
-    insertPromptAndSubmit(message.prompt)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch(error => {
-        console.error('Error inserting prompt via message:', error);
-        sendResponse({ success: false, error: error.message });
-      })
-      .finally(() => {
-        isProcessing = false;
-      });
-    return true;
-  }
-});
-
 function findSendButton() {
   const spans = document.querySelectorAll('span');
 
@@ -91,63 +66,17 @@ async function insertPromptAndSubmit(prompt) {
 
     CindraInject.robustClick(sendButton);
 
-    chrome.storage.local.remove(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp'], () => {
-      if (chrome.runtime.lastError) {
-        console.error('Error clearing pending Google Learning prompt:', chrome.runtime.lastError);
-      }
-    });
-
   } catch (error) {
     console.error('Error in insertPromptAndSubmit for Google Learning:', error);
     throw error;
   }
 }
 
-function checkPendingPrompt() {
-  if (isProcessing) {
-    return;
-  }
-  chrome.storage.local.get(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp'], (result) => {
-    if (chrome.runtime.lastError) {
-      console.error('Error getting pending Google Learning prompt:', chrome.runtime.lastError);
-      return;
-    }
-
-    if (isProcessing) {
-      return;
-    }
-
-    if (result.pendingGoogleLearningPrompt && result.googleLearningPromptTimestamp) {
-      const promptToProcess = result.pendingGoogleLearningPrompt;
-      const timestamp = result.googleLearningPromptTimestamp;
-      const promptAge = Date.now() - timestamp;
-
-      if (promptAge < 60000) {
-        isProcessing = true;
-
-        chrome.storage.local.remove(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp'], () => {
-          if (chrome.runtime.lastError) {
-            console.error('Error clearing pending Google Learning prompt before processing:', chrome.runtime.lastError);
-            isProcessing = false;
-            return;
-          }
-          insertPromptAndSubmit(promptToProcess)
-            .catch(error => {
-              console.error('Error processing pending Google Learning prompt:', error);
-            })
-            .finally(() => {
-                isProcessing = false;
-            });
-        });
-      } else {
-        chrome.storage.local.remove(['pendingGoogleLearningPrompt', 'googleLearningPromptTimestamp']);
-      }
-    }
-  });
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', checkPendingPrompt);
-} else {
-  setTimeout(checkPendingPrompt, 250);
-}
+CindraProviderRuntime.register({
+  providerId: 'google-learning',
+  legacyKeys: {
+    prompt: 'pendingGoogleLearningPrompt',
+    timestamp: 'googleLearningPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

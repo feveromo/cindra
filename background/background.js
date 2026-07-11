@@ -1,80 +1,88 @@
-importScripts('../lib/providers.js');
+importScripts('../lib/providers.js', '../lib/prompt.js', '../lib/pdf.js', 'content.js', 'pdf.js', 'handoffs.js');
 
 const providerRegistry = globalThis.CindraProviders;
+const promptBuilder = globalThis.CindraPrompt;
+const backgroundContent = globalThis.CindraBackgroundContent;
+const pdfService = globalThis.CindraBackgroundPdf;
+const { isPdfUrl, resolveContentRoute, getPageContent } = backgroundContent;
+const handoffService = globalThis.CindraBackgroundHandoffs.create({
+  providerRegistry,
+  promptBuilder,
+  onError: message => openErrorTab(message)
+});
+const {
+  setStatus,
+  sendToSelectedModel,
+  resendSummary,
+  handleProviderHandoffResult,
+  claimProviderHandoff
+} = handoffService;
 const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
-const MAX_RECENT_SUMMARIES = 5;
-const MAX_PROMPT_CONTENT_CHARS = 120000;
-const PROMPT_CONTENT_HEAD_CHARS = 80000;
-const PROMPT_CONTENT_TAIL_CHARS = 30000;
-
-let kimiClaimLock = false;
+const PDF_SHORTCUT_SCRIPT_FILES = [
+  'lib/providers.js',
+  'content_scripts/lib/inject.js',
+  'content_scripts/content.js'
+];
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'claimKimiPrompt') {
-    claimKimiPrompt(sendResponse);
-    return true;
-  }
-
   if (message.action === 'summarize') {
-    resolveSourceTab(message, sender, (tab) => {
+    resolveSourceTab(message, sender, (tab, error) => {
+      if (!tab) {
+        sendResponse({ success: false, error });
+        return;
+      }
+      sendResponse({ success: true, accepted: true });
       handleSummarize(tab, message);
     });
     return true;
   }
 
   if (message.action === 'resendSummary') {
-    resendSummary(message.summaryId);
+    resendSummary(message.summaryId, sendResponse);
     return true;
   }
 
-  return true;
-});
-
-function claimKimiPrompt(sendResponse) {
-  if (kimiClaimLock) {
-    sendResponse({ success: false, error: 'locked' });
-    return;
+  if (message.action === 'providerHandoffResult') {
+    handleProviderHandoffResult(message);
+    sendResponse({ success: true });
+    return true;
   }
 
-  kimiClaimLock = true;
-  chrome.storage.local.get(['pendingKimiPrompt', 'kimiPromptTimestamp'], (state) => {
-    const release = () => { kimiClaimLock = false; };
+  if (message.action === 'claimProviderHandoff') {
+    claimProviderHandoff(message, sender)
+      .then(sendResponse)
+      .catch(error => sendResponse({ success: false, error: error?.message || String(error) }));
+    return true;
+  }
 
-    if (chrome.runtime.lastError) {
-      release();
-      sendResponse({ success: false, error: chrome.runtime.lastError.message });
+  return false;
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  const url = changeInfo.url || tab?.url || '';
+  if (changeInfo.status === 'complete' && isPdfUrl(url)) {
+    ensurePdfShortcutContentScript(tabId);
+  }
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError || !isPdfUrl(tab?.url || '')) {
       return;
     }
 
-    const prompt = state.pendingKimiPrompt;
-    const ts = state.kimiPromptTimestamp || 0;
-    const fresh = (Date.now() - ts) < 60000;
-
-    if (!prompt || !fresh) {
-      if (!fresh && ts) {
-        chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
-      }
-      release();
-      sendResponse({ success: false, error: 'none' });
-      return;
-    }
-
-    chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
-      release();
-      if (chrome.runtime.lastError) {
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-      } else {
-        sendResponse({ success: true, prompt });
-      }
-    });
+    ensurePdfShortcutContentScript(tabId);
   });
-}
+});
+
+injectOpenPdfTabs();
 
 function resolveSourceTab(message, sender, callback) {
   if (message.tabId) {
     chrome.tabs.get(message.tabId, (tab) => {
       if (chrome.runtime.lastError || !tab) {
         setStatus('error', 'Could not find the current tab.');
+        callback(null, 'Could not find the current tab.');
         return;
       }
       callback(tab);
@@ -90,6 +98,7 @@ function resolveSourceTab(message, sender, callback) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs.length === 0) {
       setStatus('error', 'No active tab found.');
+      callback(null, 'No active tab found.');
       return;
     }
     callback(tabs[0]);
@@ -123,42 +132,72 @@ function handleSummarize(tab, options = {}) {
       url: tab.url
     });
 
-    if (config.contentSource === 'selection' && typeof config.selectedText === 'string' && config.selectedText.trim()) {
-      sendCapturedSelection(tab, config);
+    const route = resolveContentRoute({
+      contentSource: config.contentSource,
+      selectedText: typeof config.selectedText === 'string' ? config.selectedText : '',
+      capturedPageContent: typeof config.capturedPageContent === 'string' ? config.capturedPageContent : '',
+      capturedPageAttempted: Boolean(config.capturedPageAttempted),
+      isPdf: isPdfUrl(tab.url),
+      isYouTube: tab.url.includes('youtube.com/watch'),
+      isReddit: tab.url.includes('reddit.com')
+    });
+
+    if (route === 'captured-selection') return sendCapturedSelection(tab, config);
+    if (route === 'extract-selection') return extractPageContent(tab, config, 'selection');
+    if (route === 'captured-page') return sendCapturedPageContent(tab, config);
+    if (route === 'empty-captured-page') return openErrorTab('No content found on the page to summarize.');
+    if (route === 'pdf') return extractPdfContent(tab, config);
+    if (route === 'validate-pdf') return extractPageContent(tab, config, 'pdf');
+    if (route === 'youtube') return extractYouTubeTranscriptWithCache(tab, config);
+    if (route === 'reddit') return extractRedditContent(tab, config);
+    return extractPageContent(tab, config, 'page');
+  });
+}
+
+function ensurePdfShortcutContentScript(tabId) {
+  if (!tabId || !chrome.scripting?.executeScript) {
+    return;
+  }
+
+  chrome.scripting.executeScript({
+    target: { tabId },
+    function: isCindraContentScriptReady
+  }, (results) => {
+    if (chrome.runtime.lastError) {
+      console.warn('Could not inspect PDF tab for Cindra shortcut support:', chrome.runtime.lastError.message);
       return;
     }
 
-    if (config.contentSource === 'selection') {
-      openErrorTab('No selected text found on this page.');
+    if (results?.[0]?.result) {
       return;
     }
 
-    if (typeof config.capturedPageContent === 'string' && config.capturedPageContent.trim()) {
-      sendCapturedPageContent(tab, config);
+    chrome.scripting.executeScript({
+      target: { tabId },
+      files: PDF_SHORTCUT_SCRIPT_FILES
+    }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn('Could not inject Cindra shortcut support into PDF tab:', chrome.runtime.lastError.message);
+      }
+    });
+  });
+}
+
+function isCindraContentScriptReady() {
+  return Boolean(globalThis.CindraContentScriptReady);
+}
+
+function injectOpenPdfTabs() {
+  chrome.tabs.query({}, (tabs) => {
+    if (chrome.runtime.lastError) {
       return;
     }
 
-    if (config.capturedPageAttempted) {
-      openErrorTab('No content found on the page to summarize.');
-      return;
-    }
-
-    if (config.contentSource === 'selection' || config.contentSource === 'page') {
-      extractPageContent(tab, config, config.contentSource);
-      return;
-    }
-
-    if (tab.url.includes('youtube.com/watch')) {
-      extractYouTubeTranscriptWithCache(tab, config);
-      return;
-    }
-
-    if (tab.url.includes('reddit.com')) {
-      extractRedditContent(tab, config);
-      return;
-    }
-
-    extractPageContent(tab, config, 'page');
+    tabs.forEach((tab) => {
+      if (isPdfUrl(tab.url || '')) {
+        ensurePdfShortcutContentScript(tab.id);
+      }
+    });
   });
 }
 
@@ -277,7 +316,9 @@ function extractPageContent(tab, config, contentSource) {
       return;
     }
 
-    const heading = pageData.sourceType === 'selection' ? 'Selected Text' : 'Content';
+    const heading = pageData.sourceType === 'selection'
+      ? 'Selected Text'
+      : pageData.sourceType === 'pdf' ? 'PDF Text' : 'Content';
     const formattedContent = `URL: ${pageData.url}\n\n${heading}:\n${pageData.content}`;
 
     sendToSelectedModel(
@@ -291,6 +332,38 @@ function extractPageContent(tab, config, contentSource) {
       pageData.sourceType
     );
   });
+}
+
+async function extractPdfContent(tab, config) {
+  setStatus('working', 'Extracting PDF text...', {
+    model: config.aiModel,
+    title: tab.title,
+    url: tab.url,
+    sourceType: 'pdf'
+  });
+
+  try {
+    const pdfText = await pdfService.extractFullText(tab);
+    if (!pdfText) {
+      openErrorTab('No extractable PDF text found. Scanned PDFs need OCR.');
+      return;
+    }
+
+    const formattedContent = `URL: ${tab.url}\n\nPDF Text:\n${pdfText}`;
+    sendToSelectedModel(
+      config.aiModel,
+      config.summaryPrompt,
+      formattedContent,
+      tab.title,
+      tab.url,
+      null,
+      null,
+      'pdf'
+    );
+  } catch (error) {
+    console.warn('PDF extraction failed.', error);
+    openErrorTab(`Could not extract full PDF text. ${error?.message || 'Please refresh the PDF and try again.'}`);
+  }
 }
 
 function extractRedditContent(tab, config) {
@@ -338,102 +411,6 @@ function extractRedditContent(tab, config) {
       'reddit-thread'
     );
   });
-}
-
-function getPageContent(contentSource = 'page') {
-  const title = document.title;
-  const url = window.location.href;
-  const description = document.querySelector('meta[name="description"]')?.content || '';
-  const selection = window.getSelection?.().toString().trim() || '';
-
-  if (contentSource === 'selection') {
-    if (!selection) {
-      return {
-        title,
-        url,
-        error: 'No selected text found on this page.'
-      };
-    }
-
-    return {
-      title,
-      url,
-      description,
-      sourceType: 'selection',
-      content: normalizeExtractedText(selection)
-    };
-  }
-
-  const mainContent = getReadablePageText();
-  return {
-    title,
-    url,
-    description,
-    sourceType: 'page',
-    content: mainContent
-  };
-
-  function getReadablePageText() {
-    const selectors = [
-      'main',
-      'article',
-      '[role="main"]',
-      '#content',
-      '.content',
-      '.main-content',
-      '#main'
-    ];
-
-    const candidates = selectors
-      .flatMap(selector => Array.from(document.querySelectorAll(selector)))
-      .filter(Boolean);
-
-    const bestCandidate = candidates
-      .map(element => ({
-        element,
-        length: (element.innerText || '').trim().length
-      }))
-      .sort((a, b) => b.length - a.length)[0]?.element;
-
-    const sourceElement = bestCandidate || document.body;
-    if (!sourceElement) return '';
-
-    const clone = sourceElement.cloneNode(true);
-    clone.querySelectorAll([
-      'script',
-      'style',
-      'noscript',
-      'nav',
-      'footer',
-      'header',
-      'aside',
-      'form',
-      'button',
-      'input',
-      'select',
-      'textarea',
-      '[hidden]',
-      '[aria-hidden="true"]',
-      '.cindra-summary-ext',
-      '.web-summary-button',
-      '.yt-summary-widget',
-      '[data-extension="cindra-summary"]'
-    ].join(',')).forEach(element => element.remove());
-
-    return normalizeExtractedText(clone.innerText || '');
-  }
-
-  function normalizeExtractedText(text) {
-    // ponytail: duplicates normalizeCapturedText above, but getPageContent runs
-    // serialized in the page context via chrome.scripting.executeScript, which
-    // cannot close over the outer-scope helper. Inline copy is the only option.
-    return text
-      .replace(/\r\n?/g, '\n')
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim();
-  }
 }
 
 function extractYouTubeTranscript(tab, config, cacheKey, videoId) {
@@ -487,7 +464,15 @@ function extractYouTubeTranscript(tab, config, cacheKey, videoId) {
       return;
     }
 
-    chrome.storage.local.set({ [cacheKey]: transcriptData });
+    // Only cache genuine transcripts. The extractor also returns a long
+    // "manual instructions" block when captions are unavailable, and caching
+    // that would poison every retry for the same video. Real transcripts always
+    // begin with the "Transcript:" header set by the per-source formatters.
+    if (/^Transcript:\s/.test(transcriptData.content.trim())) {
+      chrome.storage.local.set({ [cacheKey]: transcriptData });
+    } else {
+      chrome.storage.local.remove(cacheKey);
+    }
     chrome.tabs.sendMessage(tab.id, {
       action: 'transcriptStatus',
       status: 'Transcript extracted. Sending to AI...',
@@ -513,416 +498,6 @@ function extractYouTubeTranscript(tab, config, cacheKey, videoId) {
       });
     }, 1000);
   });
-}
-
-function sendToSelectedModel(model, prompt, content, title, url = null, channel = null, description = null, sourceType = 'page') {
-  const provider = providerRegistry.getProvider(model);
-  const options = provider.id === 'chatgpt' ? { cleaner: (c) => cleanupContent(c, 'chatgpt') } : {};
-  if (provider.maxContentChars) {
-    options.maxContentChars = provider.maxContentChars;
-  }
-  const { promptText } = buildSummaryPrompt(prompt, content, title, url, channel, description, options);
-  const recentSummary = createRecentSummary(provider.id, promptText, title, url, sourceType);
-
-  saveRecentSummary(recentSummary);
-  setStatus('working', `Opening ${provider.label}...`, {
-    model: provider.id,
-    title,
-    url,
-    sourceType,
-    summaryId: recentSummary.id
-  });
-
-  openPreparedPrompt(provider.id, promptText, title, {
-    title,
-    url,
-    sourceType,
-    summaryId: recentSummary.id
-  });
-}
-
-function openPreparedPrompt(providerId, promptText, title, metadata = {}) {
-  const provider = providerRegistry.getProvider(providerId);
-
-  if (provider.specialOpen === 'kimi') {
-    openKimiPreparedPrompt(provider, promptText, title, metadata);
-    return;
-  }
-
-  setPendingPrompt(provider, promptText, title, () => {
-    if (chrome.runtime.lastError) {
-      openErrorTab(`Could not save prompt for ${provider.label}.`);
-      return;
-    }
-
-    const afterOpen = (tab) => {
-      setStatus('success', `Opened ${provider.label}; prompt queued.`, {
-        ...metadata,
-        model: provider.id,
-        targetUrl: provider.targetUrl
-      });
-
-      if (provider.retryDelayMs && tab?.id) {
-        setTimeout(() => {
-          sendMessageWithRetry(tab.id, {
-            action: 'insertPrompt',
-            prompt: promptText,
-            title
-          }).then((success) => {
-            if (!success) {
-              setStatus('success', `${provider.label} will pick up the queued prompt on load.`, {
-                ...metadata,
-                model: provider.id,
-                targetUrl: provider.targetUrl
-              });
-            }
-          });
-        }, provider.retryDelayMs);
-      }
-    };
-
-    if (provider.reuseTab) {
-      chrome.tabs.query({ url: provider.targetUrl + '*' }, (tabs) => {
-        if (tabs.length > 0) {
-          chrome.tabs.update(tabs[0].id, {
-            active: true,
-            url: provider.targetUrl
-          }, afterOpen);
-        } else {
-          chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
-        }
-      });
-      return;
-    }
-
-    chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
-  });
-}
-
-function setPendingPrompt(provider, promptText, title, callback) {
-  const payload = {
-    [provider.pendingPromptKey]: promptText,
-    [provider.timestampKey]: Date.now()
-  };
-
-  if (provider.pendingTitleKey) {
-    payload[provider.pendingTitleKey] = title || '';
-  }
-
-  chrome.storage.local.set(payload, callback);
-}
-
-function openKimiPreparedPrompt(provider, promptText, title, metadata = {}) {
-  if (!openKimiPreparedPrompt.lock) {
-    openKimiPreparedPrompt.lock = { inFlight: false, ts: 0 };
-  }
-
-  const now = Date.now();
-  if (openKimiPreparedPrompt.lock.inFlight && (now - openKimiPreparedPrompt.lock.ts) < 8000) {
-    setStatus('working', 'Kimi handoff already in progress.', {
-      ...metadata,
-      model: provider.id
-    });
-    return;
-  }
-
-  openKimiPreparedPrompt.lock.inFlight = true;
-  openKimiPreparedPrompt.lock.ts = now;
-
-  const promptSignature = `${title || ''}::${promptText.length}`;
-
-  chrome.storage.local.get(['kimiInFlight', 'kimiInFlightTs', 'kimiLastSignature', 'kimiLastSetAt'], (state) => {
-    const nowTs = Date.now();
-    const inFlight = state.kimiInFlight === true && (nowTs - (state.kimiInFlightTs || 0)) < 15000;
-    const isDuplicate = state.kimiLastSignature === promptSignature && (nowTs - (state.kimiLastSetAt || 0)) < 15000;
-
-    if (inFlight || isDuplicate) {
-      setStatus('working', 'Kimi already has this prompt queued.', {
-        ...metadata,
-        model: provider.id
-      });
-      setTimeout(() => { openKimiPreparedPrompt.lock.inFlight = false; }, 500);
-      return;
-    }
-
-    chrome.storage.local.set({
-      [provider.pendingPromptKey]: promptText,
-      [provider.timestampKey]: nowTs,
-      kimiInFlight: true,
-      kimiInFlightTs: nowTs,
-      kimiLastSignature: promptSignature,
-      kimiLastSetAt: nowTs
-    }, () => {
-      if (chrome.runtime.lastError) {
-        openKimiPreparedPrompt.lock.inFlight = false;
-        openErrorTab('Could not save prompt for Kimi.');
-        return;
-      }
-
-      const release = () => {
-        setTimeout(() => {
-          openKimiPreparedPrompt.lock.inFlight = false;
-          chrome.storage.local.set({ kimiInFlight: false });
-        }, 5000);
-      };
-
-      const afterOpen = () => {
-        setStatus('success', 'Opened Kimi; prompt queued.', {
-          ...metadata,
-          model: provider.id,
-          targetUrl: provider.targetUrl
-        });
-        release();
-      };
-
-      chrome.tabs.query({ url: provider.targetUrl + '*' }, (tabs) => {
-        if (tabs.length > 0) {
-          chrome.tabs.update(tabs[0].id, {
-            active: true,
-            url: provider.targetUrl
-          }, afterOpen);
-        } else {
-          chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
-        }
-      });
-    });
-  });
-}
-
-function resendSummary(summaryId) {
-  chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
-    const summaries = items.cindraRecentSummaries || [];
-    const summary = summaries.find(item => item.id === summaryId) || summaries[0];
-
-    if (!summary?.promptText) {
-      setStatus('error', 'No saved prompt to resend.');
-      return;
-    }
-
-    const provider = providerRegistry.getProvider(summary.model);
-    setStatus('working', `Resending to ${provider.label}...`, {
-      model: provider.id,
-      title: summary.title,
-      url: summary.url,
-      sourceType: summary.sourceType,
-      summaryId: summary.id
-    });
-
-    openPreparedPrompt(provider.id, summary.promptText, summary.title, {
-      title: summary.title,
-      url: summary.url,
-      sourceType: summary.sourceType,
-      summaryId: summary.id
-    });
-  });
-}
-
-function createRecentSummary(model, promptText, title, url, sourceType) {
-  return {
-    id: 'summary_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-    model,
-    promptText,
-    title: title || 'Untitled',
-    url: url || '',
-    sourceType: sourceType || 'page',
-    createdAt: Date.now()
-  };
-}
-
-function saveRecentSummary(summary) {
-  chrome.storage.sync.get({ promptHistory: 'enabled' }, (settings) => {
-    if (settings.promptHistory === 'disabled') {
-      chrome.storage.local.remove('cindraRecentSummaries');
-      return;
-    }
-
-    chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
-      const summaries = [summary, ...(items.cindraRecentSummaries || [])]
-        .filter((item, index, all) => all.findIndex(other => other.id === item.id) === index)
-        .slice(0, MAX_RECENT_SUMMARIES);
-
-      chrome.storage.local.set({ cindraRecentSummaries: summaries });
-    });
-  });
-}
-
-function setStatus(state, message, details = {}) {
-  chrome.storage.local.set({
-    cindraLastStatus: {
-      state,
-      message,
-      updatedAt: Date.now(),
-      ...details
-    }
-  });
-}
-
-function sendMessageWithRetry(tabId, message, attempt = 1, maxAttempts = 5) {
-  return new Promise((resolve) => {
-    chrome.tabs.get(tabId, (tab) => {
-      if (chrome.runtime.lastError || !tab) {
-        resolve(false);
-        return;
-      }
-
-      chrome.tabs.sendMessage(tabId, message, () => {
-        if (chrome.runtime.lastError) {
-          if (attempt < maxAttempts) {
-            const retryTime = Math.min(Math.pow(2, attempt - 1) * 500, 5000);
-            setTimeout(() => {
-              sendMessageWithRetry(tabId, message, attempt + 1, maxAttempts).then(resolve);
-            }, retryTime);
-          } else {
-            resolve(false);
-          }
-          return;
-        }
-
-        resolve(true);
-      });
-    });
-  });
-}
-
-// Unifies the former cleanupContentFormatting / cleanupContentFormattingThreads /
-// cleanupContentFormattingChatGPT. Each mode reproduces its predecessor exactly:
-//   'flat'     \u2014 collapse every run to single spaces (no line breaks).
-//   'threads'  \u2014 collapse but preserve paragraph breaks and `\n---\n` separators.
-//   'chatgpt'  \u2014 preserve breaks like threads, with chatgpt's marker handling.
-// `stripMarker` removes the floating-button label where present; `escapeQuotes`
-// matches the legacy per-function trailing behavior.
-function cleanupContent(content, mode, { stripMarker = true, escapeQuotes = false } = {}) {
-  if (!content) return '';
-
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const urls = [];
-  let protectedContent = content.replace(urlRegex, (match) => {
-    const placeholder = `__URL_PLACEHOLDER_${urls.length}__`;
-    urls.push(match);
-    return placeholder;
-  });
-
-  if (stripMarker) {
-    protectedContent = protectedContent.replace(/Summarize\s*with\s*AI\s*\(Ctrl\+X\+X\)/g, '');
-  }
-
-  let cleaned = protectedContent
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-
-  if (mode === 'flat') {
-    cleaned = cleaned
-      .replace(/\u00A0/g, ' ')
-      .replace(/(\r\n|\n|\r)+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/\s*([.!?])\s*/g, '$1 ')
-      .replace(/([.!?])\s{2,}/g, '$1 ')
-      .trim();
-  } else if (mode === 'threads') {
-    cleaned = cleaned
-      .replace(/\n---\n/g, '__POST_SEP__')
-      .replace(/\n\n/g, '__BLANK_LINE__')
-      .replace(/(\r\n|\n|\r)+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/\u00A0/g, ' ')
-      .replace(/\s*([.!?])\s*/g, '$1 ')
-      .replace(/([.!?])\s{2,}/g, '$1 ')
-      .trim()
-      .replace(/__BLANK_LINE__/g, '\n\n')
-      .replace(/__POST_SEP__/g, '\n---\n');
-  } else {
-    cleaned = cleaned
-      .replace(/\u00A0/g, ' ')
-      .replace(/\r\n?/g, '\n')
-      .replace(/\n[ \t]*---[ \t]*\n/g, '\n__POST_SEP__\n')
-      .replace(/\n{2,}/g, '\n__PARA_BREAK__\n')
-      .replace(/\n/g, ' ')
-      .replace(/[ \t]+/g, ' ')
-      .replace(/\s*([.!?])\s*/g, '$1 ')
-      .replace(/([.!?])\s{2,}/g, '$1 ')
-      .trim()
-      .replace(/\s*__PARA_BREAK__\s*/g, '\n\n')
-      .replace(/\s*__POST_SEP__\s*/g, '\n---\n\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-
-  urls.forEach((url, index) => {
-    cleaned = cleaned.replace(`__URL_PLACEHOLDER_${index}__`, url);
-  });
-
-  return escapeQuotes ? cleaned.replace(/"/g, '\\"') : cleaned;
-}
-
-function buildXmlSection(tagName, sectionContent) {
-  const text = (sectionContent ?? '').toString().trim();
-  return `<${tagName}>\n${text}\n</${tagName}>`;
-}
-
-function cleanSummaryContent(content, cleaner = null) {
-  if (cleaner) {
-    return cleaner(content);
-  }
-
-  return /\n---\n/.test(content)
-    ? cleanupContent(content, 'threads', { escapeQuotes: true, stripMarker: false })
-    : cleanupContent(content, 'flat', { escapeQuotes: true });
-}
-
-function limitPromptContent(content, maxChars = MAX_PROMPT_CONTENT_CHARS) {
-  const text = content || '';
-  if (text.length <= maxChars) {
-    return { text };
-  }
-
-  // Split the budget proportionally to the global head/tail ratio so both a
-  // 120k default and a 3.5k provider cap keep the same head-heavy shape.
-  const ratio = PROMPT_CONTENT_TAIL_CHARS / (PROMPT_CONTENT_HEAD_CHARS + PROMPT_CONTENT_TAIL_CHARS);
-  const tailBudget = Math.floor(maxChars * ratio);
-  const headBudget = maxChars - tailBudget;
-
-  const head = text.slice(0, headBudget).trimEnd();
-  const tail = text.slice(-tailBudget).trimStart();
-  const omitted = text.length - head.length - tail.length;
-  const notice = `[Cindra note: ${omitted.toLocaleString()} characters were omitted from the middle to keep this handoff within browser and provider limits.]`;
-
-  return { text: `${head}\n\n${notice}\n\n${tail}` };
-}
-
-function buildSummaryPrompt(prompt, content, title, url = null, channel = null, description = null, options = {}) {
-  const limitedContent = limitPromptContent(cleanSummaryContent(content, options.cleaner), options.maxContentChars);
-  const cleanedContent = limitedContent.text;
-  const sections = [
-    buildXmlSection('Task', prompt || ''),
-    buildXmlSection('ContentTitle', title || 'N/A')
-  ];
-
-  const normalizedUrl = typeof url === 'string' ? url.trim() : '';
-  const normalizedChannel = typeof channel === 'string' ? channel.trim() : '';
-  const normalizedDescription = typeof description === 'string' ? description.trim() : '';
-
-  if (normalizedUrl) {
-    sections.push(buildXmlSection('URL', normalizedUrl));
-  }
-
-  if (normalizedChannel) {
-    sections.push(buildXmlSection('Channel', normalizedChannel));
-  }
-
-  if (normalizedDescription) {
-    sections.push(buildXmlSection('Description', normalizedDescription));
-  }
-
-  sections.push(buildXmlSection('Content', cleanedContent));
-
-  return {
-    promptText: sections.join(options.sectionSeparator || '\n\n'),
-    cleanedContent
-  };
 }
 
 function openErrorTab(message) {

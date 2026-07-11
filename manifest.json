@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Cindra Summary",
-  "version": "1.2.0",
-  "description": "Summarize webpages, YouTube videos, and Reddit threads with your preferred AI chat.",
+  "version": "1.3.0",
+  "minimum_chrome_version": "125",
+  "description": "Summarize webpages, PDFs, YouTube videos, and Reddit threads with your preferred AI chat.",
   "action": {
     "default_popup": "ui/popup/popup.html",
     "default_icon": {
@@ -12,30 +13,14 @@
     }
   },
   "permissions": [
-    "activeTab",
+    "offscreen",
     "storage",
     "scripting",
     "tabs"
   ],
   "host_permissions": [
-    "https://aistudio.google.com/*",
-    "https://www.youtube.com/*",
-    "https://perplexity.ai/*",
-    "https://*.perplexity.ai/*",
-    "https://www.perplexity.ai/*",
-    "https://claude.ai/*",
-    "https://chat.openai.com/*",
-    "https://chatgpt.com/*",
-    "https://chat.com/*",
-    "https://grok.com/*",
-    "https://gemini.google.com/app/*",
-    "https://learning.google.com/experiments/learn-about*",
-    "https://chat.deepseek.com/*",
-    "https://chat.z.ai/*",
-    "https://kimi.com/*",
-    "https://www.kimi.com/*",
-    "https://huggingface.co/chat/*",
-    "https://chat.qwen.ai/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "icons": {
     "16": "images/icon16.png",
@@ -52,6 +37,7 @@
         "<all_urls>"
       ],
       "js": [
+        "lib/providers.js",
         "content_scripts/lib/inject.js",
         "content_scripts/content.js"
       ]
@@ -62,6 +48,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/ai_studio_content.js"
       ]
     },
@@ -71,6 +58,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/perplexity_content.js"
       ]
     },
@@ -80,6 +68,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/grok_content.js"
       ]
     },
@@ -89,6 +78,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/claude_content.js"
       ]
     },
@@ -100,6 +90,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/chatgpt_content.js"
       ]
     },
@@ -109,6 +100,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/gemini_content.js"
       ]
     },
@@ -117,6 +109,7 @@
         "*://www.youtube.com/*"
       ],
       "js": [
+        "content_scripts/lib/youtube_parser.js",
         "content_scripts/youtube_content.js"
       ],
       "run_at": "document_start"
@@ -136,6 +129,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/google_learning_content.js"
       ]
     },
@@ -145,6 +139,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/deepseek_content.js"
       ]
     },
@@ -154,6 +149,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/glm_content.js"
       ]
     },
@@ -164,6 +160,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/kimi_content.js"
       ]
     },
@@ -173,6 +170,7 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/huggingchat_content.js"
       ]
     },
@@ -182,14 +180,31 @@
       ],
       "js": [
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
         "content_scripts/qwen_content.js"
+      ]
+    },
+    {
+      "matches": [
+        "https://chat.cerebras.ai/*",
+        "https://cloud.cerebras.ai/*"
+      ],
+      "js": [
+        "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
+        "content_scripts/cerebras_content.js"
       ]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
-        "images/*"
+        "images/*",
+        "vendor/pdfjs/pdf.min.mjs",
+        "vendor/pdfjs/pdf.worker.min.mjs",
+        "vendor/pdfjs/cmaps/*",
+        "vendor/pdfjs/standard_fonts/*",
+        "vendor/pdfjs/wasm/*"
       ],
       "matches": [
         "<all_urls>"

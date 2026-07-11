@@ -158,8 +158,17 @@ function saveSettings() {
 }
 
 function summarizeCurrentPage() {
+  const summarizeButton = document.getElementById('summarize-btn');
+  summarizeButton.disabled = true;
+  summarizeButton.textContent = 'Preparing...';
+
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs.length === 0) return;
+    if (tabs.length === 0) {
+      summarizeButton.disabled = false;
+      summarizeButton.textContent = 'Summarize Current Page';
+      setLocalStatus({ state: 'error', message: 'No active tab found.' });
+      return;
+    }
 
     const currentTab = tabs[0];
     const summaryPrompt = document.getElementById('summary-prompt').value;
@@ -183,6 +192,19 @@ function summarizeCurrentPage() {
         summaryPrompt: summaryPrompt,
         aiModel: settings.aiModel,
         contentSource: document.getElementById('content-source').value
+      }, (response) => {
+        summarizeButton.disabled = false;
+        summarizeButton.textContent = 'Summarize Current Page';
+
+        if (chrome.runtime.lastError || !response?.success) {
+          setLocalStatus({
+            state: 'error',
+            message: response?.error || chrome.runtime.lastError?.message || 'Could not start the handoff.',
+            model: settings.aiModel,
+            url: currentTab.url,
+            title: currentTab.title
+          });
+        }
       });
     });
   });
@@ -267,6 +289,16 @@ function resendLastPrompt() {
     chrome.runtime.sendMessage({
       action: 'resendSummary',
       summaryId: latestSummary.id
+    }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        setLocalStatus({
+          state: 'error',
+          message: response?.error || chrome.runtime.lastError?.message || 'Could not resend the prompt.',
+          model: latestSummary.model,
+          title: latestSummary.title,
+          url: latestSummary.url
+        });
+      }
     });
   });
 }

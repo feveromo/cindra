@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   }
 
-  renderProviderRadios();
+  renderProviderSelect();
   renderContentSourceRadios();
 
   initializePromptStorage().then(() => {
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
       checkRadio('floating-button', items.floatingButton);
       checkRadio('selection-composer', items.selectionComposer);
       checkRadio('prompt-history', items.promptHistory);
-      checkRadio('ai-model', providerRegistry.getProvider(items.aiModel).id);
+      document.getElementById('ai-model').value = providerRegistry.getProvider(items.aiModel).id;
       checkRadio('content-source', providerRegistry.getContentSource(items.contentSource).id);
       CindraTheme.applyTheme(items.theme);
     });
@@ -69,12 +69,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-function renderProviderRadios() {
-  const container = document.getElementById('provider-options');
-  container.innerHTML = '';
+function renderProviderSelect() {
+  const select = document.getElementById('ai-model');
+  select.innerHTML = '';
 
   providerRegistry.providers.forEach(provider => {
-    container.appendChild(createRadio('ai-model', provider.id, provider.label));
+    const option = document.createElement('option');
+    option.value = provider.id;
+    option.textContent = provider.label;
+    select.appendChild(option);
   });
 }
 
@@ -139,7 +142,7 @@ function saveOptions() {
   const floatingButton = document.querySelector('input[name="floating-button"]:checked').value;
   const selectionComposer = document.querySelector('input[name="selection-composer"]:checked')?.value || 'visible';
   const promptHistory = document.querySelector('input[name="prompt-history"]:checked')?.value || 'enabled';
-  const aiModel = document.querySelector('input[name="ai-model"]:checked').value;
+  const aiModel = document.getElementById('ai-model').value;
   const contentSource = document.querySelector('input[name="content-source"]:checked').value;
 
   chrome.storage.sync.set({

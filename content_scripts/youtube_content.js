@@ -426,40 +426,21 @@ function getYouTubeTranscript() {
         }
       });
 
-      const apiMethodPromise = new Promise(async (resolve) => {
+      // Modern YouTube no longer refreshes window.ytInitialPlayerResponse after
+      // SPA navigation, and the get_transcript InnerTube endpoint 400s on a
+      // hand-built params payload. Fetching the watch document same-origin is
+      // the reliable way to recover captionTracks (baseUrl includes the pot /
+      // signature tokens needed by the timedtext fetch).
+      const pageFetchPromise = new Promise(async (resolve) => {
         try {
-          const ytcfg = getYtcfg();
-          if (ytcfg && ytcfg.INNERTUBE_API_KEY) {
-            const apiKey = ytcfg.INNERTUBE_API_KEY;
-            const clientVersion = ytcfg.INNERTUBE_CLIENT_VERSION || '2.20240401.00.00';
-
-            const response = await fetch(`https://www.youtube.com/youtubei/v1/get_transcript?key=${apiKey}`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-YouTube-Client-Name': '1',
-                'X-YouTube-Client-Version': clientVersion
-              },
-              body: JSON.stringify({
-                context: {
-                  client: {
-                    clientName: 'WEB',
-                    clientVersion: clientVersion,
-                    hl: 'en',
-                    gl: 'US'
-                  }
-                },
-                videoId: videoId,
-                params: btoa(JSON.stringify({videoId}))
-              }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              const transcriptData = extractTranscriptFromApiResponse(data);
+          const playerResponse = await getPlayerResponseViaFetch(videoId);
+          if (playerResponse && playerResponse.captions) {
+            const captionTracks = playerResponse.captions.playerCaptionsTracklistRenderer?.captionTracks;
+            if (captionTracks && captionTracks.length > 0) {
+              const transcriptData = await getTranscriptContent(videoId, captionTracks);
               if (transcriptData) {
                 resolve({
-                  source: 'api',
+                  source: 'page-fetch',
                   content: transcriptData
                 });
                 return;
@@ -467,13 +448,13 @@ function getYouTubeTranscript() {
             }
           }
           resolve({
-            source: 'api-failed',
+            source: 'page-fetch-failed',
             content: null
           });
         } catch (error) {
-          console.error('Error with API method:', error);
+          console.error('Error with page fetch method:', error);
           resolve({
-            source: 'api-error',
+            source: 'page-fetch-error',
             content: null
           });
         }
@@ -522,7 +503,7 @@ function getYouTubeTranscript() {
           } else {
             Promise.race([
               playerDataPromise,
-              apiMethodPromise,
+              pageFetchPromise,
               windowDataPromise,
               timeoutPromise
             ]).then(result => {
@@ -690,6 +671,38 @@ function getPlayerResponse() {
     console.error('Error getting player response:', error);
   }
   return null;
+}
+
+// Extract the first valid JSON object beginning at html[startIndex], honouring
+// string literals and escapes so embedded braces do not confuse the depth count.
+function extractJsonObjectAt(html, startIndex) {
+  return CindraYouTubeParser.extractJsonObjectAt(html, startIndex);
+}
+
+// Locate `ytInitialPlayerResponse` in the watch page (it appears under several
+// assignment forms) and brace-match its JSON object. Returns the object that
+// actually carries captions, scanning past non-player assignments if needed.
+function parsePlayerResponseFromHtml(html) {
+  return CindraYouTubeParser.parsePlayerResponseFromHtml(html);
+}
+
+// Same-origin fetch of the watch document gives us a fresh player response with
+// valid caption baseUrls (pot/signature included) for the current session.
+async function getPlayerResponseViaFetch(videoId) {
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      credentials: 'include'
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+    return parsePlayerResponseFromHtml(html);
+  } catch (error) {
+    console.error('Error fetching watch page for player response:', error);
+    return null;
+  }
 }
 
 async function getTranscriptContent(videoId, captionTracks) {

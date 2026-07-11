@@ -68,7 +68,11 @@
                 summarize.
               </p>
             </div>
-            <div class="setting-controls" id="provider-options"></div>
+            <div class="setting-controls setting-controls-stack">
+              <div class="select-wrap provider-select-wrap">
+                <select id="ai-model"></select>
+              </div>
+            </div>
           </div>
 
           <div class="setting-item">
@@ -79,7 +83,10 @@
                 you change it for a single handoff.
               </p>
             </div>
-            <div class="setting-controls" id="content-source-options"></div>
+            <div
+              class="setting-controls segmented-control"
+              id="content-source-options"
+            ></div>
           </div>
 
           <div class="setting-item">
@@ -90,7 +97,7 @@
                 light or dark look.
               </p>
             </div>
-            <div class="setting-controls">
+            <div class="setting-controls segmented-control">
               <label class="radio-container">
                 <input type="radio" name="theme" id="auto-theme" value="auto" />
                 <span class="radio-label">Auto</span>
@@ -119,7 +126,7 @@
                 site.
               </p>
             </div>
-            <div class="setting-controls">
+            <div class="setting-controls segmented-control">
               <label class="radio-container">
                 <input
                   type="radio"
@@ -148,7 +155,7 @@
                 Show the small ask window after you highlight text on a page.
               </p>
             </div>
-            <div class="setting-controls">
+            <div class="setting-controls segmented-control">
               <label class="radio-container">
                 <input
                   type="radio"
@@ -178,25 +185,27 @@
                 the most recent handoff. Turning this off clears saved handoffs.
               </p>
             </div>
-            <div class="setting-controls">
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="prompt-history"
-                  id="enabled-prompt-history"
-                  value="enabled"
-                />
-                <span class="radio-label">Save prompts</span>
-              </label>
-              <label class="radio-container">
-                <input
-                  type="radio"
-                  name="prompt-history"
-                  id="disabled-prompt-history"
-                  value="disabled"
-                />
-                <span class="radio-label">Don't save</span>
-              </label>
+            <div class="setting-controls split-controls">
+              <div class="segmented-control">
+                <label class="radio-container">
+                  <input
+                    type="radio"
+                    name="prompt-history"
+                    id="enabled-prompt-history"
+                    value="enabled"
+                  />
+                  <span class="radio-label">Save prompts</span>
+                </label>
+                <label class="radio-container">
+                  <input
+                    type="radio"
+                    name="prompt-history"
+                    id="disabled-prompt-history"
+                    value="disabled"
+                  />
+                  <span class="radio-label">Don't save</span>
+                </label>
+              </div>
               <button id="clear-history-btn" class="secondary-btn" type="button">
                 Clear History
               </button>
@@ -257,8 +266,8 @@
       </div>
 
       <div class="actions">
-        <button id="save-btn" class="primary-btn">Save Settings</button>
         <div id="status" class="status"></div>
+        <button id="save-btn" class="primary-btn">Save Settings</button>
       </div>
     </div>
     <script src="../../lib/providers.js"></script>

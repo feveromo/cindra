@@ -1,10 +1,9 @@
 /* ============================================================
-   Cindra — Raycast design system
+   Cindra command-palette design system.
    Dark-native. Inter + ss03. Surface ladder = depth (no shadows).
-   Source: getdesign.md/raycast/design-md
    ============================================================ */
 
-/* ---------- Tokens: dark (Raycast native) ---------- */
+/* ---------- Tokens: dark ---------- */
 :root,
 [data-theme="dark"] {
   /* surface ladder */
@@ -18,9 +17,11 @@
   --hairline-soft: rgba(255, 255, 255, 0.05);
   --hairline-strong: rgba(255, 255, 255, 0.16);
 
-  /* field fills — translucent per raycast.com */
+  /* field fills */
   --field-bg: rgba(255, 255, 255, 0.05);
   --field-bg-hover: rgba(255, 255, 255, 0.08);
+  --segment-selected-bg: rgba(255, 255, 255, 0.12);
+  --segment-selected-border: rgba(255, 255, 255, 0.14);
   --keycap-bg: rgba(255, 255, 255, 0.1);
   --keycap-border: rgba(255, 255, 255, 0.08);
   --keycap-color: rgba(255, 255, 255, 0.6);
@@ -72,7 +73,7 @@
   --keycap-grad: linear-gradient(#141414, #0c0c0c);
 }
 
-/* ---------- Tokens: light (Raycast-faithful inversion) ---------- */
+/* ---------- Tokens: light ---------- */
 [data-theme="light"] {
   --canvas: #f6f6f7;
   --surface: #ffffff;
@@ -85,6 +86,8 @@
 
   --field-bg: rgba(0, 0, 0, 0.04);
   --field-bg-hover: rgba(0, 0, 0, 0.06);
+  --segment-selected-bg: #ffffff;
+  --segment-selected-border: rgba(0, 0, 0, 0.1);
   --keycap-bg: rgba(0, 0, 0, 0.05);
   --keycap-border: rgba(0, 0, 0, 0.1);
   --keycap-color: rgba(0, 0, 0, 0.6);
@@ -169,7 +172,7 @@ body {
   overflow: hidden;
 }
 
-/* signature Raycast stripe — one restrained accent across the top edge */
+/* signature stripe: one restrained accent across the top edge */
 .header::before {
   content: '';
   position: absolute;
@@ -356,7 +359,7 @@ input[type="text"]:hover {
   border-color: var(--hairline);
 }
 
-/* Raycast: focus brightens the hairline, no colored ring */
+/* Focus brightens the hairline with no colored ring. */
 select:focus,
 textarea:focus,
 input[type="text"]:focus {
@@ -377,39 +380,71 @@ input[type="text"]:focus {
 }
 
 .radio-container {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-full);
-  background: transparent;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-md);
+  background: var(--field-bg);
   color: var(--body);
   font-size: 13px;
+  line-height: 1;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .radio-container:hover {
-  background: var(--surface-3);
+  background: var(--field-bg-hover);
+  border-color: var(--hairline);
 }
 
 .radio-container:has(input:checked) {
-  background: var(--surface-3);
-  border-color: var(--hairline-strong);
-  color: var(--ink);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.radio-container:active {
+  transform: translateY(1px);
 }
 
 .radio-container input {
-  accent-color: var(--ink);
-  width: 14px;
-  height: 14px;
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--ash);
+  box-shadow: 0 0 0 1px var(--hairline-strong);
+}
+
+.radio-container input:checked {
+  background: var(--on-primary);
+  box-shadow: none;
+}
+
+.radio-container:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--hairline-strong);
 }
 
 .radio-label {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* ---------- Actions ---------- */
@@ -507,6 +542,10 @@ input[type="text"]:focus {
   background: transparent;
   color: var(--ink);
   border-color: var(--hairline);
+}
+
+.actions > .secondary-btn {
+  width: 100%;
 }
 
 .secondary-btn:hover,

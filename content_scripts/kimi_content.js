@@ -1,35 +1,3 @@
-let isProcessing = false;
-
-if (!window.kimiMessageListenerRegistered) {
-  window.kimiMessageListenerRegistered = true;
-
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    if (isProcessing) {
-      sendResponse({ success: false, error: 'Already processing' });
-      return true;
-    }
-    isProcessing = true;
-
-    insertPromptAndSubmit(message.prompt)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch(error => {
-        console.error('Error inserting prompt via message:', error);
-        sendResponse({ success: false, error: error.message });
-      })
-      .finally(() => {
-        isProcessing = false;
-        try {
-          chrome.storage.local.set({ kimiInFlight: false });
-        } catch (e) {}
-      });
-    return true;
-  }
-  });
-}
-
 function normalizePromptForKimi(prompt) {
   try {
     const closeTag = '</Content>';
@@ -85,6 +53,29 @@ function forceSetEditableDivContent(editableDiv, text) {
   }
 }
 
+function getAttachmentCount() {
+  return document.querySelectorAll('.file-card-container').length;
+}
+
+function waitForAttachmentCountIncrease(initialCount, timeout = 1500) {
+  if (getAttachmentCount() > initialCount) return Promise.resolve(true);
+
+  return new Promise(resolve => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (getAttachmentCount() > initialCount) {
+        clearInterval(interval);
+        resolve(true);
+        return;
+      }
+      if (Date.now() - start >= timeout) {
+        clearInterval(interval);
+        resolve(false);
+      }
+    }, 100);
+  });
+}
+
 function robustClick(element) {
   if (!element) return;
   element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -111,7 +102,7 @@ function waitForSendButtonEnabled(timeout = 20000) {
   return new Promise((resolve, reject) => {
     const sendButtonContainer = document.querySelector('.send-button-container');
     if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
-      const sendButton = sendButtonContainer.querySelector('.send-button');
+      const sendButton = sendButtonContainer.querySelector('.send-button') || sendButtonContainer;
       if (sendButton) {
         resolve(sendButton);
         return;
@@ -126,7 +117,7 @@ function waitForSendButtonEnabled(timeout = 20000) {
 
       if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
         clearInterval(interval);
-        const sendButton = sendButtonContainer.querySelector('.send-button');
+        const sendButton = sendButtonContainer.querySelector('.send-button') || sendButtonContainer;
         if (sendButton) {
           resolve(sendButton);
         } else {
@@ -169,12 +160,16 @@ async function insertPromptAndSubmit(prompt) {
     }
 
     const normalizedPrompt = normalizePromptForKimi(prompt);
+    const attachmentCountBefore = getAttachmentCount();
 
     insertTextIntoEditableDiv(inputField, normalizedPrompt);
 
+    const attachmentCreated = normalizedPrompt.length > 3500
+      ? await waitForAttachmentCountIncrease(attachmentCountBefore)
+      : false;
     const insertedText = inputField.textContent || inputField.innerText || '';
 
-    if (insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))) {
+    if (!attachmentCreated && insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))) {
       forceSetEditableDivContent(inputField, normalizedPrompt);
     }
 
@@ -189,12 +184,6 @@ async function insertPromptAndSubmit(prompt) {
 
     robustClick(sendButton);
 
-    chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
-      if (chrome.runtime.lastError) {
-        console.error('Error clearing pending Kimi prompt:', chrome.runtime.lastError);
-      }
-    });
-
   } catch (error) {
     console.error('Error in insertPromptAndSubmit for Kimi:', error);
 
@@ -202,7 +191,9 @@ async function insertPromptAndSubmit(prompt) {
       const inputField = document.querySelector('.chat-input-editor[contenteditable="true"]');
 
       if (inputField) {
-        insertTextIntoEditableDiv(inputField, prompt);
+        if (getAttachmentCount() === 0) {
+          insertTextIntoEditableDiv(inputField, prompt);
+        }
 
         inputField.focus();
         const enterEvent = new KeyboardEvent('keydown', {
@@ -214,8 +205,7 @@ async function insertPromptAndSubmit(prompt) {
           cancelable: true
         });
         inputField.dispatchEvent(enterEvent);
-
-        chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
+        return;
       }
     } catch (fallbackError) {
       console.error('[FALLBACK FAIL] Error during Enter key fallback:', fallbackError);
@@ -225,88 +215,11 @@ async function insertPromptAndSubmit(prompt) {
   }
 }
 
-function checkPendingPrompt() {
-  if (isProcessing) {
-    return;
-  }
-  // Ask the background worker to claim the prompt so multiple Kimi tabs cannot submit it.
-  try {
-    chrome.runtime.sendMessage({ action: 'claimKimiPrompt' }, (resp) => {
-      if (chrome.runtime.lastError) {
-        fallbackClaim();
-        return;
-      }
-      if (!resp || !resp.success) {
-        return;
-      }
-      isProcessing = true;
-      insertPromptAndSubmit(resp.prompt)
-        .then(() => {})
-        .catch(error => {
-          console.error('Error processing pending Kimi prompt:', error);
-        })
-        .finally(() => {
-          isProcessing = false;
-          try {
-            chrome.storage.local.set({ kimiInFlight: false });
-          } catch (e) {}
-        });
-    });
-  } catch (e) {
-    fallbackClaim();
-  }
-
-  function fallbackClaim() {
-    chrome.storage.local.get(['pendingKimiPrompt', 'kimiPromptTimestamp'], (result) => {
-    if (chrome.runtime.lastError) {
-      console.error('Error getting pending Kimi prompt:', chrome.runtime.lastError);
-      return;
-    }
-
-    if (isProcessing) {
-      return;
-    }
-
-    if (result.pendingKimiPrompt && result.kimiPromptTimestamp) {
-      const promptToProcess = result.pendingKimiPrompt;
-      const timestamp = result.kimiPromptTimestamp;
-      const promptAge = Date.now() - timestamp;
-
-      if (promptAge < 60000) {
-        isProcessing = true;
-
-        chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp'], () => {
-          if (chrome.runtime.lastError) {
-            console.error('Error clearing pending Kimi prompt before processing:', chrome.runtime.lastError);
-            isProcessing = false;
-            return;
-          }
-          insertPromptAndSubmit(promptToProcess)
-            .then(() => {})
-            .catch(error => {
-              console.error('Error processing pending Kimi prompt:', error);
-            })
-            .finally(() => {
-                isProcessing = false;
-                try {
-                  chrome.storage.local.set({ kimiInFlight: false });
-                } catch (e) {}
-            });
-        });
-      } else {
-        chrome.storage.local.remove(['pendingKimiPrompt', 'kimiPromptTimestamp']);
-      }
-    }
-  });
-  }
-}
-
-if (!window.kimiPendingPromptChecked) {
-  window.kimiPendingPromptChecked = true;
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', checkPendingPrompt);
-  } else {
-    setTimeout(checkPendingPrompt, 250);
-  }
-}
+CindraProviderRuntime.register({
+  providerId: 'kimi',
+  legacyKeys: {
+    prompt: 'pendingKimiPrompt',
+    timestamp: 'kimiPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

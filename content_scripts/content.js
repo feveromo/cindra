@@ -1,6 +1,4 @@
-let ctrlPressed = false;
-let xPressed = false;
-let lastKeyDownTime = 0;
+let firstShortcutXTime = 0;
 let selectionComposerHost = null;
 let selectedTextForComposer = '';
 let selectionComposerTimer = null;
@@ -10,93 +8,77 @@ let selectionComposerScrollFrame = null;
 let selectionComposerDismissedText = '';
 let selectionHighlightHost = null;
 
+globalThis.CindraContentScriptReady = true;
+
+const SHORTCUT_SEQUENCE_TIMEOUT_MS = 700;
 const DEFAULT_SUMMARY_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
-const PROVIDER_LABELS = {
-  'google-ai-studio': 'Google AI Studio',
-  gemini: 'Gemini',
-  perplexity: 'Perplexity',
-  grok: 'Grok',
-  claude: 'Claude',
-  chatgpt: 'ChatGPT',
-  'google-learning': 'Google Learning',
-  deepseek: 'DeepSeek',
-  glm: 'GLM',
-  kimi: 'Kimi',
-  huggingchat: 'HuggingChat',
-  qwen: 'Qwen'
-};
+const providerRegistry = globalThis.CindraProviders;
 
 try {
-  document.addEventListener('keydown', handleShortcut);
+  window.addEventListener('keydown', handleShortcut, true);
+  window.addEventListener('keyup', handleShortcutKeyup, true);
 } catch (error) {
   if (error.message.includes('Extension context invalidated')) {
-    document.removeEventListener('keydown', handleShortcut);
+    detachShortcutListeners();
   }
 }
 
 function handleShortcut(e) {
   // Hot reloads can invalidate the extension context while this page is still open.
   if (typeof chrome.runtime === 'undefined' || chrome.runtime.id === undefined) {
-    document.removeEventListener('keydown', handleShortcut);
+    detachShortcutListeners();
     return;
   }
 
   if (!shouldHandleShortcutEvent(e)) {
-    resetKeyState();
+    resetShortcutState();
+    return;
+  }
+
+  const isCtrlX = e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === 'x';
+  if (!isCtrlX) {
+    resetShortcutState();
+    return;
+  }
+
+  if (e.repeat) {
     return;
   }
 
   const currentTime = Date.now();
+  if (firstShortcutXTime && (currentTime - firstShortcutXTime) < SHORTCUT_SEQUENCE_TIMEOUT_MS) {
+    e.preventDefault();
+    e.stopPropagation();
 
-  if (e.key === 'Control') {
-    ctrlPressed = true;
-    lastKeyDownTime = currentTime;
+    try {
+      triggerSummarize();
+    } catch (error) {
+      if (error.message.includes('Extension context invalidated')) {
+        detachShortcutListeners();
+      }
+    }
+
+    resetShortcutState();
     return;
   }
 
-  if (ctrlPressed && e.key.toLowerCase() === 'x') {
-    if (!xPressed) {
-      xPressed = true;
-      lastKeyDownTime = currentTime;
-      return;
-    }
+  firstShortcutXTime = currentTime;
+}
 
-    if (xPressed && (currentTime - lastKeyDownTime) < 500) {
-      e.preventDefault();
-      try {
-        triggerSummarize();
-      } catch (error) {
-        if (error.message.includes('Extension context invalidated')) {
-          document.removeEventListener('keydown', handleShortcut);
-        }
-      }
-
-      resetKeyState();
-      return;
-    }
-  }
-
-  if (e.key !== 'Control' && e.key.toLowerCase() !== 'x') {
-    resetKeyState();
+function handleShortcutKeyup(e) {
+  if (!e.ctrlKey || e.key === 'Control') {
+    resetShortcutState();
   }
 }
 
-function resetKeyState() {
-  ctrlPressed = false;
-  xPressed = false;
+function resetShortcutState() {
+  firstShortcutXTime = 0;
 }
 
-document.addEventListener('keyup', (e) => {
-  if (e.key === 'Control') {
-    ctrlPressed = false;
-  }
-  if (e.key.toLowerCase() === 'x') {
-    const currentTime = Date.now();
-    if (currentTime - lastKeyDownTime > 500) {
-      xPressed = false;
-    }
-  }
-});
+function detachShortcutListeners() {
+  window.removeEventListener('keydown', handleShortcut, true);
+  window.removeEventListener('keyup', handleShortcutKeyup, true);
+}
 
 function triggerSummarize() {
   // Hot reloads can invalidate the extension context while this page is still open.
@@ -136,6 +118,8 @@ function triggerSummarize() {
 function buildShortcutSummaryPayload(contentSource) {
   const normalizedSource = contentSource || 'auto';
   const selectedText = getSelectedPageText();
+  const shouldCapturePage = (normalizedSource === 'page' || shouldCapturePageForAutoSource()) &&
+    !isPdfUrl(window.location.href);
 
   if (normalizedSource === 'selection') {
     return {
@@ -144,7 +128,7 @@ function buildShortcutSummaryPayload(contentSource) {
     };
   }
 
-  if (normalizedSource === 'page' || shouldCapturePageForAutoSource()) {
+  if (shouldCapturePage) {
     const pageData = getCapturedPageData();
     return {
       contentSource: 'page',
@@ -165,6 +149,23 @@ function shouldCapturePageForAutoSource() {
     !hostname.includes('reddit.com');
 }
 
+function isPdfUrl(url = '') {
+  try {
+    const parsedUrl = new URL(url);
+    return /\.pdf$/i.test(parsedUrl.pathname) ||
+      isArxivPdfUrl(parsedUrl);
+  } catch (error) {
+    return /\.pdf(?:[?#]|$)/i.test(url) ||
+      /^https?:\/\/(?:[^/]+\.)?arxiv\.org\/pdf\/[^/?#]+/i.test(url);
+  }
+}
+
+function isArxivPdfUrl(url) {
+  const hostname = url.hostname.toLowerCase();
+  return (hostname === 'arxiv.org' || hostname.endsWith('.arxiv.org')) &&
+    url.pathname.startsWith('/pdf/');
+}
+
 function getSelectedPageText() {
   return CindraInject.normalizeWhitespace(window.getSelection?.().toString() || '');
 }
@@ -172,6 +173,8 @@ function getSelectedPageText() {
 function getCapturedPageData() {
   const description = document.querySelector('meta[name="description"]')?.content || '';
   const selectors = [
+    '#delform',
+    '.thread',
     'main',
     'article',
     '[role="main"]',
@@ -572,7 +575,7 @@ function showSelectionComposer(rect, selectedText) {
   }
 
   chrome.storage.sync.get({ aiModel: 'google-ai-studio' }, (settings) => {
-    const providerName = PROVIDER_LABELS[settings.aiModel] || 'AI';
+    const providerName = providerRegistry.getProvider(settings.aiModel).label;
     const shadow = selectionComposerHost.shadowRoot;
     shadow.getElementById('selection-meta').textContent = `${selectedText.length.toLocaleString()} chars selected -> ${providerName}`;
     shadow.getElementById('ask').textContent = `Ask ${providerName}`;
@@ -648,11 +651,18 @@ function sendSelectionToAi(questionText) {
       aiModel: settings.aiModel,
       contentSource: 'selection',
       selectedText: selectedTextForComposer
-    });
+    }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) {
+        setSelectionComposerStatus(
+          response?.error || chrome.runtime.lastError?.message || 'Could not start the handoff.'
+        );
+        return;
+      }
 
-    const providerName = PROVIDER_LABELS[settings.aiModel] || 'AI';
-    setSelectionComposerStatus(`Sent to ${providerName}.`);
-    setTimeout(hideSelectionComposer, 700);
+      const providerName = providerRegistry.getProvider(settings.aiModel).label;
+      setSelectionComposerStatus(`Queued for ${providerName}.`);
+      setTimeout(hideSelectionComposer, 700);
+    });
   });
 }
 
@@ -776,7 +786,9 @@ function isProviderDestinationHost() {
     'chat.deepseek.com',
     'chat.z.ai',
     'kimi.com',
-    'chat.qwen.ai'
+    'chat.qwen.ai',
+    'chat.cerebras.ai',
+    'cloud.cerebras.ai'
   ];
 
   if (hostname === 'huggingface.co' && window.location.pathname.startsWith('/chat')) {

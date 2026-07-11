@@ -1,6 +1,3 @@
-let promptSubmitted = false;
-let isSubmitting = false;
-
 function isPageReady() {
   const selectors = [
     '#ask-input',
@@ -17,28 +14,6 @@ function isPageReady() {
   }
   return false;
 }
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'insertPrompt') {
-    if (isSubmitting || promptSubmitted) {
-      sendResponse({ status: 'Submission already handled' });
-      return true;
-    }
-
-    // Keep the current flags so duplicate listener calls do not restart submission.
-
-    if (isPageReady()) {
-      insertPromptAndSubmit(message.prompt);
-      sendResponse({ status: 'Processing prompt' });
-    } else {
-      waitForPageReady().then(() => {
-        insertPromptAndSubmit(message.prompt);
-      });
-      sendResponse({ status: 'Will process when page is ready' });
-    }
-    return true;
-  }
-});
 
 function waitForPageReady(timeout = 10000) {
   if (isPageReady()) {
@@ -139,8 +114,7 @@ function submitViaEnter() {
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector('textarea[placeholder="Ask anything..."]');
   if (!inputArea) {
-    console.error('[FALLBACK FAIL] Could not find input area for Enter submit.');
-    return;
+    throw new Error('Could not find the Perplexity input for Enter submission.');
   }
 
   inputArea.focus();
@@ -202,111 +176,35 @@ function insertTextIntoContentEditable(element, text) {
   setEditorText(element, text);
 }
 
-function insertPromptAndSubmit(prompt) {
-  if (!prompt) {
-    console.warn('Received empty prompt, not inserting');
+async function insertPromptAndSubmit(prompt) {
+  if (!prompt) throw new Error('No prompt provided');
+
+  await waitForPageReady();
+  const inputArea = await findInputArea();
+  inputArea.focus();
+
+  if (inputArea.tagName === 'TEXTAREA') {
+    CindraInject.insertTextIntoTextarea(inputArea, prompt);
+  } else {
+    insertTextIntoContentEditable(inputArea, prompt);
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  const submitButton = await findSubmitButton();
+  if (submitButton) {
+    CindraInject.robustClick(submitButton);
     return;
   }
 
-  if (isSubmitting || promptSubmitted) {
-    return;
-  }
-
-  isSubmitting = true;
-
-  findInputArea()
-    .then(inputArea => {
-      inputArea.focus();
-
-      if (inputArea.tagName === 'TEXTAREA') {
-        inputArea.value = prompt;
-        inputArea.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-        inputArea.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        insertTextIntoContentEditable(inputArea, prompt);
-      }
-
-      inputArea.focus();
-
-      return new Promise(resolve => setTimeout(() => resolve(inputArea), 1000));
-    })
-    .then(() => {
-      // findSubmitButton resolves null when no matching control appears
-      // (Perplexity redesigned the bar). Give it a short window, then submit
-      // via Enter on the contenteditable, which Perplexity always honors.
-      const checkForButton = (attempts = 0, maxAttempts = 6) => {
-        return findSubmitButton()
-          .then(submitButton => {
-            if (submitButton) {
-              submitButton.click();
-            } else if (attempts < maxAttempts) {
-              return new Promise(resolve => setTimeout(() => resolve(checkForButton(attempts + 1, maxAttempts)), 500));
-            } else {
-              submitViaEnter();
-            }
-
-            promptSubmitted = true;
-            isSubmitting = false;
-
-            chrome.storage.local.remove(['pendingPerplexityPrompt']);
-          });
-      };
-
-      return checkForButton();
-    })
-    .catch(error => {
-      console.error('[ERROR] Caught error in insertPromptAndSubmit main chain:', error.message);
-      isSubmitting = false;
-
-      submitViaEnter();
-      promptSubmitted = true;
-      isSubmitting = false;
-
-      chrome.storage.local.remove(['pendingPerplexityPrompt']);
-    });
+  submitViaEnter();
 }
 
-function checkForPendingPrompts() {
-  isSubmitting = false;
-  promptSubmitted = false;
-
-  if (isSubmitting || promptSubmitted) {
-    return;
-  }
-
-  chrome.storage.local.get(['pendingPerplexityPrompt', 'perplexityPromptTimestamp'], function(result) {
-    if (result.pendingPerplexityPrompt) {
-      const currentTime = Date.now();
-      const promptTime = result.perplexityPromptTimestamp || 0;
-      const twoMinutesInMs = 2 * 60 * 1000;
-
-      if (currentTime - promptTime < twoMinutesInMs) {
-        const promptToProcess = result.pendingPerplexityPrompt;
-
-        // Claim the prompt before submit so reloads do not send it twice.
-        chrome.storage.local.remove(['pendingPerplexityPrompt', 'perplexityPromptTimestamp'], () => {
-          insertPromptAndSubmit(promptToProcess);
-        });
-      } else {
-        chrome.storage.local.remove(['pendingPerplexityPrompt', 'perplexityPromptTimestamp']);
-      }
-    }
-  });
-}
-
-if (isPageReady()) {
-  checkForPendingPrompts();
-} else {
-  const readyCheckInterval = setInterval(() => {
-    if (isPageReady()) {
-      clearInterval(readyCheckInterval);
-      checkForPendingPrompts();
-    }
-  }, 100);
-
-  // Backup timer covers Perplexity route changes that do not expose the input quickly.
-  setTimeout(() => {
-    clearInterval(readyCheckInterval);
-    checkForPendingPrompts();
-  }, 2000);
-}
+CindraProviderRuntime.register({
+  providerId: 'perplexity',
+  startupDelayMs: 500,
+  legacyKeys: {
+    prompt: 'pendingPerplexityPrompt',
+    timestamp: 'perplexityPromptTimestamp'
+  },
+  submitPrompt: insertPromptAndSubmit
+});

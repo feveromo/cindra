@@ -60,20 +60,11 @@ function getAttachmentCount() {
 function waitForAttachmentCountIncrease(initialCount, timeout = 1500) {
   if (getAttachmentCount() > initialCount) return Promise.resolve(true);
 
-  return new Promise(resolve => {
-    const start = Date.now();
-    const interval = setInterval(() => {
-      if (getAttachmentCount() > initialCount) {
-        clearInterval(interval);
-        resolve(true);
-        return;
-      }
-      if (Date.now() - start >= timeout) {
-        clearInterval(interval);
-        resolve(false);
-      }
-    }, 100);
-  });
+  return CindraInject.waitForCondition(
+    () => getAttachmentCount() > initialCount,
+    timeout,
+    'Kimi attachment'
+  ).then(() => true, () => false);
 }
 
 function robustClick(element) {
@@ -99,66 +90,21 @@ function isSendButtonEnabled(sendButtonContainer) {
 }
 
 function waitForSendButtonEnabled(timeout = 20000) {
-  return new Promise((resolve, reject) => {
+  return CindraInject.waitForCondition(() => {
     const sendButtonContainer = document.querySelector('.send-button-container');
     if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
       const sendButton = sendButtonContainer.querySelector('.send-button') || sendButtonContainer;
       if (sendButton) {
-        resolve(sendButton);
-        return;
+        return sendButton;
       }
     }
 
-    const intervalTime = 100;
-    let elapsedTime = 0;
-
-    const interval = setInterval(() => {
-      const sendButtonContainer = document.querySelector('.send-button-container');
-
-      if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
-        clearInterval(interval);
-        const sendButton = sendButtonContainer.querySelector('.send-button') || sendButtonContainer;
-        if (sendButton) {
-          resolve(sendButton);
-        } else {
-          console.error('Send button container found but send button element not found');
-          reject(new Error('Send button container found but send button element not found'));
-        }
-      } else {
-        elapsedTime += intervalTime;
-        if (elapsedTime >= timeout) {
-          clearInterval(interval);
-          console.error(`Send button not enabled after ${timeout}ms`);
-          if (sendButtonContainer) {
-            console.error('Final container state:', sendButtonContainer.classList.toString());
-          }
-          reject(new Error(`Send button not enabled after ${timeout}ms`));
-        }
-      }
-    }, intervalTime);
-  });
+    return null;
+  }, timeout, 'Kimi send button');
 }
 
-async function insertPromptAndSubmit(prompt) {
-  try {
-    const inputSelectors = [
-      '.chat-input-editor[contenteditable="true"]',
-      '.chat-input [contenteditable="true"]',
-      'div[contenteditable="true"][data-lexical-editor="true"]'
-    ];
-
-    let inputField = null;
-    for (const sel of inputSelectors) {
-      try {
-        inputField = await CindraInject.waitForElement(sel, 1500);
-        if (inputField) break;
-      } catch (e) {
-      }
-    }
-    if (!inputField) {
-      inputField = await CindraInject.waitForElement('.chat-input-editor[contenteditable="true"]', 10000);
-    }
-
+async function insertPrompt(context) {
+  const { input: inputField, prompt } = context;
     const normalizedPrompt = normalizePromptForKimi(prompt);
     const attachmentCountBefore = getAttachmentCount();
 
@@ -172,54 +118,31 @@ async function insertPromptAndSubmit(prompt) {
     if (!attachmentCreated && insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))) {
       forceSetEditableDivContent(inputField, normalizedPrompt);
     }
+}
 
-    let sendButton;
-    try {
-      sendButton = await waitForSendButtonEnabled(1000);
-    } catch (error) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      sendButton = await waitForSendButtonEnabled();
-    }
-
-    robustClick(sendButton);
-
+async function findSendButtonWithRetry() {
+  try {
+    return await waitForSendButtonEnabled(1000);
   } catch (error) {
-    console.error('Error in insertPromptAndSubmit for Kimi:', error);
-
-    try {
-      const inputField = document.querySelector('.chat-input-editor[contenteditable="true"]');
-
-      if (inputField) {
-        if (getAttachmentCount() === 0) {
-          insertTextIntoEditableDiv(inputField, prompt);
-        }
-
-        inputField.focus();
-        const enterEvent = new KeyboardEvent('keydown', {
-          key: 'Enter',
-          code: 'Enter',
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true
-        });
-        inputField.dispatchEvent(enterEvent);
-        return;
-      }
-    } catch (fallbackError) {
-      console.error('[FALLBACK FAIL] Error during Enter key fallback:', fallbackError);
-    }
-
-    throw error;
+    await CindraInject.delay(2000);
+    return waitForSendButtonEnabled().catch(() => null);
   }
 }
 
-CindraProviderRuntime.register({
+CindraProviderRuntime.registerAdapter({
   providerId: 'kimi',
-  legacyKeys: {
-    prompt: 'pendingKimiPrompt',
-    timestamp: 'kimiPromptTimestamp'
-  },
-  submitPrompt: insertPromptAndSubmit
+  inputSelectors: [
+    '.chat-input-editor[contenteditable="true"]',
+    '.chat-input [contenteditable="true"]',
+    'div[contenteditable="true"][data-lexical-editor="true"]'
+  ],
+  insertPrompt,
+  findSubmit: findSendButtonWithRetry,
+  submit: ({ submitControl }) => robustClick(submitControl),
+  fallbackSubmit: ({ input, prompt }) => {
+    if (getAttachmentCount() === 0) {
+      insertTextIntoEditableDiv(input, prompt);
+    }
+    CindraInject.dispatchEnter(input);
+  }
 });

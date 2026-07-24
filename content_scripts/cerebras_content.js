@@ -10,14 +10,9 @@
   let lastObservedUrl = location.href;
 
   const MAX_CEREBRAS_PROMPT_CHARS = 18000;
-  const PLAYGROUND_INPUT_SELECTOR = 'textarea[data-testid="chat-textarea"]';
-  const PLAYGROUND_SUBMIT_SELECTORS = [
-    'button[data-testid="chat-submit-button"]:not([disabled])',
-    'form button[type="submit"]:not([disabled])'
-  ];
   const CHAT_INPUT_SELECTORS = [
     'textarea[placeholder="What do you want to know?"]',
-    'textarea'
+    'main textarea:not(.g-recaptcha-response)'
   ];
 
   async function insertPromptAndSubmit(prompt) {
@@ -26,29 +21,9 @@
     }
 
     const limitedPrompt = limitPromptForCerebras(prompt);
-
-    if (isCerebrasPlayground()) {
-      await insertPromptIntoPlayground(limitedPrompt);
-    } else if (isCerebrasChat()) {
-      await insertPromptIntoChat(limitedPrompt);
-    } else {
-      throw new Error('Open Cerebras Cloud Playground before sending a prompt.');
-    }
-
-  }
-
-  async function insertPromptIntoPlayground(prompt) {
-    const textarea = await CindraInject.waitForElement(PLAYGROUND_INPUT_SELECTOR, 10000);
+    const textarea = await waitForChatTextarea(10000);
     insertTextIntoCerebrasTextarea(textarea, prompt);
     await waitForUiSettle(150);
-
-    const submitButton = await waitForPlaygroundSubmitButton(textarea, 5000);
-    CindraInject.robustClick(submitButton);
-  }
-
-  async function insertPromptIntoChat(prompt) {
-    const textarea = await CindraInject.waitForElement(CHAT_INPUT_SELECTORS, 10000);
-    insertTextIntoCerebrasTextarea(textarea, prompt);
 
     const sendButton = await waitForChatSendButton(textarea, 5000);
     CindraInject.robustClick(sendButton);
@@ -96,73 +71,79 @@
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function findPlaygroundSubmitButton(textarea) {
-    const roots = [
-      textarea.closest('form'),
-      document
-    ].filter(Boolean);
-
-    for (const root of roots) {
-      const button = Array.from(root.querySelectorAll(PLAYGROUND_SUBMIT_SELECTORS.join(',')))
-        .find(isUsablePlaygroundSubmitButton);
-
-      if (button) {
-        return button;
-      }
+  function findChatTextarea() {
+    for (const selector of CHAT_INPUT_SELECTORS) {
+      const textarea = Array.from(document.querySelectorAll(selector)).find(element =>
+        !element.disabled &&
+        !element.readOnly &&
+        !element.classList.contains('g-recaptcha-response') &&
+        isVisible(element)
+      );
+      if (textarea) return textarea;
     }
-
     return null;
   }
 
-  function isUsablePlaygroundSubmitButton(button) {
-    if (!isVisible(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') {
-      return false;
-    }
-
-    return button.matches('button[data-testid="chat-submit-button"]') ||
-      (button.type === 'submit' && /\brun\b/i.test(button.textContent || ''));
-  }
-
-  function waitForPlaygroundSubmitButton(textarea, timeout = 5000) {
-    const immediate = findPlaygroundSubmitButton(textarea);
-    if (immediate) {
-      return Promise.resolve(immediate);
-    }
-
-    return waitForButton(() => findPlaygroundSubmitButton(textarea), timeout, 'Cerebras: playground run button did not become available');
+  function waitForChatTextarea(timeout) {
+    return waitForElement(() => findChatTextarea(), timeout, 'Cerebras: chat input did not become available');
   }
 
   function findChatSendButton(textarea) {
     const roots = [
       textarea.parentElement,
+      textarea.closest('form'),
       textarea.closest('section'),
-      document
     ].filter(Boolean);
 
     for (const root of roots) {
-      const button = Array.from(root.querySelectorAll('button:not([disabled])'))
-        .find(isLikelyChatSendButton);
+      const buttons = Array.from(root.querySelectorAll('button'));
+      const button = buttons.find(isLikelyChatSendButton);
 
       if (button) {
         return button;
       }
+
+      const fallback = buttons.filter(isUsableUnlabelledComposerButton).at(-1);
+      if (fallback) return fallback;
     }
 
     return null;
   }
 
   function isLikelyChatSendButton(button) {
-    if (!isVisible(button)) {
+    if (!isUsableButton(button)) {
+      return false;
+    }
+
+    const label = getButtonLabel(button);
+    if (/\b(?:add|attach|image|model|upload|voice)\b/i.test(label)) return false;
+
+    return /\b(?:send|submit)\b/i.test(label) ||
+      button.type === 'submit' ||
+      Boolean(button.querySelector('svg.lucide-arrow-up, [data-lucide="arrow-up"]'));
+  }
+
+  function isUsableUnlabelledComposerButton(button) {
+    return isUsableButton(button) &&
+      !getButtonLabel(button) &&
+      Boolean(button.querySelector('svg'));
+  }
+
+  function isUsableButton(button) {
+    if (!isVisible(button) || button.disabled || button.getAttribute('aria-disabled') === 'true') {
       return false;
     }
 
     const rect = button.getBoundingClientRect();
-    if (rect.width > 64 || rect.height > 64) {
-      return false;
-    }
+    return rect.width <= 64 && rect.height <= 64;
+  }
 
-    return Boolean(button.querySelector('svg')) ||
-      /(?:^|\s)(?:bg-brand-51|hover:bg-\[#D44A1A\])(?:\s|$)/.test(button.className || '');
+  function getButtonLabel(button) {
+    return [
+      button.getAttribute('aria-label'),
+      button.getAttribute('title'),
+      button.textContent
+    ].filter(Boolean).join(' ').trim();
   }
 
   function waitForChatSendButton(textarea, timeout = 5000) {
@@ -171,17 +152,21 @@
       return Promise.resolve(immediate);
     }
 
-    return waitForButton(() => findChatSendButton(textarea), timeout, 'Cerebras: chat send button did not become available');
+    return waitForElement(
+      () => findChatSendButton(textarea),
+      timeout,
+      'Cerebras: chat send button did not become available'
+    );
   }
 
-  function waitForButton(findButton, timeout, errorMessage) {
+  function waitForElement(findElement, timeout, errorMessage) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const interval = setInterval(() => {
-        const button = findButton();
-        if (button) {
+        const element = findElement();
+        if (element) {
           clearInterval(interval);
-          resolve(button);
+          resolve(element);
           return;
         }
 
@@ -203,15 +188,6 @@
   }
 
   function isSupportedCerebrasInputPage() {
-    return isCerebrasPlayground() || isCerebrasChat();
-  }
-
-  function isCerebrasPlayground() {
-    return location.hostname === 'cloud.cerebras.ai' &&
-      /\/playground(?:\/|$)/.test(location.pathname);
-  }
-
-  function isCerebrasChat() {
     return location.hostname === 'chat.cerebras.ai';
   }
 

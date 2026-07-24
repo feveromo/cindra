@@ -787,8 +787,7 @@ function isProviderDestinationHost() {
     'chat.z.ai',
     'kimi.com',
     'chat.qwen.ai',
-    'chat.cerebras.ai',
-    'cloud.cerebras.ai'
+    'chat.cerebras.ai'
   ];
 
   if (hostname === 'huggingface.co' && window.location.pathname.startsWith('/chat')) {

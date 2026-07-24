@@ -186,8 +186,7 @@
     },
     {
       "matches": [
-        "https://chat.cerebras.ai/*",
-        "https://cloud.cerebras.ai/*"
+        "https://chat.cerebras.ai/*"
       ],
       "js": [
         "content_scripts/lib/inject.js",

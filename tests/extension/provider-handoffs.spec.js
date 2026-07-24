@@ -64,8 +64,8 @@ const providers = [
   },
   {
     id: 'cerebras',
-    url: 'https://cloud.cerebras.ai/playground',
-    body: '<form><textarea data-testid="chat-textarea"></textarea><button data-testid="chat-submit-button" type="submit" data-submit>Run</button></form>'
+    url: 'https://chat.cerebras.ai/fixture',
+    body: '<textarea class="g-recaptcha-response"></textarea><main><section><div><textarea placeholder="What do you want to know?"></textarea><div><button aria-label="Add images"><svg width="24" height="24"></svg></button><button data-submit><svg width="24" height="24" class="lucide lucide-arrow-up"></svg></button></div></div></section></main>'
   }
 ];
 
@@ -124,7 +124,8 @@ test('all provider adapters acknowledge a completed fixture handoff', async () =
         `Fixture prompt for ${provider.id}`,
         'direct'
       );
-      expect(response, provider.id).toMatchObject({ success: true });
+      expect(response, `${provider.id}: ${response?.error || 'unknown error'}`)
+        .toMatchObject({ success: true });
       await expect.poll(() => page.evaluate(() => window.__submitted), { message: provider.id }).toBe(1);
 
       if (provider.id === 'qwen' || provider.id === 'glm') {

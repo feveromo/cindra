@@ -6,6 +6,7 @@
   }
 
   const DEFAULT_TTL_MS = 2 * 60 * 1000;
+  const MAX_COMPLETED_HANDOFFS = 50;
   const registrations = new Map();
   const inFlight = new Map();
   const completed = new Set();
@@ -17,6 +18,18 @@
 
   function normalizeError(error) {
     return error?.message || String(error || 'Provider handoff failed.');
+  }
+
+  function contextualError(providerId, stage, error) {
+    const cause = error instanceof Error ? error : new Error(normalizeError(error));
+    const message = `${providerId}: ${stage} failed. ${cause.message}`;
+    try {
+      return new Error(message, { cause });
+    } catch (unsupportedError) {
+      const contextual = new Error(message);
+      contextual.cause = cause;
+      return contextual;
+    }
   }
 
   function isFresh(handoff, ttlMs) {
@@ -141,6 +154,9 @@
     inFlight.set(config.providerId, handoff.id);
     try {
       await config.submitPrompt(handoff.promptText, handoff.title || '', handoff);
+      if (completed.size >= MAX_COMPLETED_HANDOFFS) {
+        completed.delete(completed.values().next().value);
+      }
       completed.add(handoff.id);
       await clearMatchingHandoff(config, handoff);
       reportResult(config, handoff, true);
@@ -258,27 +274,151 @@
     }
   }
 
+  function getProviderMetadata(providerId) {
+    return root.CindraProviders?.getProviderStrict?.(providerId) || null;
+  }
+
+  function getLegacyKeys(providerId, options) {
+    return options.legacyKeys ||
+      root.CindraProviders?.getLegacyStorageKeys?.(providerId) ||
+      {};
+  }
+
+  function createSubmitPrompt(options) {
+    if (!options?.providerId) {
+      throw new Error('CindraProviderRuntime adapter requires providerId.');
+    }
+
+    const providerId = options.providerId;
+    const providerLabel = getProviderMetadata(providerId)?.label || providerId;
+
+    return async function submitPrompt(prompt, title, handoff) {
+      if (typeof prompt !== 'string' || !prompt.trim()) {
+        throw new Error('No prompt provided.');
+      }
+
+      const context = {
+        providerId,
+        providerLabel,
+        prompt,
+        title,
+        handoff,
+        input: null,
+        submitControl: null,
+        helpers: root.CindraInject
+      };
+
+      try {
+        if (typeof options.beforeInput === 'function') {
+          await options.beforeInput(context);
+        }
+
+        if (typeof options.findInput === 'function') {
+          context.input = await options.findInput(context);
+        } else if (options.inputSelectors) {
+          context.input = await root.CindraInject.waitForElement(
+            options.inputSelectors,
+            options.inputTimeoutMs ?? 10000
+          );
+        }
+
+        if (!context.input) {
+          throw new Error('Composer input was not found.');
+        }
+      } catch (error) {
+        throw contextualError(providerLabel, 'finding the composer', error);
+      }
+
+      try {
+        if (typeof options.insertPrompt === 'function') {
+          await options.insertPrompt(context);
+        } else if (context.input.getAttribute?.('contenteditable') === 'true') {
+          root.CindraInject.insertTextIntoContentEditable(context.input, prompt);
+        } else {
+          root.CindraInject.insertTextIntoTextarea(context.input, prompt);
+        }
+
+        if (typeof options.afterInsert === 'function') {
+          await options.afterInsert(context);
+        }
+        if (options.settleMs) {
+          await root.CindraInject.delay(options.settleMs);
+        }
+      } catch (error) {
+        throw contextualError(providerLabel, 'inserting the prompt', error);
+      }
+
+      try {
+        if (typeof options.findSubmit === 'function') {
+          context.submitControl = await options.findSubmit(context);
+        } else if (options.submitSelectors) {
+          context.submitControl = await root.CindraInject.waitForElement(
+            options.submitSelectors,
+            options.submitTimeoutMs ?? 10000
+          ).catch((error) => {
+            if (options.fallbackSubmit || options.submitOptional) return null;
+            throw error;
+          });
+        }
+
+        if (context.submitControl) {
+          if (typeof options.submit === 'function') {
+            await options.submit(context);
+          } else {
+            root.CindraInject.robustClick(context.submitControl);
+          }
+        } else if (typeof options.fallbackSubmit === 'function') {
+          await options.fallbackSubmit(context);
+        } else if (!options.submitOptional) {
+          throw new Error('Send control was not found.');
+        }
+
+        if (typeof options.afterSubmit === 'function') {
+          await options.afterSubmit(context);
+        }
+      } catch (error) {
+        throw contextualError(providerLabel, 'submitting the prompt', error);
+      }
+    };
+  }
+
   function register(options) {
     if (!options?.providerId || typeof options.submitPrompt !== 'function') {
       throw new Error('CindraProviderRuntime requires providerId and submitPrompt.');
     }
 
+    const provider = getProviderMetadata(options.providerId);
     const config = {
       ttlMs: DEFAULT_TTL_MS,
-      startupDelayMs: 250,
-      legacyKeys: {},
+      startupDelayMs: provider?.startupDelayMs ?? 250,
+      legacyKeys: getLegacyKeys(options.providerId, options),
       ...options
     };
+
+    if (registrations.has(config.providerId)) {
+      return { runPending: () => runPending(config.providerId) };
+    }
+
     registrations.set(config.providerId, config);
     installMessageListener();
     schedulePending(config);
     return { runPending: () => runPending(config.providerId) };
   }
 
+  function registerAdapter(options) {
+    const submitPrompt = typeof options?.submitPrompt === 'function'
+      ? options.submitPrompt
+      : createSubmitPrompt(options);
+    return register({ ...options, submitPrompt });
+  }
+
   root.CindraProviderRuntime = {
     DEFAULT_TTL_MS,
+    createSubmitPrompt,
+    normalizeError,
     pendingStorageKey,
     register,
+    registerAdapter,
     runPending
   };
 })(globalThis);

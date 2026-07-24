@@ -60,6 +60,16 @@ test('provider pending storage keys are unique and namespaced', () => {
   assert.ok(keys.every(key => key.startsWith('cindraPendingHandoff:')));
 });
 
+test('Cerebras uses the public chat site only', () => {
+  const provider = providers.getProvider('cerebras');
+  const block = manifest.content_scripts.find(item =>
+    item.js?.includes('content_scripts/cerebras_content.js'));
+
+  assert.equal(provider.targetUrl, 'https://chat.cerebras.ai/');
+  assert.deepEqual(block.matches, ['https://chat.cerebras.ai/*']);
+  assert.equal('specialOpen' in provider, false);
+});
+
 test('the vendored PDF.js version matches the pinned dependency', () => {
   const versionFile = fs.readFileSync(path.join(root, 'vendor', 'pdfjs', 'VERSION'), 'utf8');
   assert.match(versionFile, new RegExp(`pdfjs-dist ${packageJson.devDependencies['pdfjs-dist']}`));

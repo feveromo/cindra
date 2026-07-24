@@ -3,8 +3,6 @@
 
   const MAX_RECENT_SUMMARIES = 5;
   const MAX_PDF_PROMPT_CONTENT_CHARS = 220000;
-  const CEREBRAS_CLOUD_TAB_URL_PATTERN = 'https://cloud.cerebras.ai/*';
-  const CEREBRAS_PLAYGROUND_TAB_URL_PATTERN = 'https://cloud.cerebras.ai/*/playground*';
 
   function create({ providerRegistry, promptBuilder, onError }) {
     let claimQueue = Promise.resolve();
@@ -113,11 +111,6 @@
 
     function openPreparedPrompt(providerId, promptText, title, metadata = {}) {
       const provider = providerRegistry.getProvider(providerId);
-      if (provider.specialOpen === 'cerebras-playground') {
-        openCerebrasPreparedPrompt(provider, promptText, title, metadata);
-        return;
-      }
-
       setPendingPrompt(provider, promptText, title, metadata, (handoff) => {
         if (chrome.runtime.lastError) {
           fail(`Could not save prompt for ${provider.label}.`);
@@ -155,80 +148,6 @@
           return;
         }
         chrome.tabs.create({ url: provider.targetUrl, active: true }, afterOpen);
-      });
-    }
-
-    function openCerebrasPreparedPrompt(provider, promptText, title, metadata = {}) {
-      setPendingPrompt(provider, promptText, title, metadata, (handoff) => {
-        if (chrome.runtime.lastError) {
-          fail('Could not save prompt for Cerebras.');
-          return;
-        }
-
-        const setQueuedStatus = (message, tab) => setStatus('working', message, {
-          ...metadata,
-          model: provider.id,
-          targetUrl: tab?.url || provider.targetUrl,
-          handoffId: handoff.id
-        });
-        const sendToPlaygroundTab = (tab) => {
-          setQueuedStatus('Opened Cerebras Playground; submitting prompt...', tab);
-          if (!tab?.id) return;
-
-          ensureCerebrasContentScript(tab, () => {
-            setTimeout(() => {
-              sendMessageWithRetry(tab.id, {
-                action: 'insertPrompt',
-                handoff,
-                prompt: promptText,
-                title
-              }).then(result => handleDeliveryResult(provider, handoff, result, metadata));
-            }, provider.retryDelayMs || 500);
-          });
-        };
-
-        chrome.tabs.query({ url: CEREBRAS_PLAYGROUND_TAB_URL_PATTERN }, (playgroundTabs) => {
-          if (playgroundTabs.length) {
-            chrome.tabs.update(playgroundTabs[0].id, { active: true }, tab =>
-              sendToPlaygroundTab(tab || playgroundTabs[0]));
-            return;
-          }
-
-          chrome.tabs.query({ url: CEREBRAS_CLOUD_TAB_URL_PATTERN }, (cloudTabs) => {
-            const queuedMessage = 'Open Cerebras Playground; prompt queued.';
-            if (cloudTabs.length) {
-              chrome.tabs.update(cloudTabs[0].id, { active: true }, (tab) => {
-                const activeTab = tab || cloudTabs[0];
-                setQueuedStatus(queuedMessage, activeTab);
-                ensureCerebrasContentScript(activeTab);
-              });
-              return;
-            }
-            chrome.tabs.create({ url: provider.targetUrl, active: true }, tab =>
-              setQueuedStatus(queuedMessage, tab));
-          });
-        });
-      });
-    }
-
-    function ensureCerebrasContentScript(tab, callback = () => {}) {
-      if (!tab?.id || !chrome.scripting?.executeScript) {
-        callback();
-        return;
-      }
-
-      chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: [
-          'content_scripts/lib/inject.js',
-          'content_scripts/lib/provider_runtime.js',
-          'content_scripts/cerebras_content.js'
-        ]
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.warn('Could not inject Cerebras content script:', chrome.runtime.lastError.message);
-        }
-        callback();
       });
     }
 

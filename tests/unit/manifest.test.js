@@ -70,6 +70,48 @@ test('Cerebras uses the public chat site only', () => {
   assert.equal('specialOpen' in provider, false);
 });
 
+test('shared extraction and message helpers load before the main content script', () => {
+  const generalBlock = manifest.content_scripts.find(block =>
+    block.matches?.includes('<all_urls>'));
+
+  assert.deepEqual(generalBlock.js, [
+    'lib/errors.js',
+    'lib/chrome.js',
+    'lib/messages.js',
+    'lib/extraction.js',
+    'lib/providers.js',
+    'content_scripts/lib/inject.js',
+    'content_scripts/content.js'
+  ]);
+
+  const backgroundSource = fs.readFileSync(
+    path.join(root, 'background', 'background.js'),
+    'utf8'
+  );
+  const expectedImports = [
+    '../lib/errors.js',
+    '../lib/chrome.js',
+    '../lib/messages.js',
+    '../lib/extraction.js',
+    'transcript-cache.js',
+    'orchestrator.js'
+  ];
+  let previousIndex = -1;
+  for (const script of expectedImports) {
+    const index = backgroundSource.indexOf(`'${script}'`);
+    assert.ok(index > previousIndex, `${script} import order`);
+    previousIndex = index;
+  }
+  assert.match(backgroundSource, /func: getPageContent/);
+  assert.doesNotMatch(backgroundSource, /function: getPageContent/);
+});
+
+test('offscreen PDF extraction loads shared message contracts first', () => {
+  const html = fs.readFileSync(path.join(root, 'offscreen', 'pdf_extractor.html'), 'utf8');
+  assert.ok(html.indexOf('../lib/errors.js') < html.indexOf('../lib/messages.js'));
+  assert.ok(html.indexOf('../lib/messages.js') < html.indexOf('../lib/pdf.js'));
+});
+
 test('the vendored PDF.js version matches the pinned dependency', () => {
   const versionFile = fs.readFileSync(path.join(root, 'vendor', 'pdfjs', 'VERSION'), 'utf8');
   assert.match(versionFile, new RegExp(`pdfjs-dist ${packageJson.devDependencies['pdfjs-dist']}`));

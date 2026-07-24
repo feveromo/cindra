@@ -13,6 +13,9 @@ globalThis.CindraContentScriptReady = true;
 const SHORTCUT_SEQUENCE_TIMEOUT_MS = 700;
 const DEFAULT_SUMMARY_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
 const providerRegistry = globalThis.CindraProviders;
+const extraction = globalThis.CindraExtraction;
+const messageBus = globalThis.CindraMessages;
+const ACTIONS = messageBus.ACTIONS;
 
 try {
   window.addEventListener('keydown', handleShortcut, true);
@@ -102,12 +105,21 @@ function triggerSummarize() {
         }
       }
 
-      chrome.runtime.sendMessage({
-        action: 'summarize',
+      void messageBus.runtimeSendMessage({
+        action: ACTIONS.SUMMARIZE,
         url: window.location.href,
-        summaryPrompt: summaryPrompt,
+        summaryPrompt,
         aiModel: settings.aiModel,
         ...buildShortcutSummaryPayload(settings.contentSource)
+      }, {
+        context: 'start summary from keyboard shortcut',
+        timeoutMs: 5000
+      }).catch((error) => {
+        if (error?.message?.includes('Extension context invalidated')) {
+          detachShortcutListeners();
+          return;
+        }
+        console.error('[Cindra] Could not start summary from keyboard shortcut.', error);
       });
     });
   } catch (error) {
@@ -167,65 +179,13 @@ function isArxivPdfUrl(url) {
 }
 
 function getSelectedPageText() {
-  return CindraInject.normalizeWhitespace(window.getSelection?.().toString() || '');
+  return extraction.normalizeText(window.getSelection?.().toString() || '');
 }
 
 function getCapturedPageData() {
-  const description = document.querySelector('meta[name="description"]')?.content || '';
-  const selectors = [
-    '#delform',
-    '.thread',
-    'main',
-    'article',
-    '[role="main"]',
-    '#content',
-    '.content',
-    '.main-content',
-    '#main'
-  ];
-
-  const candidates = selectors
-    .flatMap(selector => Array.from(document.querySelectorAll(selector)))
-    .filter(Boolean);
-
-  const bestCandidate = candidates
-    .map(element => ({
-      element,
-      length: (element.innerText || '').trim().length
-    }))
-    .sort((a, b) => b.length - a.length)[0]?.element;
-
-  const sourceElement = bestCandidate || document.body;
-  const clone = sourceElement?.cloneNode(true);
-
-  if (!clone) {
-    return { description, content: '' };
-  }
-
-  clone.querySelectorAll([
-    'script',
-    'style',
-    'noscript',
-    'nav',
-    'footer',
-    'header',
-    'aside',
-    'form',
-    'button',
-    'input',
-    'select',
-    'textarea',
-    '[hidden]',
-    '[aria-hidden="true"]',
-    '.cindra-summary-ext',
-    '.web-summary-button',
-    '.yt-summary-widget',
-    '[data-extension="cindra-summary"]'
-  ].join(',')).forEach(element => element.remove());
-
   return {
-    description,
-    content: CindraInject.normalizeWhitespace(clone.innerText || '')
+    description: document.querySelector('meta[name="description"]')?.content || '',
+    content: extraction.getReadablePageText(document)
   };
 }
 
@@ -644,24 +604,26 @@ function sendSelectionToAi(questionText) {
 
     setSelectionComposerStatus('Sending selected text...');
 
-    chrome.runtime.sendMessage({
-      action: 'summarize',
+    messageBus.runtimeSendMessage({
+      action: ACTIONS.SUMMARIZE,
       url: window.location.href,
       summaryPrompt,
       aiModel: settings.aiModel,
       contentSource: 'selection',
       selectedText: selectedTextForComposer
-    }, (response) => {
-      if (chrome.runtime.lastError || !response?.success) {
-        setSelectionComposerStatus(
-          response?.error || chrome.runtime.lastError?.message || 'Could not start the handoff.'
-        );
-        return;
+    }, {
+      context: 'start summary from selection composer',
+      timeoutMs: 5000
+    }).then((response) => {
+      if (!response?.success) {
+        throw new Error(response?.error || 'Could not start the handoff.');
       }
 
       const providerName = providerRegistry.getProvider(settings.aiModel).label;
       setSelectionComposerStatus(`Queued for ${providerName}.`);
       setTimeout(hideSelectionComposer, 700);
+    }).catch((error) => {
+      setSelectionComposerStatus(error?.message || 'Could not start the handoff.');
     });
   });
 }

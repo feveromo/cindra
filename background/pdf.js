@@ -2,6 +2,9 @@
   'use strict';
 
   const pdfUtils = root.CindraPdf;
+  const chromeApi = root.CindraChrome;
+  const messages = root.CindraMessages;
+  const ACTIONS = messages.ACTIONS;
   const OFFSCREEN_DOCUMENT_PATH = 'offscreen/pdf_extractor.html';
   const PDF_MODULE_URL = chrome.runtime.getURL('vendor/pdfjs/pdf.min.mjs');
   const PDF_WORKER_URL = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.mjs');
@@ -35,11 +38,14 @@
       await ensureOffscreenDocument();
       try {
         await waitForOffscreenReady();
-        const result = await chrome.runtime.sendMessage({
-          action: 'extractPdfTextInOffscreen',
+        const result = await messages.runtimeSendMessage({
+          action: ACTIONS.EXTRACT_PDF_TEXT_IN_OFFSCREEN,
           url,
           maxBytes: pdfUtils.DEFAULT_MAX_BYTES,
           timeoutMs: FETCH_TIMEOUT_MS
+        }, {
+          context: 'extract PDF text in offscreen document',
+          timeoutMs: FETCH_TIMEOUT_MS + 30000
         });
 
         if (!result?.success) {
@@ -86,7 +92,12 @@
     let lastError = null;
     for (let attempt = 0; attempt < 20; attempt += 1) {
       try {
-        const response = await chrome.runtime.sendMessage({ action: 'pdfExtractorPing' });
+        const response = await messages.runtimeSendMessage({
+          action: ACTIONS.PDF_EXTRACTOR_PING
+        }, {
+          context: 'ping PDF offscreen extractor',
+          timeoutMs: 1000
+        });
         if (response?.ready) return;
       } catch (error) {
         lastError = error;
@@ -106,39 +117,30 @@
     }
   }
 
-  function extractFromTab(tabId, pdfUrl) {
-    if (!tabId) {
-      return Promise.reject(new Error('No PDF tab id available.'));
+  async function extractFromTab(tabId, pdfUrl) {
+    if (!Number.isInteger(tabId) || tabId < 0) {
+      throw new Error('No PDF tab id available.');
     }
 
-    return new Promise((resolve, reject) => {
-      chrome.scripting.executeScript({
-        target: { tabId },
-        function: extractCurrentPdfText,
-        args: [
-          PDF_MODULE_URL,
-          PDF_WORKER_URL,
-          PDF_CMAP_URL,
-          PDF_STANDARD_FONT_URL,
-          PDF_WASM_URL,
-          pdfUtils.DEFAULT_MAX_BYTES,
-          FETCH_TIMEOUT_MS,
-          pdfUrl
-        ]
-      }, (results) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-
-        const result = results?.[0]?.result;
-        if (!result?.success) {
-          reject(new Error(result?.error || 'PDF tab extraction failed.'));
-          return;
-        }
-        resolve(pdfUtils.normalizeExtractedText(result.text || ''));
-      });
+    const results = await chromeApi.executeScript({
+      target: { tabId },
+      func: extractCurrentPdfText,
+      args: [
+        PDF_MODULE_URL,
+        PDF_WORKER_URL,
+        PDF_CMAP_URL,
+        PDF_STANDARD_FONT_URL,
+        PDF_WASM_URL,
+        pdfUtils.DEFAULT_MAX_BYTES,
+        FETCH_TIMEOUT_MS,
+        pdfUrl
+      ]
     });
+    const result = results?.[0]?.result;
+    if (!result?.success) {
+      throw new Error(result?.error || 'PDF tab extraction failed.');
+    }
+    return pdfUtils.normalizeExtractedText(result.text || '');
   }
 
   // Serialized into the PDF tab; keep every helper inside this function.

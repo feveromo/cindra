@@ -1,22 +1,34 @@
 import * as pdfjsLib from '../vendor/pdfjs/pdf.min.mjs';
 
 const pdfUtils = globalThis.CindraPdf;
+const errors = globalThis.CindraErrors;
+const messages = globalThis.CindraMessages;
+const ACTIONS = messages.ACTIONS;
 const DEFAULT_TIMEOUT_MS = 30000;
+const OFFSCREEN_ACTIONS = [
+  ACTIONS.PDF_EXTRACTOR_PING,
+  ACTIONS.EXTRACT_PDF_TEXT_IN_OFFSCREEN
+];
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('vendor/pdfjs/pdf.worker.min.mjs');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.action === 'pdfExtractorPing') {
-    sendResponse({ ready: true });
-    return false;
-  }
+  if (!message || !OFFSCREEN_ACTIONS.includes(message.action)) return false;
 
-  if (message?.action !== 'extractPdfTextInOffscreen') {
+  const respond = messages.respondOnce(sendResponse);
+  const validation = messages.validateMessage(message, OFFSCREEN_ACTIONS);
+  if (!validation.ok) {
+    respond({ success: false, error: validation.error });
     return false;
   }
 
   if (sender.id !== chrome.runtime.id || sender.tab) {
-    sendResponse({ success: false, error: 'PDF extraction request was not trusted.' });
+    respond({ success: false, error: 'PDF extraction request was not trusted.' });
+    return false;
+  }
+
+  if (message.action === ACTIONS.PDF_EXTRACTOR_PING) {
+    respond({ ready: true });
     return false;
   }
 
@@ -25,11 +37,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     message.maxBytes || pdfUtils.DEFAULT_MAX_BYTES,
     message.timeoutMs || DEFAULT_TIMEOUT_MS
   )
-    .then(text => sendResponse({ success: true, text }))
-    .catch(error => sendResponse({
-      success: false,
-      error: error?.message || 'PDF extraction failed.'
-    }));
+    .then(text => respond({ success: true, text }))
+    .catch((error) => {
+      errors.logError('Offscreen PDF extraction failed', error);
+      respond({
+        success: false,
+        error: errors.toUserMessage(error, error?.message || 'PDF extraction failed.')
+      });
+    });
   return true;
 });
 

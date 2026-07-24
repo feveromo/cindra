@@ -1,0 +1,79 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const messages = require('../../lib/messages.js');
+
+const { ACTIONS } = messages;
+
+test('message contracts accept compatible summarize payloads', () => {
+  const result = messages.validateMessage({
+    action: ACTIONS.SUMMARIZE,
+    tabId: 0,
+    url: 'https://example.test/page',
+    contentSource: 'selection',
+    selectedText: 'Chosen text'
+  }, [ACTIONS.SUMMARIZE]);
+
+  assert.deepEqual(result, { ok: true, action: ACTIONS.SUMMARIZE });
+});
+
+test('message contracts reject malformed actions, ids, and URLs', () => {
+  assert.equal(messages.validateMessage(null).ok, false);
+  assert.match(messages.validateMessage({ action: 'unknown' }).error, /unknown/);
+  assert.match(messages.validateMessage({
+    action: ACTIONS.SUMMARIZE,
+    tabId: -1
+  }).error, /tabId/);
+  assert.match(messages.validateMessage({
+    action: ACTIONS.SUMMARIZE,
+    url: 'javascript:alert(1)'
+  }).error, /HTTP or HTTPS/);
+  assert.match(messages.validateMessage({
+    action: ACTIONS.CLAIM_PROVIDER_HANDOFF,
+    providerId: '../../bad',
+    handoffId: 'handoff_1'
+  }).error, /Provider id/);
+});
+
+test('respondOnce ignores duplicate asynchronous responses', () => {
+  const responses = [];
+  const respond = messages.respondOnce(value => responses.push(value));
+
+  assert.equal(respond({ success: true }), true);
+  assert.equal(respond({ success: false }), false);
+  assert.deepEqual(responses, [{ success: true }]);
+});
+
+test('runtime message wrapper preserves chrome.runtime.lastError context', async () => {
+  const runtime = {
+    lastError: null,
+    sendMessage(message, callback) {
+      this.lastError = { message: `No receiver for ${message.action}` };
+      callback();
+      this.lastError = null;
+    }
+  };
+
+  await assert.rejects(
+    messages.runtimeSendMessage({ action: ACTIONS.PDF_EXTRACTOR_PING }, {
+      runtime,
+      context: 'test ping',
+      timeoutMs: 50
+    }),
+    error => error.name === 'ChromeRuntimeError' && /test ping/.test(error.message)
+  );
+});
+
+test('runtime message wrapper rejects requests that exceed their timeout', async () => {
+  const runtime = {
+    sendMessage() {}
+  };
+
+  await assert.rejects(
+    messages.runtimeSendMessage({ action: ACTIONS.PDF_EXTRACTOR_PING }, {
+      runtime,
+      context: 'slow ping',
+      timeoutMs: 5
+    }),
+    error => error.name === 'TimeoutError' && /slow ping/.test(error.message)
+  );
+});

@@ -37,6 +37,10 @@
         "<all_urls>"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
+        "lib/extraction.js",
         "lib/providers.js",
         "content_scripts/lib/inject.js",
         "content_scripts/content.js"

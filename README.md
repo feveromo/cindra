@@ -13,6 +13,7 @@ Cindra Summary is a Manifest V3 Chrome extension that extracts the current page,
 - Reusable prompt presets and per-handoff prompt editing
 - Page, selection, PDF, YouTube, and Reddit extraction
 - Copy/resend recovery for recent generated prompts
+- Abortable, deadline-bounded provider handoffs that keep failed work queued for retry
 - Optional local prompt history with one-click clearing
 - Bounded long-page extraction that preserves the beginning and end
 - Serialized, isolated PDF parsing with vendored PDF.js

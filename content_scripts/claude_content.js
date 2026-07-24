@@ -1,19 +1,24 @@
-function insertTextIntoClaudeEditor({ input, prompt }) {
-  input.focus();
+function insertTextIntoClaudeEditor(editor, prompt) {
+  editor.focus();
   document.execCommand('selectAll', false, null);
   document.execCommand('delete', false, null);
 
   if (!document.execCommand('insertText', false, prompt)) {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.setData('text/plain', prompt);
-    input.dispatchEvent(new ClipboardEvent('paste', {
-      bubbles: true,
-      cancelable: true,
-      clipboardData: dataTransfer
-    }));
+    try {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData('text/plain', prompt);
+      editor.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer
+      }));
+    } catch (error) {
+      CindraInject.insertTextIntoContentEditable(editor, prompt, { mode: 'paragraph' });
+      return;
+    }
   }
 
-  CindraInject.dispatchInput(input, prompt);
+  CindraInject.dispatchTextInput(editor, prompt);
 }
 
 CindraProviderRuntime.registerAdapter({
@@ -24,8 +29,10 @@ CindraProviderRuntime.registerAdapter({
     'div[contenteditable="true"].w-full'
   ],
   insertPrompt: insertTextIntoClaudeEditor,
-  settleMs: 300,
+  settleDelayMs: 300,
   submitSelectors: 'button[aria-label="Send message"]:not(:disabled):not([aria-disabled="true"])',
   submitTimeoutMs: 2500,
-  fallbackSubmit: ({ input }) => CindraInject.dispatchEnter(input)
+  fallbackSubmit: ({ input }) => CindraInject.pressEnter(input, {
+    eventTypes: ['keydown']
+  })
 });

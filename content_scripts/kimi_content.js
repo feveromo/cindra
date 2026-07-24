@@ -1,148 +1,121 @@
 function normalizePromptForKimi(prompt) {
-  try {
-    const closeTag = '</Content>';
-    const firstCloseIdx = prompt.indexOf(closeTag);
-    if (firstCloseIdx !== -1) {
-      const trimmed = prompt.slice(0, firstCloseIdx + closeTag.length);
-      return trimmed;
-    }
-    return prompt;
-  } catch (e) {
-    return prompt;
-  }
+  const closeTag = '</Content>';
+  const firstCloseIndex = prompt.indexOf(closeTag);
+  return firstCloseIndex === -1
+    ? prompt
+    : prompt.slice(0, firstCloseIndex + closeTag.length);
 }
 
-function insertTextIntoEditableDiv(editableDiv, text) {
-  editableDiv.focus();
-
-  try {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editableDiv);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    document.execCommand('delete');
-  } catch (e) {
-  }
-
-  // Kimi's Lexical editor can double-insert if paste and fallback both run.
-  try {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.setData('text/plain', text);
-    const pasteEvent = new ClipboardEvent('paste', {
-      clipboardData: dataTransfer,
-      bubbles: true,
-      cancelable: true
-    });
-    editableDiv.dispatchEvent(pasteEvent);
-  } catch (e) {
-  }
-
-  try {
-    editableDiv.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  } catch (e) {}
-
-  editableDiv.focus();
-}
-
-function forceSetEditableDivContent(editableDiv, text) {
-  try {
-    editableDiv.textContent = text;
-    editableDiv.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  } catch (e) {
-  }
-}
-
-function getAttachmentCount() {
+function getKimiAttachmentCount() {
   return document.querySelectorAll('.file-card-container').length;
 }
 
-function waitForAttachmentCountIncrease(initialCount, timeout = 1500) {
-  if (getAttachmentCount() > initialCount) return Promise.resolve(true);
-
-  return CindraInject.waitForCondition(
-    () => getAttachmentCount() > initialCount,
-    timeout,
-    'Kimi attachment'
-  ).then(() => true, () => false);
+function findEnabledKimiSendButton() {
+  const container = document.querySelector('.send-button-container');
+  if (!container || container.classList.contains('disabled')) return null;
+  return container.querySelector('.send-button') || container;
 }
 
-function robustClick(element) {
-  if (!element) return;
-  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  // Prefer one native click to avoid duplicate submit handlers.
+async function waitForKimiAttachment(attachmentCountBefore, signal) {
   try {
-    element.click();
-  } catch (e) {
-    const clickEvent = new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window
-    });
-    element.dispatchEvent(clickEvent);
+    await CindraInject.waitForCondition(
+      () => getKimiAttachmentCount() > attachmentCountBefore,
+      {
+        timeoutMs: 1500,
+        signal,
+        description: 'Kimi prompt attachment'
+      }
+    );
+    return true;
+  } catch (error) {
+    if (!CindraInject.isTimeoutError(error) || signal?.aborted) throw error;
+    return false;
   }
 }
 
-function isSendButtonEnabled(sendButtonContainer) {
-  const isEnabled = !sendButtonContainer.classList.contains('disabled');
-  return isEnabled;
-}
-
-function waitForSendButtonEnabled(timeout = 20000) {
-  return CindraInject.waitForCondition(() => {
-    const sendButtonContainer = document.querySelector('.send-button-container');
-    if (sendButtonContainer && isSendButtonEnabled(sendButtonContainer)) {
-      const sendButton = sendButtonContainer.querySelector('.send-button') || sendButtonContainer;
-      if (sendButton) {
-        return sendButton;
-      }
-    }
-
-    return null;
-  }, timeout, 'Kimi send button');
-}
-
-async function insertPrompt(context) {
-  const { input: inputField, prompt } = context;
-    const normalizedPrompt = normalizePromptForKimi(prompt);
-    const attachmentCountBefore = getAttachmentCount();
-
-    insertTextIntoEditableDiv(inputField, normalizedPrompt);
-
-    const attachmentCreated = normalizedPrompt.length > 3500
-      ? await waitForAttachmentCountIncrease(attachmentCountBefore)
-      : false;
-    const insertedText = inputField.textContent || inputField.innerText || '';
-
-    if (!attachmentCreated && insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))) {
-      forceSetEditableDivContent(inputField, normalizedPrompt);
-    }
-}
-
-async function findSendButtonWithRetry() {
+async function waitForKimiSendButton(signal) {
   try {
-    return await waitForSendButtonEnabled(1000);
+    return await CindraInject.waitForCondition(
+      findEnabledKimiSendButton,
+      {
+        timeoutMs: 1000,
+        signal,
+        description: 'Kimi send control'
+      }
+    );
   } catch (error) {
-    await CindraInject.delay(2000);
-    return waitForSendButtonEnabled().catch(() => null);
+    if (!CindraInject.isTimeoutError(error) || signal?.aborted) throw error;
+  }
+
+  await CindraInject.sleep(2000, signal);
+  return CindraInject.waitForCondition(
+    findEnabledKimiSendButton,
+    {
+      timeoutMs: 20000,
+      signal,
+      description: 'Kimi send control'
+    }
+  );
+}
+
+async function insertKimiPrompt(input, prompt, { signal }) {
+  const normalizedPrompt = normalizePromptForKimi(prompt);
+  const attachmentCountBefore = getKimiAttachmentCount();
+
+  input.focus();
+  try {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(input);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.execCommand('delete');
+  } catch (error) {
+    input.replaceChildren();
+  }
+
+  try {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.setData('text/plain', normalizedPrompt);
+    input.dispatchEvent(new ClipboardEvent('paste', {
+      clipboardData: dataTransfer,
+      bubbles: true,
+      cancelable: true
+    }));
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  } catch (error) {
+    CindraInject.insertTextIntoContentEditable(input, normalizedPrompt, { mode: 'text' });
+  }
+
+  const attachmentCreated = normalizedPrompt.length > 3500
+    ? await waitForKimiAttachment(attachmentCountBefore, signal)
+    : false;
+  const insertedText = input.textContent || input.innerText || '';
+
+  if (
+    !attachmentCreated &&
+    insertedText.length < Math.min(100, Math.floor(normalizedPrompt.length * 0.8))
+  ) {
+    CindraInject.insertTextIntoContentEditable(input, normalizedPrompt, {
+      mode: 'text',
+      caretAtEnd: true
+    });
   }
 }
 
 CindraProviderRuntime.registerAdapter({
   providerId: 'kimi',
+  handoffTimeoutMs: 45000,
+  inputTimeoutMs: 14500,
   inputSelectors: [
     '.chat-input-editor[contenteditable="true"]',
     '.chat-input [contenteditable="true"]',
     'div[contenteditable="true"][data-lexical-editor="true"]'
   ],
-  insertPrompt,
-  findSubmit: findSendButtonWithRetry,
-  submit: ({ submitControl }) => robustClick(submitControl),
-  fallbackSubmit: ({ input, prompt }) => {
-    if (getAttachmentCount() === 0) {
-      insertTextIntoEditableDiv(input, prompt);
-    }
-    CindraInject.dispatchEnter(input);
-  }
+  insertPrompt: insertKimiPrompt,
+  findSubmit: ({ signal }) => waitForKimiSendButton(signal),
+  clickMode: 'native',
+  fallbackSubmit: ({ input }) => CindraInject.pressEnter(input, {
+    eventTypes: ['keydown']
+  })
 });

@@ -1,16 +1,22 @@
 (function (root, factory) {
   'use strict';
 
-  const api = factory();
+  const promptBuilder = typeof module === 'object' && module.exports
+    ? require('../lib/prompt.js')
+    : root.CindraPrompt;
+  const api = factory(promptBuilder);
   root.CindraBackgroundOrchestrator = api;
 
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (promptBuilder) {
   'use strict';
 
-  const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+  if (!promptBuilder?.DEFAULT_SUMMARY_PROMPT) {
+    throw new TypeError('ContentExtractionOrchestrator requires CindraPrompt.');
+  }
+  const DEFAULT_PROMPT = promptBuilder.DEFAULT_SUMMARY_PROMPT;
 
   function createUserError(message, cause = null) {
     const error = cause instanceof Error ? cause : new Error(message);

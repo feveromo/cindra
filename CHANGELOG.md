@@ -24,6 +24,9 @@ All notable changes to Cindra are documented here.
 - Replaced YouTube’s multiple unbounded observers and loose retry timers with one debounced lifecycle controller.
 - Made Reddit extraction fall back to readable page text when structured content is unavailable.
 - Updated automatic theme handling to react to system color-scheme changes.
+- Unified the default summary prompt in `lib/prompt.js` so background, page, popup, and settings flows cannot drift.
+- Made provider DOM waits and delayed actions abortable, with a bounded deadline for every provider handoff and a longer allowance for Kimi attachment handling.
+- Consolidated provider-specific input behavior further into the shared adapter runtime while preserving destination-specific editor modes and fallbacks.
 
 ### Fixed
 
@@ -34,6 +37,8 @@ All notable changes to Cindra are documented here.
 - Preserved valid legacy transcript cache entries during startup maintenance.
 - Corrected Chrome scripting calls to use the supported `func` property.
 - Sanitized popup status state classes and improved malformed message rejection.
+- Redacted prompt bodies and captured content from serialized diagnostics while retaining names, codes, causes, and stack traces.
+- Prevented provider waits from running indefinitely; timed-out or cancelled handoffs remain queued for recovery instead of being cleared.
 
 ## 1.3.0
 

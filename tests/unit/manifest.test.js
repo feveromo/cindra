@@ -45,6 +45,17 @@ test('all direct manifest file references exist', () => {
   }
 });
 
+test('provider registry is deeply immutable and returns canonical entries', () => {
+  const chatgpt = providers.getProviderStrict('chatgpt');
+  assert.equal(providers.getProvider('chatgpt'), chatgpt);
+  assert.equal(Object.isFrozen(providers), true);
+  assert.equal(Object.isFrozen(providers.providers), true);
+  assert.equal(Object.isFrozen(chatgpt), true);
+  assert.equal(Object.isFrozen(chatgpt.contentScript), true);
+  assert.equal(Object.isFrozen(chatgpt.contentScript.matches), true);
+  assert.equal(Object.isFrozen(providers.contentSources), true);
+});
+
 test('provider pending storage keys are unique and namespaced', () => {
   const keys = providers.providers.map(provider => providers.getPendingStorageKey(provider.id));
   assert.equal(new Set(keys).size, providers.providers.length);
@@ -70,6 +81,7 @@ test('shared extraction and message helpers load before the main content script'
     'lib/chrome.js',
     'lib/messages.js',
     'lib/extraction.js',
+    'lib/prompt.js',
     'lib/providers.js',
     'content_scripts/lib/inject.js',
     'content_scripts/lib/page_ui.js',
@@ -85,6 +97,7 @@ test('shared extraction and message helpers load before the main content script'
     '../lib/chrome.js',
     '../lib/messages.js',
     '../lib/extraction.js',
+    '../lib/prompt.js',
     'transcript-cache.js',
     'orchestrator.js'
   ];

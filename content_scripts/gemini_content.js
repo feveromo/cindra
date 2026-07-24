@@ -1,47 +1,3 @@
-async function insertTextIntoEditableDiv({ input, prompt }) {
-  input.focus();
-
-  // Gemini's Quill editor accepts direct DOM text plus input events more reliably than execCommand.
-  input.replaceChildren();
-
-  const fragment = document.createDocumentFragment();
-  const lines = prompt.split('\n');
-
-  for (let i = 0; i < lines.length; i++) {
-    if (i > 0) {
-      fragment.appendChild(document.createElement('br'));
-    }
-    if (lines[i]) {
-      fragment.appendChild(document.createTextNode(lines[i]));
-    }
-  }
-
-  input.appendChild(fragment);
-
-  input.classList.remove('ql-blank');
-
-  // InputEvent.data can truncate large prompts, so the text lives in the DOM instead.
-  const inputEvent = new InputEvent('input', {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    inputType: 'insertText',
-    data: null
-  });
-  input.dispatchEvent(inputEvent);
-
-  input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-
-  input.focus();
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(input);
-  range.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
 CindraProviderRuntime.registerAdapter({
   providerId: 'gemini',
   inputSelectors: [
@@ -50,9 +6,14 @@ CindraProviderRuntime.registerAdapter({
     'div.ql-editor[contenteditable="true"][data-placeholder="Ask Gemini"]',
     'rich-textarea div.ql-editor[contenteditable="true"]'
   ],
-  insertPrompt: insertTextIntoEditableDiv,
-  settleMs: 500,
-  // Gemini marks disabled state through aria-disabled rather than disabled.
+  contentEditable: {
+    mode: 'lines',
+    blankClass: 'ql-blank',
+    inputEventData: null,
+    additionalInputEvent: true,
+    caretAtEnd: true
+  },
+  settleDelayMs: 500,
   submitSelectors: [
     'button.send-button[aria-label="Send message"]:not([aria-disabled="true"])',
     'button[aria-label="Send message"]:not([aria-disabled="true"]):not([disabled])',

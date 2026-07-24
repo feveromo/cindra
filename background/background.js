@@ -36,6 +36,7 @@ const PDF_SHORTCUT_SCRIPT_FILES = [
   'lib/chrome.js',
   'lib/messages.js',
   'lib/extraction.js',
+  'lib/prompt.js',
   'lib/providers.js',
   'content_scripts/lib/inject.js',
   'content_scripts/lib/page_ui.js',

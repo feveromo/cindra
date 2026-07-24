@@ -1,118 +1,88 @@
-function insertTextIntoEditableDiv(div, text) {
-  div.focus();
-  div.innerHTML = '';
-  const pre = document.createElement('pre');
-  pre.style.whiteSpace = 'pre-wrap';
-  pre.style.wordBreak = 'break-word';
-  pre.style.margin = '0';
-  pre.appendChild(document.createTextNode(text));
-  div.appendChild(pre);
-  try {
-    div.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-  } catch (_) {
-    div.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-}
-
-function parsePromptSections(prompt) {
+function parseQwenPromptSections(prompt) {
   const contentStartTag = '<Content>';
   const contentEndTag = '</Content>';
-
   const contentStartIndex = prompt.indexOf(contentStartTag);
   const contentEndIndex = prompt.indexOf(contentEndTag);
 
   if (contentStartIndex === -1 || contentEndIndex === -1) {
-    return {
-      instructionPart: prompt,
-      contentPart: ''
-    };
+    return { instructionPart: prompt, contentPart: '' };
   }
 
-  const contentPart = prompt.substring(
-    contentStartIndex + contentStartTag.length,
-    contentEndIndex
-  ).trim();
-
-  const instructionPart = prompt.substring(0, contentStartIndex).trim();
-
   return {
-    instructionPart,
-    contentPart
+    instructionPart: prompt.slice(0, contentStartIndex).trim(),
+    contentPart: prompt
+      .slice(contentStartIndex + contentStartTag.length, contentEndIndex)
+      .trim()
   };
 }
 
-function pasteTextAsFile(element, text) {
-  element.focus();
+function insertQwenText(input, text) {
+  CindraInject.insertText(input, text, {
+    mode: 'pre',
+    caretAtEnd: true
+  });
+}
 
-  // Keep the instruction text in place; Qwen turns pasted large text into an attached file.
+function pasteQwenContent(input, text) {
+  input.focus();
   try {
     const dataTransfer = new DataTransfer();
     dataTransfer.setData('text/plain', text);
-    const pasteEvent = new ClipboardEvent('paste', {
+    input.dispatchEvent(new ClipboardEvent('paste', {
       clipboardData: dataTransfer,
       bubbles: true,
       cancelable: true
-    });
-    element.dispatchEvent(pasteEvent);
-  } catch (e) {
-    if (element.tagName && element.tagName.toLowerCase() === 'textarea') {
-      CindraInject.insertTextIntoTextarea(element, text);
-    } else {
-      insertTextIntoEditableDiv(element, text);
-    }
+    }));
+    input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  } catch (error) {
+    insertQwenText(input, text);
   }
-
-  element.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
 }
 
-async function insertPrompt(context) {
-  const { input, prompt } = context;
-  const isLargeFile = prompt.length > 40960;
-  context.isLargeFile = isLargeFile;
+async function insertQwenPrompt(input, prompt, context) {
+  const { signal } = context;
+  context.isLargeFile = prompt.length > 40960;
 
-  // Qwen handles very large prompts better when the content is pasted as a file.
-  if (isLargeFile) {
-    const { instructionPart, contentPart } = parsePromptSections(prompt);
+  if (!context.isLargeFile) {
+    insertQwenText(input, prompt);
+    await CindraInject.sleep(800, signal);
+    return;
+  }
 
-    if (instructionPart) {
-      if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
-        CindraInject.insertTextIntoTextarea(input, instructionPart);
-      } else {
-        insertTextIntoEditableDiv(input, instructionPart);
-      }
-      await CindraInject.delay(300);
-    }
+  const { instructionPart, contentPart } = parseQwenPromptSections(prompt);
+  if (instructionPart) {
+    insertQwenText(input, instructionPart);
+    await CindraInject.sleep(300, signal);
+  }
 
-    if (contentPart) {
-      pasteTextAsFile(input, contentPart);
-      await CindraInject.delay(1500);
-    } else {
-      console.warn('Qwen: No content part found after parsing, proceeding with instruction only');
-      await CindraInject.delay(800);
-    }
+  if (contentPart) {
+    pasteQwenContent(input, contentPart);
+    await CindraInject.sleep(1500, signal);
   } else {
-    if (input.tagName && input.tagName.toLowerCase() === 'textarea') {
-      CindraInject.insertTextIntoTextarea(input, prompt);
-    } else {
-      insertTextIntoEditableDiv(input, prompt);
-    }
-    await CindraInject.delay(800);
+    await CindraInject.sleep(800, signal);
   }
 }
 
-function waitForSendButton() {
-  return CindraInject.waitForElement([
-    'button[type="submit"]:not([disabled])',
-    'button[aria-label*="Send" i]:not([disabled])',
-    '#open-omni-button + button[type="submit"]:not([disabled])'
-  ], 1500).catch(() => null);
+async function findQwenSendButton({ signal }) {
+  try {
+    return await CindraInject.waitForElement([
+      'button[type="submit"]:not([disabled])',
+      'button[aria-label*="Send" i]:not([disabled])',
+      '#open-omni-button + button[type="submit"]:not([disabled])'
+    ], {
+      timeoutMs: 1500,
+      signal,
+      description: 'Qwen send control'
+    });
+  } catch (error) {
+    if (!CindraInject.isTimeoutError(error) || signal?.aborted) throw error;
+    return null;
+  }
 }
 
-async function submitPrompt(context) {
-  if (context.isLargeFile) {
-    await CindraInject.delay(750);
-  }
-  CindraInject.robustClick(context.submitControl);
+async function submitQwenPrompt({ submitControl, isLargeFile, signal }) {
+  if (isLargeFile) await CindraInject.sleep(750, signal);
+  CindraInject.robustClick(submitControl);
 }
 
 CindraProviderRuntime.registerAdapter({
@@ -123,8 +93,10 @@ CindraProviderRuntime.registerAdapter({
     'textarea.text-area-box-web',
     'div[contenteditable="true"]'
   ],
-  insertPrompt,
-  findSubmit: waitForSendButton,
-  submit: submitPrompt,
-  fallbackSubmit: ({ input }) => CindraInject.dispatchEnter(input, { keyup: true })
+  insertPrompt: insertQwenPrompt,
+  findSubmit: findQwenSendButton,
+  submit: submitQwenPrompt,
+  fallbackSubmit: ({ input }) => CindraInject.pressEnter(input, {
+    eventTypes: ['keydown', 'keyup']
+  })
 });

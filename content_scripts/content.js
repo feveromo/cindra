@@ -4,13 +4,14 @@
   root.CindraContentScript?.cleanup?.();
 
   const SHORTCUT_SEQUENCE_TIMEOUT_MS = 700;
-  const DEFAULT_SUMMARY_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+  const promptBuilder = root.CindraPrompt;
   const providerRegistry = root.CindraProviders;
   const extraction = root.CindraExtraction;
   const messageBus = root.CindraMessages;
   const chromeApi = root.CindraChrome;
   const pageUi = root.CindraPageUi;
   const ACTIONS = messageBus?.ACTIONS;
+  const DEFAULT_SUMMARY_PROMPT = promptBuilder?.DEFAULT_SUMMARY_PROMPT;
 
   let firstShortcutXTime = 0;
   let selectionComposer = null;
@@ -18,7 +19,15 @@
   let initialized = false;
   let cleanedUp = false;
 
-  if (!providerRegistry || !extraction || !messageBus || !chromeApi || !pageUi) {
+  if (
+    !promptBuilder ||
+    !DEFAULT_SUMMARY_PROMPT ||
+    !providerRegistry ||
+    !extraction ||
+    !messageBus ||
+    !chromeApi ||
+    !pageUi
+  ) {
     console.error('[Cindra] Content script dependencies are unavailable.');
     root.CindraContentScriptReady = false;
     return;

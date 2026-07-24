@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const prompt = require('../../lib/prompt.js');
 
+test('exports one shared default summary prompt', () => {
+  assert.equal(
+    prompt.DEFAULT_SUMMARY_PROMPT,
+    'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.'
+  );
+});
+
 test('keeps content unchanged below the limit', () => {
   assert.deepEqual(prompt.limitPromptContent('short text', 100), {
     text: 'short text',

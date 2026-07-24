@@ -26,9 +26,9 @@ The popup and settings page are extension pages. They use the same error and Chr
 - `lib/providers.js`: provider and content-source registry. Labels, URLs, match patterns, storage keys, startup delays, and content limits belong here.
 - `lib/messages.js`: action constants, payload validation, one-shot responses, message timeouts, and Promise wrappers for runtime/tab messaging.
 - `lib/chrome.js`: Promise wrappers for callback-based Chrome APIs with `chrome.runtime.lastError` preservation.
-- `lib/errors.js`: contextual errors, safe user messages, and diagnostic logging that retains causes and stack traces.
+- `lib/errors.js`: contextual errors, safe user messages, and redacted diagnostic serialization that retains names, codes, causes, and stack traces without exposing prompt or captured-content bodies.
 - `lib/extraction.js`: normalized selection/page/PDF extraction and bounded long-page truncation.
-- `lib/prompt.js`: prompt formatting and destination-specific content limits.
+- `lib/prompt.js`: the shared default summary prompt, prompt formatting, and destination-specific content limits.
 
 Shared modules expose globals because MV3 content scripts and service workers are loaded as classic scripts. The same files expose CommonJS exports for Node tests.
 
@@ -52,7 +52,7 @@ Every AI destination is registered in `lib/providers.js` and has a small adapter
 
 The background worker builds the final prompt, stores a namespaced pending envelope, opens or reuses the destination tab, and delivers the envelope when eager delivery is supported.
 
-The provider runtime validates `insertPrompt`, claims the pending handoff so two tabs cannot submit it, finds the composer, inserts and submits the prompt, reports contextual success/failure, and clears only the matching successful handoff. Legacy pending-prompt keys remain readable so upgrades do not discard queued work.
+The provider runtime validates `insertPrompt`, claims the pending handoff so two tabs cannot submit it, finds the composer, inserts and submits the prompt, reports contextual success/failure, and clears only the matching successful handoff. Shared DOM waits and sleeps accept an `AbortSignal`; each handoff has a bounded deadline, with provider-specific overrides for slower attachment flows. A timeout aborts pending DOM work and leaves the envelope queued for recovery. Legacy pending-prompt keys remain readable so upgrades do not discard queued work.
 
 ## Page UI lifecycle
 

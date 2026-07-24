@@ -253,7 +253,7 @@ test('adapter failures retain the pending handoff for recovery', async () => {
 
     const response = await deliverHandoff(serviceWorker, provider.url, provider.id, 'Retain me', 'failure');
     expect(response.success).toBe(false);
-    expect(response.error).toMatch(/Timeout waiting for element/);
+    expect(response.error).toMatch(/Timeout waiting for DeepSeek submit control/);
 
     const pending = await serviceWorker.evaluate(providerId =>
       chrome.storage.local.get([`cindraPendingHandoff:${providerId}`]), provider.id);

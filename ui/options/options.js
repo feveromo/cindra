@@ -5,14 +5,15 @@
 
   const errors = root.CindraErrors;
   const chromeApi = root.CindraChrome;
+  const promptBuilder = root.CindraPrompt;
   const providerRegistry = root.CindraProviders;
   const theme = root.CindraTheme;
-  if (!errors || !chromeApi || !providerRegistry || !theme) {
+  if (!errors || !chromeApi || !promptBuilder || !providerRegistry || !theme) {
     console.error('[Cindra] Options dependencies are unavailable.');
     return;
   }
 
-  const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+  const DEFAULT_PROMPT = promptBuilder.DEFAULT_SUMMARY_PROMPT;
   const MAX_PROMPTS = 50;
   const elements = {};
   let editingPromptId = null;

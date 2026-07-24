@@ -12,17 +12,15 @@
     'main textarea:not(.g-recaptcha-response)'
   ];
 
-  async function insertPromptAndSubmit(prompt) {
-    if (!prompt) {
-      throw new Error('No prompt provided');
-    }
+  async function insertPromptAndSubmit(prompt, title, handoff, { signal } = {}) {
+    if (!prompt) throw new Error('No prompt provided');
 
     const limitedPrompt = limitPromptForCerebras(prompt);
-    const textarea = await waitForChatTextarea(10000);
+    const textarea = await waitForChatTextarea(10000, signal);
     insertTextIntoCerebrasTextarea(textarea, limitedPrompt);
-    await waitForUiSettle(150);
+    await CindraInject.sleep(150, signal);
 
-    const sendButton = await waitForChatSendButton(textarea, 5000);
+    const sendButton = await waitForChatSendButton(textarea, 5000, signal);
     CindraInject.robustClick(sendButton);
   }
 
@@ -88,12 +86,12 @@
     return null;
   }
 
-  function waitForChatTextarea(timeout) {
-    return CindraInject.waitForCondition(
-      findChatTextarea,
-      timeout,
-      'Cerebras chat input'
-    );
+  function waitForChatTextarea(timeout, signal) {
+    return CindraInject.waitForCondition(findChatTextarea, {
+      timeoutMs: timeout,
+      signal,
+      description: 'Cerebras chat input'
+    });
   }
 
   function findChatSendButton(textarea) {
@@ -154,16 +152,17 @@
     ].filter(Boolean).join(' ').trim();
   }
 
-  function waitForChatSendButton(textarea, timeout = 5000) {
+  function waitForChatSendButton(textarea, timeout = 5000, signal = null) {
     const immediate = findChatSendButton(textarea);
-    if (immediate) {
-      return Promise.resolve(immediate);
-    }
+    if (immediate) return Promise.resolve(immediate);
 
     return CindraInject.waitForCondition(
       () => findChatSendButton(textarea),
-      timeout,
-      'Cerebras chat send button'
+      {
+        timeoutMs: timeout,
+        signal,
+        description: 'Cerebras chat send button'
+      }
     );
   }
 
@@ -178,10 +177,6 @@
 
   function isSupportedCerebrasInputPage() {
     return location.hostname === 'chat.cerebras.ai';
-  }
-
-  function waitForUiSettle(delay) {
-    return new Promise(resolve => setTimeout(resolve, delay));
   }
 
   function watchCerebrasRouteChanges(providerRuntime) {

@@ -1,48 +1,73 @@
-(function (root) {
+(function (root, factory) {
   'use strict';
 
-  if (root.CindraProviderRuntime) {
-    return;
+  const dependencies = typeof module === 'object' && module.exports
+    ? {
+        errors: require('../../lib/errors.js'),
+        chromeApi: require('../../lib/chrome.js'),
+        messages: require('../../lib/messages.js'),
+        providers: require('../../lib/providers.js'),
+        inject: require('./inject.js')
+      }
+    : {
+        errors: root.CindraErrors,
+        chromeApi: root.CindraChrome,
+        messages: root.CindraMessages,
+        providers: root.CindraProviders,
+        inject: root.CindraInject
+      };
+  const api = root.CindraProviderRuntime || factory(root, dependencies);
+  root.CindraProviderRuntime = api;
+
+  if (typeof module === 'object' && module.exports) {
+    module.exports = api;
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root, dependencies) {
+  'use strict';
+
+  const { errors, chromeApi, messages, providers, inject } = dependencies;
+  if (!errors || !chromeApi || !messages || !inject) {
+    throw new TypeError('CindraProviderRuntime dependencies are unavailable.');
   }
 
-  const errors = root.CindraErrors;
-  const chromeApi = root.CindraChrome;
-  const messages = root.CindraMessages;
-  if (!errors || !chromeApi || !messages) {
-    console.error('[Cindra] Provider runtime dependencies are unavailable.');
-    return;
-  }
   const ACTIONS = messages.ACTIONS;
   const DEFAULT_TTL_MS = 2 * 60 * 1000;
-  const MAX_COMPLETED_HANDOFFS = 50;
+  const DEFAULT_HANDOFF_TIMEOUT_MS = 30000;
+  const MAX_COMPLETED_HANDOFFS = 100;
   const registrations = new Map();
   const inFlight = new Map();
   const completed = new Set();
+  const completedOrder = [];
   let messageListenerInstalled = false;
 
   function pendingStorageKey(providerId) {
     return `cindraPendingHandoff:${providerId}`;
   }
 
-  function normalizeError(error) {
-    return errors.debugMessage(error, 'Provider handoff failed.');
+  function normalizeError(error, fallback = 'Provider handoff failed.') {
+    return errors.debugMessage(error, fallback);
   }
 
-  function contextualError(providerId, stage, error) {
-    const cause = errors.toError(error, 'Provider handoff failed.');
-    const contextual = errors.wrap(
-      `${providerId}: ${stage} failed`,
-      cause,
-      `${providerId} could not complete the ${stage} stage.`
+  function contextualError(providerLabel, stage, error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      if (!error.userMessage) {
+        error.userMessage = `${providerLabel} could not complete the ${stage} stage.`;
+      }
+      return error;
+    }
+    const wrapped = errors.wrap(
+      `${providerLabel}: ${stage} failed`,
+      error,
+      `${providerLabel} could not complete the ${stage} stage.`
     );
-    contextual.message = `${providerId}: ${stage} failed. ${cause.message}`;
-    return contextual;
+    wrapped.stage = stage;
+    return wrapped;
   }
 
   function isFresh(handoff, ttlMs) {
     return Boolean(
       handoff?.promptText &&
-      handoff?.createdAt &&
+      Number.isFinite(handoff?.createdAt) &&
       Date.now() - handoff.createdAt < ttlMs
     );
   }
@@ -68,11 +93,7 @@
     const key = pendingStorageKey(config.providerId);
     const state = await storageGet([key]);
     const keys = legacyStorageKeys(config);
-
-    if (!state[key] || state[key].id === handoff.id) {
-      keys.push(key);
-    }
-
+    if (!state[key] || state[key].id === handoff.id) keys.push(key);
     await storageRemove(keys);
   }
 
@@ -90,8 +111,6 @@
         timeoutMs: 5000
       });
     } catch (reportError) {
-      // Prompt submission already finished. A stale or reloaded extension
-      // context must not turn a successful provider action into a retry loop.
       if (!/Extension context invalidated/i.test(reportError?.message || '')) {
         errors.logError(`Could not report ${config.providerId} handoff result`, reportError);
       }
@@ -102,7 +121,6 @@
     if (handoff.id.startsWith('legacy-') || handoff.id.startsWith('legacy-message-')) {
       return Promise.resolve({ success: true, claimed: true });
     }
-
     return messages.runtimeSendMessage({
       action: ACTIONS.CLAIM_PROVIDER_HANDOFF,
       providerId: config.providerId,
@@ -113,12 +131,73 @@
     }).then(response => response || { success: false, claimed: false });
   }
 
+  function rememberCompleted(handoffId) {
+    if (completed.has(handoffId)) return;
+    completed.add(handoffId);
+    completedOrder.push(handoffId);
+    while (completedOrder.length > MAX_COMPLETED_HANDOFFS) {
+      completed.delete(completedOrder.shift());
+    }
+  }
+
+  function createHandoffTimeoutError(config) {
+    const seconds = Math.max(1, Math.ceil(config.handoffTimeoutMs / 1000));
+    const error = new Error(`${config.providerId} handoff timed out after ${seconds} seconds.`);
+    error.name = 'TimeoutError';
+    error.userMessage = `${config.providerLabel} did not become ready in time. The prompt remains queued for retry.`;
+    return error;
+  }
+
+  async function submitWithDeadline(config, handoff) {
+    const Controller = root.AbortController || AbortController;
+    const controller = new Controller();
+    const timeoutError = createHandoffTimeoutError(config);
+    const timeout = root.setTimeout(
+      () => controller.abort(timeoutError),
+      config.handoffTimeoutMs
+    );
+    const context = {
+      signal: controller.signal,
+      providerId: config.providerId,
+      providerLabel: config.providerLabel,
+      handoffId: handoff.id
+    };
+
+    const abortPromise = new Promise((resolve, reject) => {
+      controller.signal.addEventListener('abort', () => {
+        reject(controller.signal.reason instanceof Error
+          ? controller.signal.reason
+          : inject.createAbortError(controller.signal.reason));
+      }, { once: true });
+    });
+    const submitPromise = Promise.resolve().then(() => config.submitPrompt(
+      handoff.promptText,
+      handoff.title || '',
+      handoff,
+      context
+    ));
+
+    try {
+      await Promise.race([submitPromise, abortPromise]);
+      inject.throwIfAborted(controller.signal);
+    } finally {
+      root.clearTimeout(timeout);
+    }
+  }
+
   async function processHandoff(config, handoff) {
-    if (!handoff?.promptText) {
-      throw new Error('No prompt provided.');
+    if (!handoff?.promptText) throw new Error('No prompt provided.');
+    if (typeof handoff.id !== 'string' || !handoff.id) {
+      throw new Error('Provider handoff is missing an id.');
+    }
+    if (handoff.providerId && handoff.providerId !== config.providerId) {
+      throw new Error(
+        `Provider handoff mismatch: expected ${config.providerId}, received ${handoff.providerId}.`
+      );
     }
 
     if (completed.has(handoff.id)) {
+      await clearMatchingHandoff(config, handoff);
       return { success: true, duplicate: true, handoffId: handoff.id };
     }
 
@@ -131,46 +210,34 @@
     }
 
     if (config.isReady && !config.isReady()) {
-      throw new Error(`${config.providerId} is not ready for prompt input.`);
+      throw new Error(`${config.providerLabel} is not ready for prompt input.`);
     }
 
     const claim = await claimHandoff(config, handoff);
-    if (!claim.success) {
-      throw new Error(claim.error || 'Could not claim the pending handoff.');
-    }
+    if (!claim.success) throw new Error(claim.error || 'Could not claim the pending handoff.');
     if (!claim.claimed) {
       return { success: true, accepted: true, claimedElsewhere: true, handoffId: handoff.id };
     }
 
     inFlight.set(config.providerId, handoff.id);
     try {
-      await config.submitPrompt(handoff.promptText, handoff.title || '', handoff);
-      if (completed.size >= MAX_COMPLETED_HANDOFFS) {
-        completed.delete(completed.values().next().value);
-      }
-      completed.add(handoff.id);
+      await submitWithDeadline(config, handoff);
+      rememberCompleted(handoff.id);
       await clearMatchingHandoff(config, handoff);
       await reportResult(config, handoff, true);
       return { success: true, handoffId: handoff.id };
     } catch (error) {
-      await reportResult(config, handoff, false, error);
-      throw error;
+      const contextual = contextualError(config.providerLabel, 'submitting the prompt', error);
+      await reportResult(config, handoff, false, contextual);
+      throw contextual;
     } finally {
-      if (inFlight.get(config.providerId) === handoff.id) {
-        inFlight.delete(config.providerId);
-      }
+      if (inFlight.get(config.providerId) === handoff.id) inFlight.delete(config.providerId);
     }
   }
 
   function handoffFromMessage(config, message) {
-    if (message.handoff?.providerId && message.handoff.providerId !== config.providerId) {
-      return null;
-    }
-
-    if (message.handoff?.promptText) {
-      return message.handoff;
-    }
-
+    if (message.handoff?.providerId && message.handoff.providerId !== config.providerId) return null;
+    if (message.handoff?.promptText) return message.handoff;
     if (!message.prompt) return null;
     return {
       id: `legacy-message-${config.providerId}-${Date.now()}`,
@@ -182,12 +249,11 @@
   }
 
   function installMessageListener() {
-    if (messageListenerInstalled) return;
+    if (messageListenerInstalled || !root.chrome?.runtime?.onMessage) return;
     messageListenerInstalled = true;
 
     root.chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message?.action !== ACTIONS.INSERT_PROMPT) return false;
-
       const respond = messages.respondOnce(sendResponse);
       const validation = messages.validateMessage(message, [ACTIONS.INSERT_PROMPT]);
       if (!validation.ok) {
@@ -200,7 +266,6 @@
         ? registrations.get(requestedProvider)
         : registrations.values().next().value;
       const handoff = config ? handoffFromMessage(config, message) : null;
-
       if (!config || !handoff) {
         respond({ success: false, error: 'No matching provider adapter is registered.' });
         return false;
@@ -231,7 +296,6 @@
     const prompt = config.legacyKeys?.prompt && state[config.legacyKeys.prompt];
     const createdAt = config.legacyKeys?.timestamp && state[config.legacyKeys.timestamp];
     if (!prompt) return null;
-
     if (!createdAt || Date.now() - createdAt >= config.ttlMs) {
       await storageRemove(legacyKeys);
       return null;
@@ -249,9 +313,7 @@
   async function runPending(providerId) {
     const config = registrations.get(providerId);
     if (!config) return { success: false, error: 'Provider adapter is not registered.' };
-    if (config.isReady && !config.isReady()) {
-      return { success: false, notReady: true };
-    }
+    if (config.isReady && !config.isReady()) return { success: false, notReady: true };
 
     try {
       const handoff = await readPendingHandoff(config);
@@ -264,38 +326,41 @@
   }
 
   function schedulePending(config) {
-    const run = () => setTimeout(() => runPending(config.providerId), config.startupDelayMs);
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', run, { once: true });
+    if (!root.document) return;
+    const run = () => root.setTimeout(() => void runPending(config.providerId), config.startupDelayMs);
+    if (root.document.readyState === 'loading') {
+      root.document.addEventListener('DOMContentLoaded', run, { once: true });
     } else {
       run();
     }
   }
 
   function getProviderMetadata(providerId) {
-    return root.CindraProviders?.getProviderStrict?.(providerId) || null;
+    return providers?.getProviderStrict?.(providerId) || null;
   }
 
   function getLegacyKeys(providerId, options) {
-    return options.legacyKeys ||
-      root.CindraProviders?.getLegacyStorageKeys?.(providerId) ||
-      {};
+    return options.legacyKeys || providers?.getLegacyStorageKeys?.(providerId) || {};
+  }
+
+  function callInsertPrompt(handler, context) {
+    return handler.length >= 2
+      ? handler(context.input, context.prompt, context)
+      : handler(context);
   }
 
   function createSubmitPrompt(options) {
-    if (!options?.providerId) {
-      throw new Error('CindraProviderRuntime adapter requires providerId.');
+    if (!options?.providerId || (!options.inputSelectors && !options.findInput)) {
+      throw new Error('CindraProviderRuntime adapter requires providerId and an input resolver.');
     }
 
     const providerId = options.providerId;
     const providerLabel = getProviderMetadata(providerId)?.label || providerId;
 
-    return async function submitPrompt(prompt, title, handoff) {
-      if (typeof prompt !== 'string' || !prompt.trim()) {
-        throw new Error('No prompt provided.');
-      }
-
+    return async function submitPrompt(prompt, title, handoff, runtimeContext = {}) {
+      if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('No prompt provided.');
       const context = {
+        ...runtimeContext,
         providerId,
         providerLabel,
         prompt,
@@ -303,45 +368,39 @@
         handoff,
         input: null,
         submitControl: null,
-        helpers: root.CindraInject
+        helpers: inject,
+        options
       };
 
       try {
-        if (typeof options.beforeInput === 'function') {
-          await options.beforeInput(context);
-        }
-
-        if (typeof options.findInput === 'function') {
-          context.input = await options.findInput(context);
-        } else if (options.inputSelectors) {
-          context.input = await root.CindraInject.waitForElement(
-            options.inputSelectors,
-            options.inputTimeoutMs ?? 10000
-          );
-        }
-
-        if (!context.input) {
-          throw new Error('Composer input was not found.');
-        }
+        inject.throwIfAborted(context.signal);
+        await options.beforeInput?.(context);
+        await options.beforeInsert?.(context);
+        inject.throwIfAborted(context.signal);
+        context.input = options.findInput
+          ? await options.findInput(context)
+          : await inject.waitForElement(options.inputSelectors, {
+              timeoutMs: options.inputTimeoutMs ?? 10000,
+              signal: context.signal,
+              description: `${providerLabel} prompt input`
+            });
+        if (!context.input) throw new Error('Composer input was not found.');
       } catch (error) {
         throw contextualError(providerLabel, 'finding the composer', error);
       }
 
       try {
+        inject.throwIfAborted(context.signal);
         if (typeof options.insertPrompt === 'function') {
-          await options.insertPrompt(context);
-        } else if (context.input.getAttribute?.('contenteditable') === 'true') {
-          root.CindraInject.insertTextIntoContentEditable(context.input, prompt);
+          await callInsertPrompt(options.insertPrompt, context);
         } else {
-          root.CindraInject.insertTextIntoTextarea(context.input, prompt);
+          inject.insertText(context.input, prompt, options.contentEditable || {});
         }
-
-        if (typeof options.afterInsert === 'function') {
-          await options.afterInsert(context);
-        }
-        if (options.settleMs) {
-          await root.CindraInject.delay(options.settleMs);
-        }
+        inject.throwIfAborted(context.signal);
+        await options.afterInsert?.(context);
+        const settleMs = options.settleMs ?? options.settleDelayMs ?? 0;
+        if (settleMs) await inject.sleep(settleMs, context.signal);
+        inject.throwIfAborted(context.signal);
       } catch (error) {
         throw contextualError(providerLabel, 'inserting the prompt', error);
       }
@@ -350,57 +409,71 @@
         if (typeof options.findSubmit === 'function') {
           context.submitControl = await options.findSubmit(context);
         } else if (options.submitSelectors) {
-          context.submitControl = await root.CindraInject.waitForElement(
-            options.submitSelectors,
-            options.submitTimeoutMs ?? 10000
-          ).catch((error) => {
-            if (options.fallbackSubmit || options.submitOptional) return null;
-            throw error;
-          });
+          try {
+            context.submitControl = await inject.waitForElement(options.submitSelectors, {
+              timeoutMs: options.submitTimeoutMs ?? 5000,
+              signal: context.signal,
+              predicate: options.submitPredicate || inject.isUsableControl,
+              description: `${providerLabel} submit control`
+            });
+          } catch (error) {
+            if (
+              !options.fallbackSubmit ||
+              context.signal?.aborted ||
+              !inject.isTimeoutError(error)
+            ) {
+              throw error;
+            }
+          }
         }
 
+        inject.throwIfAborted(context.signal);
         if (context.submitControl) {
           if (typeof options.submit === 'function') {
             await options.submit(context);
+          } else if (options.clickMode === 'native') {
+            inject.nativeClick(context.submitControl);
           } else {
-            root.CindraInject.robustClick(context.submitControl);
+            inject.robustClick(context.submitControl);
           }
         } else if (typeof options.fallbackSubmit === 'function') {
           await options.fallbackSubmit(context);
         } else if (!options.submitOptional) {
           throw new Error('Send control was not found.');
         }
-
-        if (typeof options.afterSubmit === 'function') {
-          await options.afterSubmit(context);
-        }
+        inject.throwIfAborted(context.signal);
+        await options.afterSubmit?.(context);
+        inject.throwIfAborted(context.signal);
       } catch (error) {
         throw contextualError(providerLabel, 'submitting the prompt', error);
       }
     };
   }
 
-  function register(options) {
+  function normalizeRegistration(options) {
     if (!options?.providerId || typeof options.submitPrompt !== 'function') {
       throw new Error('CindraProviderRuntime requires providerId and submitPrompt.');
     }
-
     const provider = getProviderMetadata(options.providerId);
-    const config = {
+    return {
       ttlMs: DEFAULT_TTL_MS,
       startupDelayMs: provider?.startupDelayMs ?? 250,
+      handoffTimeoutMs: DEFAULT_HANDOFF_TIMEOUT_MS,
       legacyKeys: getLegacyKeys(options.providerId, options),
+      providerLabel: provider?.label || options.providerId,
       ...options
     };
+  }
 
+  function register(options) {
+    const config = normalizeRegistration(options);
     if (registrations.has(config.providerId)) {
-      return { runPending: () => runPending(config.providerId) };
+      return Object.freeze({ runPending: () => runPending(config.providerId) });
     }
-
     registrations.set(config.providerId, config);
     installMessageListener();
     schedulePending(config);
-    return { runPending: () => runPending(config.providerId) };
+    return Object.freeze({ runPending: () => runPending(config.providerId) });
   }
 
   function registerAdapter(options) {
@@ -410,13 +483,16 @@
     return register({ ...options, submitPrompt });
   }
 
-  root.CindraProviderRuntime = {
+  return Object.freeze({
+    DEFAULT_HANDOFF_TIMEOUT_MS,
     DEFAULT_TTL_MS,
+    MAX_COMPLETED_HANDOFFS,
     createSubmitPrompt,
     normalizeError,
     pendingStorageKey,
+    processHandoff,
     register,
     registerAdapter,
     runPending
-  };
-})(globalThis);
+  });
+});

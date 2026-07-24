@@ -6,15 +6,16 @@
   const errors = root.CindraErrors;
   const chromeApi = root.CindraChrome;
   const messages = root.CindraMessages;
+  const promptBuilder = root.CindraPrompt;
   const providerRegistry = root.CindraProviders;
   const theme = root.CindraTheme;
-  if (!errors || !chromeApi || !messages || !providerRegistry || !theme) {
+  if (!errors || !chromeApi || !messages || !promptBuilder || !providerRegistry || !theme) {
     console.error('[Cindra] Popup dependencies are unavailable.');
     return;
   }
 
   const ACTIONS = messages.ACTIONS;
-  const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+  const DEFAULT_PROMPT = promptBuilder.DEFAULT_SUMMARY_PROMPT;
   const STATUS_STATES = new Set(['idle', 'working', 'success', 'error']);
   const elements = {};
   let storageListener = null;

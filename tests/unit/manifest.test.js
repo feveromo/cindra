@@ -117,6 +117,21 @@ test('offscreen PDF extraction loads shared message contracts first', () => {
   assert.ok(html.indexOf('../lib/messages.js') < html.indexOf('../lib/pdf.js'));
 });
 
+test('error reporting uses a packaged extension page instead of an inline data URL', () => {
+  const backgroundSource = fs.readFileSync(
+    path.join(root, 'background', 'background.js'),
+    'utf8'
+  );
+  const html = fs.readFileSync(path.join(root, 'ui', 'error', 'error.html'), 'utf8');
+  const script = fs.readFileSync(path.join(root, 'ui', 'error', 'error.js'), 'utf8');
+
+  assert.match(backgroundSource, /getURL\('ui\/error\/error\.html'\)/);
+  assert.doesNotMatch(backgroundSource, /data:text\/html/);
+  assert.match(html, /role="alert"/);
+  assert.match(script, /messageElement\.textContent/);
+  assert.doesNotMatch(script, /innerHTML/);
+});
+
 test('the vendored PDF.js version matches the pinned dependency', () => {
   const versionFile = fs.readFileSync(path.join(root, 'vendor', 'pdfjs', 'VERSION'), 'utf8');
   assert.match(versionFile, new RegExp(`pdfjs-dist ${packageJson.devDependencies['pdfjs-dist']}`));

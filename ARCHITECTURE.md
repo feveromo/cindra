@@ -19,7 +19,7 @@ Cindra runs in four isolated contexts:
    - Entry point: `offscreen/pdf_extractor.js`
    - Downloads and parses PDFs in an isolated extension document with vendored PDF.js.
 
-The popup and settings page are extension pages. They use the same error and Chrome API helpers as runtime contexts.
+The popup and settings page are extension pages. They use the same error and Chrome API helpers as runtime contexts. User-facing extraction failures open the packaged `ui/error/error.html` page; query text is normalized and assigned with `textContent`, avoiding inline `data:` documents and HTML injection.
 
 ## Shared modules
 

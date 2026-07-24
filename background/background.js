@@ -258,32 +258,8 @@ function openErrorTab(message) {
   const userMessage = errors.cleanMessage(message, 'Cindra could not complete that request.');
   setStatus('error', userMessage);
 
-  const escapedMessage = userMessage
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-  const errorHtml = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>Cindra Summary Error</title>
-      <style>
-        body { font-family: Arial, sans-serif; background: #f8f9fa; color: #202124; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        main { background: white; border: 1px solid #dadce0; padding: 24px; max-width: 500px; text-align: center; }
-        h1 { color: #d93025; font-size: 24px; margin: 0 0 16px; }
-        p { margin: 0 0 24px; line-height: 1.5; }
-        button { background: #202124; color: white; border: 0; padding: 10px 20px; font-weight: 600; cursor: pointer; }
-      </style>
-    </head>
-    <body><main><h1>Could not summarize</h1><p>${escapedMessage}</p><button onclick="window.close()">Close</button></main></body>
-    </html>
-  `;
-
-  chromeApi.tabsCreate({
-    url: 'data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml)
-  }).catch(error => errors.logError('Could not open error tab', error));
+  const url = new URL(chrome.runtime.getURL('ui/error/error.html'));
+  url.searchParams.set('message', userMessage);
+  chromeApi.tabsCreate({ url: url.href })
+    .catch(error => errors.logError('Could not open error tab', error));
 }

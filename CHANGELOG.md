@@ -39,6 +39,7 @@ All notable changes to Cindra are documented here.
 - Sanitized popup status state classes and improved malformed message rejection.
 - Redacted prompt bodies and captured content from serialized diagnostics while retaining names, codes, causes, and stack traces.
 - Prevented provider waits from running indefinitely; timed-out or cancelled handoffs remain queued for recovery instead of being cleared.
+- Replaced inline `data:` error documents with a packaged, themed extension page that renders messages through `textContent`.
 
 ## 1.3.0
 

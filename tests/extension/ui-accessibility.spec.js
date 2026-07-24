@@ -80,3 +80,21 @@ test('popup exposes semantic controls and sanitizes status state classes', async
     await context.close();
   }
 });
+
+test('packaged error page renders messages as text and focuses its close action', async () => {
+  const { context, serviceWorker } = await launchExtensionContext();
+  try {
+    const page = await context.newPage();
+    const hostileMessage = '<img src=x onerror="globalThis.__cindraInjected=true"> Fixture failure';
+    const url = new URL(`chrome-extension://${extensionId(serviceWorker)}/ui/error/error.html`);
+    url.searchParams.set('message', hostileMessage);
+    await page.goto(url.href);
+
+    await expect(page.locator('#error-message')).toHaveText(hostileMessage);
+    await expect(page.locator('#close-button')).toBeFocused();
+    await expect(page.locator('img[src="x"]')).toHaveCount(0);
+    expect(await page.evaluate(() => globalThis.__cindraInjected)).toBeUndefined();
+  } finally {
+    await context.close();
+  }
+});

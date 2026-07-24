@@ -77,7 +77,8 @@ for (const file of manifestReferences) {
 const htmlFiles = [
   manifest.action?.default_popup,
   manifest.options_page,
-  'offscreen/pdf_extractor.html'
+  'offscreen/pdf_extractor.html',
+  'ui/error/error.html'
 ]
   .filter(Boolean)
   .map(file => join(root, file));

@@ -1,230 +1,87 @@
-let isExtracting = false;
-let hasExtracted = false;
+(function initializeCindraYouTubeContent(root) {
+  'use strict';
 
-function addCopyTranscriptButton() {
-  if (document.querySelector('.copy-transcript-button')) {
+  root.CindraYouTubeContent?.cleanup?.();
+
+  const errors = root.CindraErrors;
+  const messages = root.CindraMessages;
+  const youtubeUi = root.CindraYouTubeUi;
+  if (!errors || !messages || !youtubeUi) {
+    console.error('[Cindra] YouTube content dependencies are unavailable.');
     return;
   }
 
-  const button = document.createElement('button');
-  button.className = 'copy-transcript-button';
-  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-  button.setAttribute('aria-label', 'Copy Transcript');
-  button.setAttribute('title', 'Copy Transcript');
-  button.style.cssText = `
-    background-color: transparent;
-    color: #aaaaaa;
-    border: none;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s, color 0.2s;
-    margin-left: 8px;
-    padding: 8px;
-    box-sizing: border-box;
-  `;
+  const ACTIONS = messages.ACTIONS;
+  let activeExtractionPromise = null;
+  let transcriptButton = null;
+  let cleanedUp = false;
 
-  button.addEventListener('mouseover', () => {
-    button.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-    button.style.color = '#ffffff';
-  });
-
-  button.addEventListener('mouseout', () => {
-    button.style.backgroundColor = 'transparent';
-    button.style.color = '#aaaaaa';
-  });
-
-  button.addEventListener('click', async () => {
-    try {
-      button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
-      button.style.color = '#666666';
-      button.style.cursor = 'wait';
-
-      const transcriptData = await getYouTubeTranscript();
-
-      if (transcriptData && transcriptData.content) {
-        await navigator.clipboard.writeText(transcriptData.content);
-
-        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-        button.style.color = '#137333';
-
-        setTimeout(() => {
-          button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-          button.style.color = '#aaaaaa';
-          button.style.cursor = 'pointer';
-        }, 2000);
-      } else {
-        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-        button.style.color = '#ea4335';
-
-        setTimeout(() => {
-          button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-          button.style.color = '#aaaaaa';
-          button.style.cursor = 'pointer';
-        }, 2000);
-      }
-    } catch (error) {
-      button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
-      button.style.color = '#ea4335';
-
-      setTimeout(() => {
-        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
-        button.style.color = '#aaaaaa';
-        button.style.cursor = 'pointer';
-      }, 2000);
-    }
-  });
-
-  // YouTube shifts the action row often, so try stable insertion points in order.
-  const subscribeButton = document.querySelector('#subscribe-button');
-  if (subscribeButton) {
-    if (subscribeButton.nextSibling && subscribeButton.nextSibling.classList &&
-        subscribeButton.nextSibling.classList.contains('copy-transcript-button')) {
-      return;
-    }
-    subscribeButton.parentNode.insertBefore(button, subscribeButton.nextSibling);
-    return;
-  }
-
-  const topRow = document.querySelector('#above-the-fold #top-row');
-  if (topRow) {
-    const subscribeContainer = topRow.querySelector('#subscribe-button');
-    if (subscribeContainer) {
-      if (subscribeContainer.nextSibling && subscribeContainer.nextSibling.classList &&
-          subscribeContainer.nextSibling.classList.contains('copy-transcript-button')) {
-        return;
-      }
-      topRow.insertBefore(button, subscribeContainer.nextSibling);
-    } else {
-      topRow.appendChild(button);
-    }
-    return;
-  }
-
-  const titleElement = document.querySelector('#above-the-fold #title h1');
-  if (titleElement) {
-    titleElement.parentNode.insertBefore(button, titleElement.nextSibling);
-    return;
-  }
-
-  const aboveTheFold = document.querySelector('#above-the-fold');
-  if (aboveTheFold) {
-    const title = aboveTheFold.querySelector('#title');
-    if (title) {
-      aboveTheFold.insertBefore(button, title.nextSibling);
-    } else {
-      aboveTheFold.appendChild(button);
-    }
-    return;
-  }
-
-  const actionsDiv = document.querySelector('#actions');
-  if (actionsDiv) {
-    const actionsInner = actionsDiv.querySelector('#actions-inner');
-    if (actionsInner) {
-      actionsInner.insertBefore(button, actionsInner.firstChild);
-    } else {
-      actionsDiv.insertBefore(button, actionsDiv.firstChild);
-    }
-    return;
-  }
-
-  const watchMetadata = document.querySelector('ytd-watch-metadata');
-  if (watchMetadata) {
-    watchMetadata.insertBefore(button, watchMetadata.firstChild);
-  }
-}
-
-function isVideoPage() {
-  return window.location.pathname === '/watch' && new URLSearchParams(window.location.search).get('v');
-}
-
-function initializeCopyButton() {
-  if (isVideoPage()) {
-    addCopyTranscriptButton();
-
-    // YouTube renders watch metadata lazily after SPA navigation.
-    setTimeout(addCopyTranscriptButton, 1000);
-    setTimeout(addCopyTranscriptButton, 3000);
-  }
-}
-
-function setupMutationObserver() {
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    const url = location.href;
-    if (url !== lastUrl) {
-      lastUrl = url;
-      setTimeout(initializeCopyButton, 1000);
-    }
-  }).observe(document, { subtree: true, childList: true });
-
-  function setupVideoObserver() {
-    const videoContainer = document.querySelector('ytd-page-manager') || document.body;
-
-    if (!videoContainer) {
-      setTimeout(setupVideoObserver, 500);
-      return;
-    }
-
-    new MutationObserver((mutations) => {
-      const shouldTryAddButton = mutations.some(mutation => {
-        return Array.from(mutation.addedNodes).some(node => {
-          if (node.nodeName === 'YTD-WATCH-METADATA' ||
-              node.id === 'above-the-fold' ||
-              node.id === 'top-row') {
-            return true;
-          }
-          return false;
+  function extractTranscriptOnce() {
+    if (!activeExtractionPromise) {
+      activeExtractionPromise = Promise.resolve()
+        .then(() => getYouTubeTranscript())
+        .finally(() => {
+          activeExtractionPromise = null;
         });
-      });
-
-      if (shouldTryAddButton) {
-        setTimeout(addCopyTranscriptButton, 500);
-      }
-    }).observe(videoContainer, { childList: true, subtree: true });
+    }
+    return activeExtractionPromise;
   }
 
-  setupVideoObserver();
-}
+  function handleMessage(message, sender, sendResponse) {
+    if (message?.action !== ACTIONS.EXTRACT_TRANSCRIPT) return false;
+    const respond = messages.respondOnce(sendResponse);
+    const validation = messages.validateMessage(message, [ACTIONS.EXTRACT_TRANSCRIPT]);
+    if (!validation.ok) {
+      respond({ success: false, error: validation.error });
+      return false;
+    }
+    if (sender.id !== root.chrome.runtime.id) {
+      respond({ success: false, error: 'YouTube transcript request was not trusted.' });
+      return false;
+    }
 
-initializeCopyButton();
-setupMutationObserver();
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'extractTranscript') {
-    isExtracting = false;
-    hasExtracted = false;
-
-    getYouTubeTranscript()
-      .then(transcriptData => {
-        if (!transcriptData || !transcriptData.content) {
-          throw new Error('Could not extract transcript. Please ensure the video has captions available.');
+    extractTranscriptOnce()
+      .then((transcriptData) => {
+        if (!transcriptData?.content || !/^Transcript:\s/i.test(transcriptData.content.trim())) {
+          throw new Error(transcriptData?.error || 'Could not extract transcript. Please ensure the video has captions available.');
         }
-        sendResponse({
+        respond({
           success: true,
           transcript: transcriptData.content,
           channelName: transcriptData.channelName,
           description: transcriptData.description
         });
-        hasExtracted = true;
       })
-      .catch(error => {
-        console.error('Failed to extract transcript:', error);
-        sendResponse({ success: false, error: error.message });
-      })
-      .finally(() => {
-        isExtracting = false;
+      .catch((error) => {
+        errors.logError('YouTube transcript extraction failed', error);
+        respond({ success: false, error: error?.message || 'Could not extract transcript.' });
       });
-
     return true;
   }
-});
+
+  function cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    transcriptButton?.destroy();
+    transcriptButton = null;
+    root.chrome.runtime.onMessage.removeListener(handleMessage);
+  }
+
+  root.chrome.runtime.onMessage.addListener(handleMessage);
+  transcriptButton = new youtubeUi.YouTubeTranscriptButton({
+    window: root,
+    document: root.document,
+    onCopy: async () => {
+      const transcriptData = await extractTranscriptOnce();
+      if (!transcriptData?.content || !/^Transcript:\s/i.test(transcriptData.content.trim())) {
+        throw new Error(transcriptData?.error || 'Could not extract a usable transcript.');
+      }
+      return transcriptData.content;
+    },
+    onError: error => errors.logError('Could not copy YouTube transcript', error)
+  }).start();
+
+  root.CindraYouTubeContent = { cleanup, extractTranscriptOnce };
 
 function removeTimestamps(text) {
   if (!text) return text;
@@ -328,7 +185,8 @@ function getYouTubeTranscript() {
           url,
           channelName,
           description: videoDescription,
-          content: 'Could not find video ID. This doesn\'t appear to be a valid YouTube video.'
+          content: null,
+          error: 'Could not find a YouTube video ID on this page.'
         });
         return;
       }
@@ -523,12 +381,8 @@ function getYouTubeTranscript() {
                   videoId,
                   channelName,
                   description: videoDescription,
-                  content: 'Could not extract transcript automatically. This video may not have captions available.\n\n' +
-                           'To access the transcript manually:\n' +
-                           '1. Look for the "..." or "More actions" button below the video\n' +
-                           '2. Select "Show transcript" from the menu\n' +
-                           '3. The transcript will appear in a panel to the right of the video\n\n' +
-                           'If you don\'t see this option, the video might not have captions available.'
+                  content: null,
+                  error: 'Could not extract transcript automatically. This video may not have captions available.'
                 });
               }
             });
@@ -542,7 +396,8 @@ function getYouTubeTranscript() {
         url: window.location.href,
         channelName: getChannelName(),
         description: getVideoDescription(),
-        content: `Error extracting transcript: ${error.message}. Please check if this video has captions available.`
+        content: null,
+        error: `Error extracting transcript: ${error.message}. Please check if this video has captions available.`
       });
     }
   });
@@ -1183,3 +1038,5 @@ function getExistingTranscriptFromDOM() {
     return null;
   }
 }
+
+})(globalThis);

@@ -53,7 +53,7 @@
     const normalizedTtlMs = Math.max(1, Math.floor(Number(ttlMs) || TTL_MS));
 
     async function loadState() {
-      return get(null);
+      return (await get(null)) || {};
     }
 
     async function maintain(state, accessedVideoId = null) {

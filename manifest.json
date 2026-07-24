@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cindra Summary",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "minimum_chrome_version": "125",
   "description": "Summarize webpages, PDFs, YouTube videos, and Reddit threads with your preferred AI chat.",
   "action": {
@@ -43,6 +43,7 @@
         "lib/extraction.js",
         "lib/providers.js",
         "content_scripts/lib/inject.js",
+        "content_scripts/lib/page_ui.js",
         "content_scripts/content.js"
       ]
     },
@@ -51,6 +52,9 @@
         "*://aistudio.google.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/ai_studio_content.js"
@@ -61,6 +65,9 @@
         "*://*.perplexity.ai/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/perplexity_content.js"
@@ -71,6 +78,9 @@
         "*://grok.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/grok_content.js"
@@ -81,6 +91,9 @@
         "*://claude.ai/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/claude_content.js"
@@ -93,6 +106,9 @@
         "*://chat.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/chatgpt_content.js"
@@ -103,6 +119,9 @@
         "https://gemini.google.com/app/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/gemini_content.js"
@@ -113,7 +132,10 @@
         "*://www.youtube.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/messages.js",
         "content_scripts/lib/youtube_parser.js",
+        "content_scripts/lib/youtube_ui.js",
         "content_scripts/youtube_content.js"
       ],
       "run_at": "document_start"
@@ -123,6 +145,8 @@
         "*://*.reddit.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/messages.js",
         "content_scripts/reddit_content.js"
       ],
       "run_at": "document_idle"
@@ -132,6 +156,9 @@
         "https://learning.google.com/experiments/learn-about*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/google_learning_content.js"
@@ -142,6 +169,9 @@
         "https://chat.deepseek.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/deepseek_content.js"
@@ -152,6 +182,9 @@
         "https://chat.z.ai/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/glm_content.js"
@@ -163,6 +196,9 @@
         "https://www.kimi.com/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/kimi_content.js"
@@ -173,6 +209,9 @@
         "https://huggingface.co/chat/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/huggingchat_content.js"
@@ -183,6 +222,9 @@
         "https://chat.qwen.ai/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/qwen_content.js"
@@ -193,6 +235,9 @@
         "https://chat.cerebras.ai/*"
       ],
       "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/cerebras_content.js"

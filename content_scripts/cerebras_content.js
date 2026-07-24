@@ -1,13 +1,10 @@
 (function (root) {
   'use strict';
 
-  if (root.__cindraCerebrasContentLoaded) {
-    return;
-  }
-
-  root.__cindraCerebrasContentLoaded = true;
+  root.CindraCerebrasContent?.cleanup?.();
 
   let lastObservedUrl = location.href;
+  let routeCleanup = null;
 
   const MAX_CEREBRAS_PROMPT_CHARS = 18000;
   const CHAT_INPUT_SELECTORS = [
@@ -22,7 +19,7 @@
 
     const limitedPrompt = limitPromptForCerebras(prompt);
     const textarea = await waitForChatTextarea(10000);
-    insertTextIntoCerebrasTextarea(textarea, prompt);
+    insertTextIntoCerebrasTextarea(textarea, limitedPrompt);
     await waitForUiSettle(150);
 
     const sendButton = await waitForChatSendButton(textarea, 5000);
@@ -31,18 +28,25 @@
 
   function limitPromptForCerebras(prompt) {
     const text = prompt || '';
-    if (text.length <= MAX_CEREBRAS_PROMPT_CHARS) {
-      return text;
+    if (text.length <= MAX_CEREBRAS_PROMPT_CHARS) return text;
+
+    let notice = '';
+    let headChars = 0;
+    let tailChars = 0;
+    for (let iteration = 0; iteration < 4; iteration += 1) {
+      const contentBudget = Math.max(0, MAX_CEREBRAS_PROMPT_CHARS - notice.length - 4);
+      headChars = Math.floor(contentBudget * 0.7);
+      tailChars = contentBudget - headChars;
+      const omitted = Math.max(0, text.length - headChars - tailChars);
+      notice = `[Cindra note: ${omitted.toLocaleString()} characters were omitted from the middle because Cerebras rejected the original message size.]`;
     }
 
-    const headChars = Math.floor(MAX_CEREBRAS_PROMPT_CHARS * 0.7);
-    const tailChars = MAX_CEREBRAS_PROMPT_CHARS - headChars;
+    const contentBudget = Math.max(0, MAX_CEREBRAS_PROMPT_CHARS - notice.length - 4);
+    headChars = Math.floor(contentBudget * 0.7);
+    tailChars = contentBudget - headChars;
     const head = text.slice(0, headChars).trimEnd();
-    const tail = text.slice(-tailChars).trimStart();
-    const omitted = text.length - head.length - tail.length;
-    const notice = `[Cindra note: ${omitted.toLocaleString()} characters were omitted from the middle because Cerebras rejected the original message size.]`;
-
-    return `${head}\n\n${notice}\n\n${tail}`;
+    const tail = tailChars ? text.slice(-tailChars).trimStart() : '';
+    return `${head}\n\n${notice}\n\n${tail}`.slice(0, MAX_CEREBRAS_PROMPT_CHARS);
   }
 
   function insertTextIntoCerebrasTextarea(textarea, text) {
@@ -85,7 +89,11 @@
   }
 
   function waitForChatTextarea(timeout) {
-    return waitForElement(() => findChatTextarea(), timeout, 'Cerebras: chat input did not become available');
+    return CindraInject.waitForCondition(
+      findChatTextarea,
+      timeout,
+      'Cerebras chat input'
+    );
   }
 
   function findChatSendButton(textarea) {
@@ -152,30 +160,11 @@
       return Promise.resolve(immediate);
     }
 
-    return waitForElement(
+    return CindraInject.waitForCondition(
       () => findChatSendButton(textarea),
       timeout,
-      'Cerebras: chat send button did not become available'
+      'Cerebras chat send button'
     );
-  }
-
-  function waitForElement(findElement, timeout, errorMessage) {
-    return new Promise((resolve, reject) => {
-      const start = Date.now();
-      const interval = setInterval(() => {
-        const element = findElement();
-        if (element) {
-          clearInterval(interval);
-          resolve(element);
-          return;
-        }
-
-        if (Date.now() - start >= timeout) {
-          clearInterval(interval);
-          reject(new Error(errorMessage));
-        }
-      }, 100);
-    });
   }
 
   function isVisible(element) {
@@ -196,14 +185,29 @@
   }
 
   function watchCerebrasRouteChanges(providerRuntime) {
-    setInterval(() => {
-      if (location.href === lastObservedUrl) {
-        return;
-      }
+    let retryTimer = null;
+    let observer = null;
 
+    const handleRouteChange = () => {
+      if (location.href === lastObservedUrl) return;
       lastObservedUrl = location.href;
-      setTimeout(providerRuntime.runPending, 250);
-    }, 750);
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => void providerRuntime.runPending(), 250);
+    };
+
+    root.addEventListener('popstate', handleRouteChange);
+    root.navigation?.addEventListener?.('currententrychange', handleRouteChange);
+    if (typeof MutationObserver === 'function' && document.documentElement) {
+      observer = new MutationObserver(handleRouteChange);
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
+    return () => {
+      root.removeEventListener('popstate', handleRouteChange);
+      root.navigation?.removeEventListener?.('currententrychange', handleRouteChange);
+      observer?.disconnect();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }
 
   const providerRuntime = CindraProviderRuntime.register({
@@ -216,5 +220,11 @@
     submitPrompt: insertPromptAndSubmit
   });
 
-  watchCerebrasRouteChanges(providerRuntime);
+  routeCleanup = watchCerebrasRouteChanges(providerRuntime);
+  root.CindraCerebrasContent = {
+    cleanup() {
+      routeCleanup?.();
+      routeCleanup = null;
+    }
+  };
 })(globalThis);

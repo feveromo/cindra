@@ -1,313 +1,355 @@
-const providerRegistry = globalThis.CindraProviders;
-const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+(function initializeCindraPopup(root) {
+  'use strict';
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.body.classList.add('popup-body');
+  root.CindraPopup?.cleanup?.();
 
-  const versionEl = document.getElementById('version-pill');
-  if (versionEl) {
-    versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+  const errors = root.CindraErrors;
+  const chromeApi = root.CindraChrome;
+  const messages = root.CindraMessages;
+  const providerRegistry = root.CindraProviders;
+  const theme = root.CindraTheme;
+  if (!errors || !chromeApi || !messages || !providerRegistry || !theme) {
+    console.error('[Cindra] Popup dependencies are unavailable.');
+    return;
   }
 
-  renderProviderOptions();
-  renderContentSourceOptions();
+  const ACTIONS = messages.ACTIONS;
+  const DEFAULT_PROMPT = 'Summarize the following content in 5-10 bullet points with timestamp if it\'s transcript.';
+  const STATUS_STATES = new Set(['idle', 'working', 'success', 'error']);
+  const elements = {};
+  let storageListener = null;
+  let initialized = false;
 
-  initializeStorage().then(() => {
-    loadSettings();
-    loadLastHandoff();
-  });
+  function byId(id) {
+    return root.document.getElementById(id);
+  }
 
-  document.getElementById('ai-model').addEventListener('change', saveSettings);
-  document.getElementById('content-source').addEventListener('change', saveSettings);
-  document.getElementById('options-btn').addEventListener('click', () => {
-    chrome.runtime.openOptionsPage();
-  });
-  document.getElementById('summarize-btn').addEventListener('click', summarizeCurrentPage);
-  document.getElementById('copy-last-prompt').addEventListener('click', copyLastPrompt);
-  document.getElementById('resend-last-prompt').addEventListener('click', resendLastPrompt);
-  document.getElementById('clear-handoff-history').addEventListener('click', clearHandoffHistory);
+  function cacheElements() {
+    [
+      'version-pill',
+      'ai-model',
+      'content-source',
+      'prompt-selector',
+      'summary-prompt',
+      'summarize-btn',
+      'handoff-status',
+      'handoff-status-text',
+      'handoff-actions',
+      'copy-last-prompt',
+      'resend-last-prompt',
+      'clear-handoff-history',
+      'options-btn'
+    ].forEach(id => {
+      elements[id] = byId(id);
+    });
+  }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') return;
+  function generateId() {
+    const random = root.crypto?.randomUUID?.().replace(/-/g, '').slice(0, 12) ||
+      Math.random().toString(36).slice(2, 14);
+    return `prompt_${Date.now()}_${random}`;
+  }
 
-    if (changes.cindraLastStatus || changes.cindraRecentSummaries) {
-      loadLastHandoff();
-    }
-  });
-});
-
-function renderProviderOptions() {
-  const aiModel = document.getElementById('ai-model');
-  aiModel.innerHTML = '';
-
-  providerRegistry.providers.forEach(provider => {
-    const option = document.createElement('option');
-    option.value = provider.id;
-    option.textContent = provider.label;
-    aiModel.appendChild(option);
-  });
-}
-
-function renderContentSourceOptions() {
-  const contentSource = document.getElementById('content-source');
-  contentSource.innerHTML = '';
-
-  providerRegistry.contentSources.forEach(source => {
-    const option = document.createElement('option');
-    option.value = source.id;
-    option.textContent = source.label;
-    contentSource.appendChild(option);
-  });
-}
-
-async function initializeStorage() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get([
+  async function initializeStorage() {
+    const items = await chromeApi.storageGet(root.chrome.storage.sync, [
       'savedPrompts',
       'summaryPrompt',
       'activePromptId',
       'contentSource'
-    ], (items) => {
-      const updates = {};
+    ]);
+    const prompts = Array.isArray(items.savedPrompts) ? items.savedPrompts : [];
+    const updates = {};
 
-      if (!items.savedPrompts || items.savedPrompts.length === 0) {
-        const defaultPrompt = {
-          id: generateId(),
-          name: 'General',
-          text: items.summaryPrompt || DEFAULT_PROMPT
-        };
+    if (!prompts.length) {
+      const defaultPrompt = {
+        id: generateId(),
+        name: 'General',
+        text: typeof items.summaryPrompt === 'string' && items.summaryPrompt.trim()
+          ? items.summaryPrompt
+          : DEFAULT_PROMPT
+      };
+      updates.savedPrompts = [defaultPrompt];
+      updates.activePromptId = defaultPrompt.id;
+    } else if (!prompts.some(prompt => prompt.id === items.activePromptId)) {
+      updates.activePromptId = prompts[0].id;
+    }
 
-        updates.savedPrompts = [defaultPrompt];
-        updates.activePromptId = defaultPrompt.id;
-      }
+    if (!providerRegistry.getContentSourceStrict(items.contentSource)) {
+      updates.contentSource = providerRegistry.DEFAULT_CONTENT_SOURCE;
+    }
 
-      if (!items.contentSource) {
-        updates.contentSource = providerRegistry.DEFAULT_CONTENT_SOURCE;
-      }
+    if (Object.keys(updates).length) {
+      await chromeApi.storageSet(root.chrome.storage.sync, updates);
+    }
+  }
 
-      if (Object.keys(updates).length === 0) {
-        resolve();
-        return;
-      }
+  function renderRegistryOptions(select, entries) {
+    const fragment = root.document.createDocumentFragment();
+    for (const entry of entries) {
+      const option = root.document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.label;
+      fragment.appendChild(option);
+    }
+    select.replaceChildren(fragment);
+  }
 
-      chrome.storage.sync.set(updates, resolve);
-    });
-  });
-}
-
-function generateId() {
-  return 'prompt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-}
-
-function loadSettings() {
-  chrome.storage.sync.get({
-    aiModel: providerRegistry.DEFAULT_PROVIDER,
-    contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE,
-    savedPrompts: [],
-    activePromptId: null,
-    theme: 'auto'
-  }, (items) => {
-    const provider = providerRegistry.getProvider(items.aiModel);
-    const source = providerRegistry.getContentSource(items.contentSource);
-
-    document.getElementById('ai-model').value = provider.id;
-    document.getElementById('content-source').value = source.id;
-
-    const promptSelector = document.getElementById('prompt-selector');
-    promptSelector.innerHTML = '';
-
-    items.savedPrompts.forEach(prompt => {
-      const option = document.createElement('option');
+  function renderPromptOptions(prompts, activePromptId) {
+    const fragment = root.document.createDocumentFragment();
+    for (const prompt of prompts) {
+      const option = root.document.createElement('option');
       option.value = prompt.id;
-      option.textContent = prompt.name;
-      promptSelector.appendChild(option);
-    });
-
-    if (items.activePromptId) {
-      promptSelector.value = items.activePromptId;
-      const activePrompt = items.savedPrompts.find(p => p.id === items.activePromptId);
-      if (activePrompt) {
-        document.getElementById('summary-prompt').value = activePrompt.text;
-      }
+      option.textContent = prompt.name || 'Untitled prompt';
+      fragment.appendChild(option);
     }
-
-    promptSelector.addEventListener('change', onPromptSelected);
-
-    CindraTheme.applyTheme(items.theme);
-  });
-}
-
-function onPromptSelected() {
-  const promptSelector = document.getElementById('prompt-selector');
-  const selectedId = promptSelector.value;
-
-  chrome.storage.sync.get(['savedPrompts'], (items) => {
-    const selectedPrompt = (items.savedPrompts || []).find(p => p.id === selectedId);
-    if (!selectedPrompt) return;
-
-    document.getElementById('summary-prompt').value = selectedPrompt.text;
-    chrome.storage.sync.set({ activePromptId: selectedId });
-  });
-}
-
-function saveSettings() {
-  chrome.storage.sync.set({
-    aiModel: document.getElementById('ai-model').value,
-    contentSource: document.getElementById('content-source').value
-  });
-}
-
-function summarizeCurrentPage() {
-  const summarizeButton = document.getElementById('summarize-btn');
-  summarizeButton.disabled = true;
-  summarizeButton.textContent = 'Preparing...';
-
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs.length === 0) {
-      summarizeButton.disabled = false;
-      summarizeButton.textContent = 'Summarize Current Page';
-      setLocalStatus({ state: 'error', message: 'No active tab found.' });
-      return;
+    elements['prompt-selector'].replaceChildren(fragment);
+    const active = prompts.find(prompt => prompt.id === activePromptId) || prompts[0];
+    if (active) {
+      elements['prompt-selector'].value = active.id;
+      elements['summary-prompt'].value = active.text || DEFAULT_PROMPT;
+    } else {
+      elements['summary-prompt'].value = DEFAULT_PROMPT;
     }
+  }
 
-    const currentTab = tabs[0];
-    const summaryPrompt = document.getElementById('summary-prompt').value;
-
-    chrome.storage.sync.get({
+  async function loadSettings() {
+    const items = await chromeApi.storageGet(root.chrome.storage.sync, {
       aiModel: providerRegistry.DEFAULT_PROVIDER,
-      contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE
-    }, (settings) => {
-      setLocalStatus({
-        state: 'working',
-        message: 'Preparing handoff...',
-        model: settings.aiModel,
-        url: currentTab.url,
-        title: currentTab.title
-      });
-
-      chrome.runtime.sendMessage({
-        action: 'summarize',
-        tabId: currentTab.id,
-        url: currentTab.url,
-        summaryPrompt: summaryPrompt,
-        aiModel: settings.aiModel,
-        contentSource: document.getElementById('content-source').value
-      }, (response) => {
-        summarizeButton.disabled = false;
-        summarizeButton.textContent = 'Summarize Current Page';
-
-        if (chrome.runtime.lastError || !response?.success) {
-          setLocalStatus({
-            state: 'error',
-            message: response?.error || chrome.runtime.lastError?.message || 'Could not start the handoff.',
-            model: settings.aiModel,
-            url: currentTab.url,
-            title: currentTab.title
-          });
-        }
-      });
+      contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE,
+      savedPrompts: [],
+      activePromptId: null,
+      theme: 'auto'
     });
-  });
-}
+    const prompts = Array.isArray(items.savedPrompts) ? items.savedPrompts : [];
+    elements['ai-model'].value = providerRegistry.getProvider(items.aiModel).id;
+    elements['content-source'].value = providerRegistry.getContentSource(items.contentSource).id;
+    renderPromptOptions(prompts, items.activePromptId);
+    theme.applyTheme(items.theme);
+  }
 
-function setLocalStatus(status) {
-  chrome.storage.local.set({
-    cindraLastStatus: {
-      ...status,
-      updatedAt: Date.now()
-    }
-  });
-}
+  async function saveWorkflowSettings() {
+    await chromeApi.storageSet(root.chrome.storage.sync, {
+      aiModel: elements['ai-model'].value,
+      contentSource: elements['content-source'].value
+    });
+  }
 
-function loadLastHandoff() {
-  chrome.storage.local.get({
-    cindraLastStatus: null,
-    cindraRecentSummaries: []
-  }, (items) => {
+  async function selectPrompt() {
+    const selectedId = elements['prompt-selector'].value;
+    const items = await chromeApi.storageGet(root.chrome.storage.sync, { savedPrompts: [] });
+    const selected = (items.savedPrompts || []).find(prompt => prompt.id === selectedId);
+    if (!selected) return;
+    elements['summary-prompt'].value = selected.text || DEFAULT_PROMPT;
+    await chromeApi.storageSet(root.chrome.storage.sync, { activePromptId: selectedId });
+  }
+
+  async function setLocalStatus(status) {
+    await chromeApi.storageSet(root.chrome.storage.local, {
+      cindraLastStatus: {
+        ...status,
+        updatedAt: Date.now()
+      }
+    });
+  }
+
+  function renderStatus(status, recentSummaries) {
+    const state = STATUS_STATES.has(status?.state) ? status.state : 'idle';
+    elements['handoff-status'].classList.remove(
+      'is-idle',
+      'is-working',
+      'is-success',
+      'is-error'
+    );
+    elements['handoff-status'].classList.add(`is-${state}`);
+    elements['handoff-status-text'].textContent = status?.message || 'Ready.';
+    const latest = Array.isArray(recentSummaries) ? recentSummaries[0] : null;
+    elements['handoff-actions'].hidden = !latest?.promptText;
+  }
+
+  async function loadLastHandoff() {
+    const items = await chromeApi.storageGet(root.chrome.storage.local, {
+      cindraLastStatus: null,
+      cindraRecentSummaries: []
+    });
     renderStatus(items.cindraLastStatus, items.cindraRecentSummaries);
-  });
-}
+  }
 
-function renderStatus(status, recentSummaries) {
-  const panel = document.getElementById('handoff-status');
-  const text = document.getElementById('handoff-status-text');
-  const actions = document.getElementById('handoff-actions');
-  const latestSummary = Array.isArray(recentSummaries) ? recentSummaries[0] : null;
+  async function latestSummary() {
+    const items = await chromeApi.storageGet(root.chrome.storage.local, {
+      cindraRecentSummaries: []
+    });
+    return Array.isArray(items.cindraRecentSummaries)
+      ? items.cindraRecentSummaries[0] || null
+      : null;
+  }
 
-  panel.classList.remove('is-idle', 'is-working', 'is-success', 'is-error');
-  panel.classList.add(`is-${status?.state || 'idle'}`);
+  function setSummarizeBusy(busy) {
+    elements['summarize-btn'].disabled = busy;
+    elements['summarize-btn'].textContent = busy ? 'Preparing…' : 'Summarize Current Page';
+  }
 
-  text.textContent = status?.message || 'Ready.';
-  actions.hidden = !latestSummary;
-}
+  async function summarizeCurrentPage() {
+    if (elements['summarize-btn'].disabled) return;
+    setSummarizeBusy(true);
+    try {
+      const [tab] = await chromeApi.tabsQuery({ active: true, currentWindow: true });
+      if (!tab || !Number.isInteger(tab.id)) throw new Error('No active tab found.');
 
-function copyLastPrompt() {
-  chrome.storage.local.get({ cindraRecentSummaries: [] }, async (items) => {
-    const latestSummary = items.cindraRecentSummaries[0];
-    if (!latestSummary?.promptText) {
-      renderStatus({ state: 'error', message: 'No saved prompt to copy.' }, []);
+      const settings = await chromeApi.storageGet(root.chrome.storage.sync, {
+        aiModel: providerRegistry.DEFAULT_PROVIDER,
+        contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE
+      });
+      const provider = providerRegistry.getProvider(settings.aiModel);
+      await setLocalStatus({
+        state: 'working',
+        message: `Preparing handoff to ${provider.label}…`,
+        model: provider.id,
+        url: tab.url || '',
+        title: tab.title || ''
+      });
+
+      const response = await messages.runtimeSendMessage({
+        action: ACTIONS.SUMMARIZE,
+        tabId: tab.id,
+        url: tab.url,
+        summaryPrompt: elements['summary-prompt'].value,
+        aiModel: provider.id,
+        contentSource: elements['content-source'].value
+      }, {
+        context: 'start summary from popup',
+        timeoutMs: 10000
+      });
+      if (!response?.success) throw new Error(response?.error || 'Could not start the handoff.');
+    } catch (error) {
+      errors.logError('Popup summary request failed', error);
+      await setLocalStatus({
+        state: 'error',
+        message: error?.message || 'Could not start the handoff.'
+      });
+    } finally {
+      setSummarizeBusy(false);
+    }
+  }
+
+  async function copyLastPrompt() {
+    const summary = await latestSummary();
+    if (!summary?.promptText) {
+      await setLocalStatus({ state: 'error', message: 'No saved prompt to copy.' });
       return;
     }
-
     try {
-      await navigator.clipboard.writeText(latestSummary.promptText);
-      setLocalStatus({
+      await root.navigator.clipboard.writeText(summary.promptText);
+      await setLocalStatus({
         state: 'success',
         message: 'Prompt copied.',
-        model: latestSummary.model,
-        title: latestSummary.title,
-        url: latestSummary.url
+        model: summary.model,
+        title: summary.title,
+        url: summary.url
       });
     } catch (error) {
-      setLocalStatus({
-        state: 'error',
-        message: 'Could not copy prompt.',
-        model: latestSummary.model,
-        title: latestSummary.title,
-        url: latestSummary.url
-      });
+      errors.logError('Could not copy recent prompt', error);
+      await setLocalStatus({ state: 'error', message: 'Could not copy the saved prompt.' });
     }
-  });
-}
+  }
 
-function resendLastPrompt() {
-  chrome.storage.local.get({ cindraRecentSummaries: [] }, (items) => {
-    const latestSummary = items.cindraRecentSummaries[0];
-    if (!latestSummary) {
-      setLocalStatus({ state: 'error', message: 'No saved prompt to resend.' });
+  async function resendLastPrompt() {
+    const summary = await latestSummary();
+    if (!summary?.id) {
+      await setLocalStatus({ state: 'error', message: 'No saved prompt to resend.' });
       return;
     }
-
-    setLocalStatus({
+    const provider = providerRegistry.getProvider(summary.model);
+    await setLocalStatus({
       state: 'working',
-      message: `Resending to ${providerRegistry.getProvider(latestSummary.model).label}...`,
-      model: latestSummary.model,
-      title: latestSummary.title,
-      url: latestSummary.url
+      message: `Resending to ${provider.label}…`,
+      model: provider.id,
+      title: summary.title,
+      url: summary.url
     });
+    try {
+      const response = await messages.runtimeSendMessage({
+        action: ACTIONS.RESEND_SUMMARY,
+        summaryId: summary.id
+      }, {
+        context: 'resend recent summary from popup',
+        timeoutMs: 10000
+      });
+      if (!response?.success) throw new Error(response?.error || 'Could not resend the prompt.');
+    } catch (error) {
+      errors.logError('Could not resend recent prompt', error);
+      await setLocalStatus({ state: 'error', message: error?.message || 'Could not resend the prompt.' });
+    }
+  }
 
-    chrome.runtime.sendMessage({
-      action: 'resendSummary',
-      summaryId: latestSummary.id
-    }, (response) => {
-      if (chrome.runtime.lastError || !response?.success) {
-        setLocalStatus({
-          state: 'error',
-          message: response?.error || chrome.runtime.lastError?.message || 'Could not resend the prompt.',
-          model: latestSummary.model,
-          title: latestSummary.title,
-          url: latestSummary.url
-        });
+  async function clearHandoffHistory() {
+    await chromeApi.storageRemove(root.chrome.storage.local, ['cindraRecentSummaries']);
+    await setLocalStatus({ state: 'success', message: 'Handoff history cleared.' });
+  }
+
+  async function openOptions() {
+    try {
+      await chromeApi.callbackPromise(
+        callback => root.chrome.runtime.openOptionsPage(callback),
+        'chrome.runtime.openOptionsPage'
+      );
+    } catch (error) {
+      errors.logError('Could not open settings', error);
+      await setLocalStatus({ state: 'error', message: 'Could not open Settings.' });
+    }
+  }
+
+  function bindEvents() {
+    elements['ai-model'].addEventListener('change', () => void saveWorkflowSettings());
+    elements['content-source'].addEventListener('change', () => void saveWorkflowSettings());
+    elements['prompt-selector'].addEventListener('change', () => void selectPrompt());
+    elements['summarize-btn'].addEventListener('click', () => void summarizeCurrentPage());
+    elements['copy-last-prompt'].addEventListener('click', () => void copyLastPrompt());
+    elements['resend-last-prompt'].addEventListener('click', () => void resendLastPrompt());
+    elements['clear-handoff-history'].addEventListener('click', () => void clearHandoffHistory());
+    elements['options-btn'].addEventListener('click', () => void openOptions());
+
+    storageListener = (changes, areaName) => {
+      if (areaName === 'local' && (changes.cindraLastStatus || changes.cindraRecentSummaries)) {
+        void loadLastHandoff();
       }
-    });
-  });
-}
+      if (areaName === 'sync' && (changes.savedPrompts || changes.activePromptId || changes.theme)) {
+        void loadSettings();
+      }
+    };
+    root.chrome.storage.onChanged.addListener(storageListener);
+    root.addEventListener('pagehide', cleanup, { once: true });
+  }
 
-function clearHandoffHistory() {
-  chrome.storage.local.remove('cindraRecentSummaries', () => {
-    setLocalStatus({
-      state: 'success',
-      message: 'Handoff history cleared.'
-    });
-  });
-}
+  function cleanup() {
+    if (storageListener) root.chrome.storage.onChanged.removeListener(storageListener);
+    storageListener = null;
+    root.removeEventListener('pagehide', cleanup);
+    theme.cleanup?.();
+    initialized = false;
+  }
+
+  async function initialize() {
+    if (initialized) return;
+    initialized = true;
+    cacheElements();
+    elements['version-pill'].textContent = `v${root.chrome.runtime.getManifest().version}`;
+    renderRegistryOptions(elements['ai-model'], providerRegistry.providers);
+    renderRegistryOptions(elements['content-source'], providerRegistry.contentSources);
+    bindEvents();
+
+    try {
+      await initializeStorage();
+      await Promise.all([loadSettings(), loadLastHandoff()]);
+    } catch (error) {
+      errors.logError('Could not initialize popup', error);
+      renderStatus({ state: 'error', message: 'Could not load Cindra settings.' }, []);
+    }
+  }
+
+  root.CindraPopup = { cleanup, initialize };
+  if (root.document.readyState === 'loading') {
+    root.document.addEventListener('DOMContentLoaded', () => void initialize(), { once: true });
+  } else {
+    void initialize();
+  }
+})(globalThis);

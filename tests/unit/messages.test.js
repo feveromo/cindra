@@ -34,6 +34,38 @@ test('message contracts reject malformed actions, ids, and URLs', () => {
   }).error, /Provider id/);
 });
 
+test('prompt handoff contracts reject malformed envelopes', () => {
+  assert.match(messages.validateMessage({
+    action: ACTIONS.INSERT_PROMPT,
+    handoff: {
+      id: 'handoff_1',
+      providerId: 'chatgpt',
+      promptText: 'Prompt',
+      createdAt: 'yesterday'
+    }
+  }).error, /envelope/);
+
+  assert.match(messages.validateMessage({
+    action: ACTIONS.INSERT_PROMPT,
+    handoff: {
+      id: 'handoff_1',
+      providerId: 'chatgpt',
+      promptText: 'x'.repeat(1000001),
+      createdAt: Date.now()
+    }
+  }).error, /envelope/);
+
+  assert.equal(messages.validateMessage({
+    action: ACTIONS.INSERT_PROMPT,
+    handoff: {
+      id: 'handoff_1',
+      providerId: 'chatgpt',
+      promptText: 'Prompt',
+      createdAt: Date.now()
+    }
+  }).ok, true);
+});
+
 test('respondOnce ignores duplicate asynchronous responses', () => {
   const responses = [];
   const respond = messages.respondOnce(value => responses.push(value));

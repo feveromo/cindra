@@ -38,6 +38,7 @@ test('legacy transcript keys are adopted instead of discarded', async () => {
     now: () => 100000
   });
 
+  await cache.cleanup();
   assert.deepEqual(await cache.get('abc123'), transcript('abc123'));
   assert.deepEqual(storage.state[cacheModule.METADATA_KEY].entries.abc123, {
     cachedAt: 100000,

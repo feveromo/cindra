@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,102 +7,89 @@
   <script src="../theme.js"></script>
   <link rel="stylesheet" href="../styles.css">
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="brand-mark">
-        <img src="/images/icon48.png" alt="Logo" class="logo">
+<body class="popup-body">
+  <main class="container" aria-labelledby="page-title">
+    <header class="header">
+      <div class="brand-mark" aria-hidden="true">
+        <img src="/images/icon48.png" alt="" class="logo">
       </div>
       <div class="header-copy">
         <span class="eyebrow">Page Summary Router</span>
-        <h1>Cindra Summary</h1>
-        <p class="header-description">Route the current page into your favorite AI workspace with the prompt you want.</p>
+        <h1 id="page-title">Cindra Summary</h1>
+        <p class="header-description">Send the current page to your preferred AI workspace with a reusable prompt.</p>
       </div>
-      <span class="version-pill" id="version-pill"></span>
-    </div>
-    
-    <div class="section">
-      <div class="section-heading">
-        <h2>Destination</h2>
-        <p class="section-copy">Pick the AI tab that should receive the generated summary.</p>
-      </div>
-      <div class="model-selection">
-        <label for="ai-model" class="field-label">AI Model</label>
-        <div class="select-wrap">
-          <select id="ai-model"></select>
-        </div>
-      </div>
-    </div>
+      <span class="version-pill" id="version-pill" aria-label="Extension version"></span>
+    </header>
 
-    <div class="section">
+    <section class="section" aria-labelledby="destination-heading">
       <div class="section-heading">
-        <h2>Source</h2>
-        <p class="section-copy">Choose what gets packaged for the AI tab.</p>
+        <h2 id="destination-heading">Destination</h2>
+        <p class="section-copy">Choose the AI workspace that should receive the handoff.</p>
       </div>
-      <div class="model-selection">
-        <label for="content-source" class="field-label">Content Source</label>
-        <div class="select-wrap">
-          <select id="content-source"></select>
-        </div>
+      <label for="ai-model" class="field-label">AI Model</label>
+      <div class="select-wrap">
+        <select id="ai-model"></select>
       </div>
-    </div>
+    </section>
 
-    <div class="section">
+    <section class="section" aria-labelledby="source-heading">
       <div class="section-heading">
-        <h2>Saved Prompt</h2>
-        <p class="section-copy">Swap between reusable prompt presets from your settings page.</p>
+        <h2 id="source-heading">Source</h2>
+        <p class="section-copy">Choose the content Cindra should package.</p>
       </div>
-      <div class="model-selection">
-        <label for="prompt-selector" class="field-label">Prompt Preset</label>
-        <div class="select-wrap">
-          <select id="prompt-selector">
-            <!-- Populated dynamically -->
-          </select>
-        </div>
+      <label for="content-source" class="field-label">Content Source</label>
+      <div class="select-wrap">
+        <select id="content-source"></select>
       </div>
-    </div>
+    </section>
 
-    <div class="section">
+    <section class="section" aria-labelledby="prompt-heading">
       <div class="section-heading">
-        <h2>Prompt Draft</h2>
-        <p class="section-copy">Review or tweak the prompt before sending the page over.</p>
+        <h2 id="prompt-heading">Prompt</h2>
+        <p class="section-copy">Pick a preset, then adjust this handoff without changing the saved preset.</p>
       </div>
-      <textarea id="summary-prompt" rows="4" placeholder="Enter your custom prompt here...">Summarize the following content in 5-10 bullet points with timestamp if it's transcript.</textarea>
-    </div>
+      <label for="prompt-selector" class="field-label">Prompt Preset</label>
+      <div class="select-wrap prompt-selector-wrap">
+        <select id="prompt-selector"></select>
+      </div>
+      <label for="summary-prompt" class="field-label prompt-draft-label">Prompt Draft</label>
+      <textarea id="summary-prompt" rows="4" maxlength="20000" placeholder="Enter your custom prompt here..."></textarea>
+    </section>
 
     <div class="actions">
-      <button id="summarize-btn" class="primary-btn">Summarize Current Page</button>
-      <div id="handoff-status" class="status-panel is-idle" role="status" aria-live="polite">
+      <button id="summarize-btn" class="primary-btn" type="button">Summarize Current Page</button>
+      <section id="handoff-status" class="status-panel is-idle" aria-labelledby="handoff-heading" aria-live="polite" aria-atomic="true">
         <div>
-          <div class="field-label">Last Handoff</div>
+          <div class="field-label" id="handoff-heading">Last Handoff</div>
           <div id="handoff-status-text" class="status-meta">Ready.</div>
         </div>
         <div id="handoff-actions" class="handoff-actions" hidden>
-          <button id="copy-last-prompt" class="secondary-btn compact-btn">Copy Prompt</button>
-          <button id="resend-last-prompt" class="secondary-btn compact-btn">Resend</button>
-          <button id="clear-handoff-history" class="secondary-btn compact-btn">Clear</button>
+          <button id="copy-last-prompt" class="secondary-btn compact-btn" type="button">Copy</button>
+          <button id="resend-last-prompt" class="secondary-btn compact-btn" type="button">Resend</button>
+          <button id="clear-handoff-history" class="secondary-btn compact-btn" type="button">Clear</button>
         </div>
-      </div>
+      </section>
       <div class="action-strip">
         <div>
           <div class="field-label">Shortcut</div>
-          <div class="status-meta">Quick trigger from the keyboard</div>
+          <div class="status-meta">Trigger from a supported page</div>
         </div>
-        <div class="shortcut-hint">
-          <span class="keycap">Ctrl</span>
-          <span>+</span>
-          <span class="keycap">X</span>
-          <span>+</span>
-          <span class="keycap">X</span>
+        <div class="shortcut-hint" aria-label="Control X X">
+          <kbd class="keycap">Ctrl</kbd><span aria-hidden="true">+</span>
+          <kbd class="keycap">X</kbd><span aria-hidden="true">+</span>
+          <kbd class="keycap">X</kbd>
         </div>
       </div>
     </div>
 
-    <div class="footer">
-      <button id="options-btn">Open Settings</button>
-    </div>
-  </div>
+    <footer class="footer">
+      <button id="options-btn" type="button">Open Settings</button>
+    </footer>
+  </main>
+  <script src="../../lib/errors.js"></script>
+  <script src="../../lib/chrome.js"></script>
+  <script src="../../lib/messages.js"></script>
   <script src="../../lib/providers.js"></script>
   <script src="popup.js"></script>
 </body>
-</html> 
+</html>

@@ -2,21 +2,22 @@
 
 # Cindra Summary
 
-Cindra Summary is a Chrome extension that sends the current page, selected text, PDF text, YouTube transcript, or Reddit thread to your preferred AI chat for summarization.
+Cindra Summary is a Manifest V3 Chrome extension that extracts the current page, selected text, PDF text, a YouTube transcript, or a Reddit thread and routes it to a selected AI chat workspace. It uses the destination’s existing web UI, so no API key is required.
 
-## What it does
+## Highlights
 
-- Summarizes the current page from the popup
-- Supports a keyboard shortcut: `Ctrl + X + X`
-- Can show a floating summarize button on regular webpages
-- Stores reusable prompt presets
-- Can send the full page or only selected text
-- Can extract text from PDFs when available
-- Opens an optional on-page composer when you highlight text so you can ask a question about that exact selection
-- Shows handoff status with copy/resend recovery for the last generated prompt
-- Lets you clear or disable saved prompt handoff history
-- Routes content into multiple AI destinations without using an API key directly
-- Confirms provider handoffs and keeps a failed prompt available for copy or retry
+- Popup routing to 13 AI destinations
+- `Ctrl + X + X` page shortcut
+- Accessible floating summarize button
+- Selection composer for focused questions about highlighted text
+- Reusable prompt presets and per-handoff prompt editing
+- Page, selection, PDF, YouTube, and Reddit extraction
+- Copy/resend recovery for recent generated prompts
+- Optional local prompt history with one-click clearing
+- Bounded long-page extraction that preserves the beginning and end
+- Serialized, isolated PDF parsing with vendored PDF.js
+- Expiring local YouTube transcript cache
+- Deterministic unit and unpacked-extension browser tests
 
 ## Screenshots
 
@@ -50,89 +51,126 @@ Cindra Summary is a Chrome extension that sends the current page, selected text,
 - Qwen
 - Cerebras
 
+Provider metadata, match patterns, limits, and storage keys are defined in `lib/providers.js`.
+
 ## Content sources
 
-- Regular webpages
-- Selected text from the current page
-- PDFs with extractable text
-- YouTube videos with transcript extraction
-- Reddit threads and posts
+- **Best Available**: automatically chooses a specialized source when supported
+- **Page Text**: extracts the largest readable page region and removes surrounding controls
+- **Selected Text**: uses the active browser selection
+- **PDF Text**: extracts selectable PDF text or parses the current HTTP(S) PDF with PDF.js
+- **YouTube**: extracts a genuine caption transcript and rejects manual-instruction fallback text
+- **Reddit**: extracts post/comment structure and falls back to readable page text
 
-## Known limitations
-
-- Very long pages may be trimmed in the middle to stay within browser and provider limits; some providers (e.g. Perplexity) have a stricter per-query character limit, in which case the content is trimmed further before the handoff
-- Scanned PDFs need OCR elsewhere before Cindra can summarize their text
-- Provider integrations depend on each site's live DOM, so breakage can happen when those UIs change
-
-## Permissions and local data
-
-Cindra runs its shortcut, floating button, and selection composer on regular webpages, so Chrome asks for access to HTTP and HTTPS sites. That access is also used only after an explicit Cindra action to read the selected page and, for PDFs, download the current document in an isolated extension page.
-
-Prompts and extracted page content are sent only to the AI destination you select. The optional handoff history is stored in `chrome.storage.local`, keeps at most five prompts, and can be disabled or cleared from Settings.
+Very long page captures are limited to 500,000 characters. Cindra preserves the beginning and end and inserts an omission notice. Each destination can apply a stricter final prompt limit.
 
 ## Installation
-
-1. Clone the repository:
 
 ```bash
 git clone https://github.com/feveromo/cindra.git
 cd cindra
+pnpm install
 ```
 
-2. Open `chrome://extensions/`
-3. Enable Developer Mode
-4. Click `Load unpacked`
-5. Select this repository folder
+Then:
+
+1. Open `chrome://extensions/`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked**.
+4. Select the repository directory.
 
 ## Usage
 
-1. Open the extension popup
-2. Pick a destination AI service
-3. Pick or edit a prompt preset
-4. Pick the content source if you want selected text, page text, or PDF text specifically
-5. Click `Summarize Current Page`
+1. Open the popup.
+2. Select an AI destination and content source.
+3. Select a prompt preset and optionally adjust the draft.
+4. Choose **Summarize Current Page**.
 
-You can also use `Ctrl + X + X` on a page, the floating button if it is enabled in settings, or highlight text and use the on-page composer to ask a focused question.
+On supported pages, you can also use `Ctrl + X + X`, the floating button, or highlight text to open the selection composer.
+
+## Privacy and local data
+
+Cindra does not send content to a Cindra-operated server. Extracted content is delivered only to the AI destination selected by the user.
+
+- Workflow preferences and prompt presets use `chrome.storage.sync`.
+- Pending handoffs, status, transcript cache, and optional recent generated prompts use `chrome.storage.local`.
+- Recent prompt history keeps at most five entries and can be disabled or cleared in Settings.
+- YouTube transcript cache entries expire after seven days and are capped at 20 entries.
+- PDF downloads accept only HTTP(S), enforce a 50 MiB limit, validate the PDF signature, and disable PDF.js JavaScript evaluation.
+
+Chrome requests access to HTTP and HTTPS pages because Cindra’s shortcut and optional page controls run there and because explicit summary actions need to read the selected source.
+
+## Known limitations
+
+- Scanned image-only PDFs require OCR before Cindra can summarize their text.
+- Provider automation depends on live destination DOMs and may need maintenance when those sites redesign their composers.
+- Some providers enforce small input limits, so Cindra may trim the final content more aggressively for those destinations.
+- Protected pages and Chrome-internal URLs do not allow normal content-script extraction.
 
 ## Project structure
 
 ```text
 cindra/
-├── background/          # MV3 service worker and routing logic
-├── content_scripts/     # Site-specific integrations and generic page shortcut UI
-│   └── lib/             # Shared injection, provider-runtime, and parser helpers
-├── lib/                 # Shared provider/source registry
-├── images/              # Extension icons
-├── ui/
-│   ├── options/         # Settings page
-│   ├── popup/           # Popup UI
-│   └── theme.js         # Shared CindraTheme helper (FOUC guard + theme apply)
-├── offscreen/           # Isolated PDF text extraction page
-├── tests/               # Node unit tests and deterministic extension fixtures
-├── vendor/              # Pinned PDF.js runtime, assets, version, and license
+├── background/
+│   ├── background.js          # MV3 service-worker wiring and trusted message entry point
+│   ├── orchestrator.js        # normalize → route → extract → format → handoff pipeline
+│   ├── handoffs.js            # destination opening, pending envelopes, status, recovery
+│   ├── pdf.js                 # serialized offscreen and tab PDF extraction
+│   └── transcript-cache.js    # expiring LRU YouTube transcript cache
+├── content_scripts/
+│   ├── *_content.js           # provider, YouTube, and Reddit adapters
+│   └── lib/
+│       ├── inject.js          # shared DOM input/click helpers
+│       ├── provider_runtime.js
+│       ├── page_ui.js         # floating button and selection composer
+│       ├── youtube_ui.js      # lifecycle-managed YouTube transcript control
+│       └── youtube_parser.js
+├── lib/
+│   ├── chrome.js              # Promise wrappers for Chrome APIs
+│   ├── errors.js              # contextual diagnostics and safe user messages
+│   ├── extraction.js          # shared page/selection/PDF DOM extraction
+│   ├── messages.js            # action constants, validation, messaging timeouts
+│   ├── prompt.js
+│   ├── providers.js
+│   └── pdf.js
+├── offscreen/                 # isolated PDF.js document
+├── ui/                        # popup, settings, shared theme and styles
+├── tests/                     # Node unit tests and Playwright extension fixtures
+├── vendor/pdfjs/              # pinned PDF.js runtime and Apache 2.0 license
+├── ARCHITECTURE.md
+├── CHANGELOG.md
 └── manifest.json
 ```
 
-The vendored PDF parser is PDF.js 6.1.200. It is loaded entirely from the extension package, runs with JavaScript evaluation disabled, and is covered by the Apache 2.0 license in `vendor/pdfjs/LICENSE`.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for runtime boundaries, message flow, cache behavior, storage, and handoff details.
 
-## Development checks
-
-Install the test dependencies with `pnpm install`, then run:
+## Development
 
 ```bash
 pnpm check
+pnpm test:unit
+pnpm test:extension
+# or run both suites
 pnpm test
 ```
 
-`pnpm check` validates JavaScript syntax, manifest references, synchronized versions, and removal of development-only probe code. The unit suite covers routing, prompt limits, PDF validation, provider registration, and YouTube response parsing. The Playwright suite loads the unpacked extension against deterministic provider/PDF fixtures; it does not contact or monitor live AI sites.
+- `pnpm check` validates JavaScript syntax, version synchronization, provider registry invariants, and manifest/HTML references.
+- `pnpm test:unit` covers routing, extraction, messages, errors, caches, UI helpers, prompt limits, PDF validation, and YouTube parsing.
+- `pnpm test:extension` loads the unpacked extension against deterministic local fixtures. It does not probe or monitor live AI sites.
 
 ## Adding a provider
 
-1. Add a content script in `content_scripts/`
-2. Register it in `manifest.json`, listing `content_scripts/lib/inject.js` and then `content_scripts/lib/provider_runtime.js` before the provider adapter
-3. Add the provider metadata to `lib/providers.js` (set `maxContentChars` if the destination enforces a per-query limit)
-4. Register the adapter with `globalThis.CindraProviderRuntime` and use the shared `globalThis.CindraInject` helpers (`waitForElement`, `insertTextIntoTextarea`, `robustClick`, `normalizeWhitespace`); keep only site-specific DOM insertion logic in the adapter
+1. Add provider metadata to `lib/providers.js`, including `contentScript.matches`, `contentScript.file`, target URL, storage keys, and any content limit.
+2. Add one manifest block that loads, in order:
+   - `lib/errors.js`
+   - `lib/chrome.js`
+   - `lib/messages.js`
+   - `content_scripts/lib/inject.js`
+   - `content_scripts/lib/provider_runtime.js`
+   - the provider adapter
+3. Implement only destination-specific input/submit behavior in `content_scripts/<provider>_content.js` and register it with `CindraProviderRuntime.registerAdapter()`.
+4. Add deterministic unit or Playwright coverage and run all validation commands.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [`LICENSE`](LICENSE). Vendored PDF.js licensing is retained in `vendor/pdfjs/LICENSE`.

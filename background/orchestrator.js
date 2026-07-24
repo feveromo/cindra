@@ -272,12 +272,15 @@
         return this.extractPageResult(tab, 'page');
       }
 
-      if (!response?.success) {
-        throw createUserError(response?.error || 'Could not extract content from Reddit page.');
-      }
-      const content = this.normalizeText(response.content);
-      if (!content) {
-        throw createUserError('No content found on the Reddit page to summarize.');
+      const content = this.normalizeText(response?.content);
+      if (!response?.success || !content) {
+        this.setStatus('working', 'Reddit content was unavailable; using page text...', {
+          model: config.aiModel,
+          title: tab.title,
+          url: tab.url,
+          sourceType: 'page'
+        });
+        return this.extractPageResult(tab, 'page');
       }
 
       return {
@@ -355,7 +358,12 @@
         throw createUserError('No transcript found for this YouTube video.');
       }
 
-      await this.transcriptCache.set(videoId, transcriptData);
+      const cacheable = await this.transcriptCache.set(videoId, transcriptData);
+      if (cacheable === false) {
+        const message = 'Could not extract a usable transcript. This video may not have captions available.';
+        await this.sendTranscriptStatus(tab.id, message, false);
+        throw createUserError(message);
+      }
       await this.sendTranscriptStatus(tab.id, 'Transcript extracted. Sending to AI...', true);
       this.schedule(() => {
         this.sendTranscriptStatus(tab.id, 'Transcript queued for AI.', false);

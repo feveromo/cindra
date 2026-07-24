@@ -346,6 +346,14 @@ textarea {
   resize: vertical;
 }
 
+.prompt-selector-wrap {
+  margin-bottom: 12px;
+}
+
+.prompt-draft-label {
+  margin-top: 2px;
+}
+
 select {
   appearance: none;
   padding-right: 34px;
@@ -574,6 +582,14 @@ input[type="text"]:focus {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--hairline-strong);
 }
 
+.primary-btn:disabled,
+.secondary-btn:disabled,
+#options-btn:disabled,
+.icon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* ---------- Shortcut keycaps ---------- */
 .shortcut-hint {
   display: inline-flex;
@@ -620,6 +636,16 @@ input[type="text"]:focus {
 }
 
 /* ---------- Responsive ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
+
 @media (max-width: 640px) {
   .container {
     padding: 14px;

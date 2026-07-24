@@ -5,6 +5,14 @@
     return;
   }
 
+  const errors = root.CindraErrors;
+  const chromeApi = root.CindraChrome;
+  const messages = root.CindraMessages;
+  if (!errors || !chromeApi || !messages) {
+    console.error('[Cindra] Provider runtime dependencies are unavailable.');
+    return;
+  }
+  const ACTIONS = messages.ACTIONS;
   const DEFAULT_TTL_MS = 2 * 60 * 1000;
   const MAX_COMPLETED_HANDOFFS = 50;
   const registrations = new Map();
@@ -17,19 +25,18 @@
   }
 
   function normalizeError(error) {
-    return error?.message || String(error || 'Provider handoff failed.');
+    return errors.debugMessage(error, 'Provider handoff failed.');
   }
 
   function contextualError(providerId, stage, error) {
-    const cause = error instanceof Error ? error : new Error(normalizeError(error));
-    const message = `${providerId}: ${stage} failed. ${cause.message}`;
-    try {
-      return new Error(message, { cause });
-    } catch (unsupportedError) {
-      const contextual = new Error(message);
-      contextual.cause = cause;
-      return contextual;
-    }
+    const cause = errors.toError(error, 'Provider handoff failed.');
+    const contextual = errors.wrap(
+      `${providerId}: ${stage} failed`,
+      cause,
+      `${providerId} could not complete the ${stage} stage.`
+    );
+    contextual.message = `${providerId}: ${stage} failed. ${cause.message}`;
+    return contextual;
   }
 
   function isFresh(handoff, ttlMs) {
@@ -49,28 +56,12 @@
   }
 
   function storageGet(keys) {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.get(keys, (result) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        resolve(result || {});
-      });
-    });
+    return chromeApi.storageGet(root.chrome.storage.local, keys);
   }
 
   function storageRemove(keys) {
     if (!keys.length) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.remove(keys, () => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        resolve();
-      });
-    });
+    return chromeApi.storageRemove(root.chrome.storage.local, keys);
   }
 
   async function clearMatchingHandoff(config, handoff) {
@@ -85,20 +76,25 @@
     await storageRemove(keys);
   }
 
-  function reportResult(config, handoff, ok, error = null) {
+  async function reportResult(config, handoff, ok, error = null) {
     try {
-      chrome.runtime.sendMessage({
-        action: 'providerHandoffResult',
+      await messages.runtimeSendMessage({
+        action: ACTIONS.PROVIDER_HANDOFF_RESULT,
         handoffId: handoff.id,
         summaryId: handoff.summaryId || null,
         providerId: config.providerId,
         ok,
         error: error ? normalizeError(error) : null
-      }, () => {
-        void chrome.runtime.lastError;
+      }, {
+        context: `report ${config.providerId} handoff result`,
+        timeoutMs: 5000
       });
     } catch (reportError) {
-      // A hot-reloaded extension can invalidate this content-script context.
+      // Prompt submission already finished. A stale or reloaded extension
+      // context must not turn a successful provider action into a retry loop.
+      if (!/Extension context invalidated/i.test(reportError?.message || '')) {
+        errors.logError(`Could not report ${config.providerId} handoff result`, reportError);
+      }
     }
   }
 
@@ -107,19 +103,14 @@
       return Promise.resolve({ success: true, claimed: true });
     }
 
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({
-        action: 'claimProviderHandoff',
-        providerId: config.providerId,
-        handoffId: handoff.id
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        resolve(response || { success: false, claimed: false });
-      });
-    });
+    return messages.runtimeSendMessage({
+      action: ACTIONS.CLAIM_PROVIDER_HANDOFF,
+      providerId: config.providerId,
+      handoffId: handoff.id
+    }, {
+      context: `claim ${config.providerId} handoff`,
+      timeoutMs: 5000
+    }).then(response => response || { success: false, claimed: false });
   }
 
   async function processHandoff(config, handoff) {
@@ -159,10 +150,10 @@
       }
       completed.add(handoff.id);
       await clearMatchingHandoff(config, handoff);
-      reportResult(config, handoff, true);
+      await reportResult(config, handoff, true);
       return { success: true, handoffId: handoff.id };
     } catch (error) {
-      reportResult(config, handoff, false, error);
+      await reportResult(config, handoff, false, error);
       throw error;
     } finally {
       if (inFlight.get(config.providerId) === handoff.id) {
@@ -194,8 +185,15 @@
     if (messageListenerInstalled) return;
     messageListenerInstalled = true;
 
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (message?.action !== 'insertPrompt') return false;
+    root.chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message?.action !== ACTIONS.INSERT_PROMPT) return false;
+
+      const respond = messages.respondOnce(sendResponse);
+      const validation = messages.validateMessage(message, [ACTIONS.INSERT_PROMPT]);
+      if (!validation.ok) {
+        respond({ success: false, error: validation.error });
+        return false;
+      }
 
       const requestedProvider = message.handoff?.providerId;
       const config = requestedProvider
@@ -204,13 +202,13 @@
       const handoff = config ? handoffFromMessage(config, message) : null;
 
       if (!config || !handoff) {
-        sendResponse({ success: false, error: 'No matching provider adapter is registered.' });
+        respond({ success: false, error: 'No matching provider adapter is registered.' });
         return false;
       }
 
       processHandoff(config, handoff)
-        .then(sendResponse)
-        .catch(error => sendResponse({
+        .then(respond)
+        .catch(error => respond({
           success: false,
           handoffId: handoff.id,
           error: normalizeError(error)
@@ -260,7 +258,7 @@
       if (!handoff) return { success: false, empty: true };
       return await processHandoff(config, handoff);
     } catch (error) {
-      console.error(`Cindra ${providerId} pending handoff failed:`, error);
+      errors.logError(`${providerId} pending handoff failed`, error);
       return { success: false, error: normalizeError(error) };
     }
   }

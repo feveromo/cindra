@@ -74,11 +74,14 @@ function fixtureHtml(body) {
     <html><body>${body}
       <script>
         window.__submitted = 0;
+        window.__submittedPrompt = '';
         window.__modelClicks = 0;
         document.querySelectorAll('[data-submit]').forEach(element => {
           element.addEventListener('click', event => {
             event.preventDefault();
             window.__submitted += 1;
+            const input = document.querySelector('textarea:not(.g-recaptcha-response), [contenteditable="true"]');
+            window.__submittedPrompt = input?.value || input?.textContent || '';
           });
         });
         document.querySelectorAll('[data-model]').forEach(element => {
@@ -137,6 +140,38 @@ test('all provider adapters acknowledge a completed fixture handoff', async () =
       expect(pending[`cindraPendingHandoff:${provider.id}`], `${provider.id} pending storage`).toBeUndefined();
       await page.close();
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test('Cerebras submits the exact bounded prompt instead of the rejected original', async () => {
+  const { context, serviceWorker } = await launchExtensionContext();
+  try {
+    const provider = providers.find(item => item.id === 'cerebras');
+    const page = await context.newPage();
+    await page.route(`${new URL(provider.url).origin}/**`, route => route.fulfill({
+      contentType: 'text/html',
+      body: fixtureHtml(provider.body)
+    }));
+    await page.goto(provider.url);
+
+    const prompt = `${'A'.repeat(16000)}MIDDLE${'Z'.repeat(12000)}`;
+    const response = await deliverHandoff(
+      serviceWorker,
+      provider.url,
+      provider.id,
+      prompt,
+      'bounded'
+    );
+    expect(response).toMatchObject({ success: true });
+    await expect.poll(() => page.evaluate(() => window.__submitted)).toBe(1);
+
+    const submittedPrompt = await page.evaluate(() => window.__submittedPrompt);
+    expect(submittedPrompt).toHaveLength(18000);
+    expect(submittedPrompt).toMatch(/^A+/);
+    expect(submittedPrompt).toMatch(/characters were omitted from the middle/);
+    expect(submittedPrompt).toMatch(/Z+$/);
   } finally {
     await context.close();
   }

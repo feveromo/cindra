@@ -7,21 +7,13 @@ const packageJson = require('../../package.json');
 const providers = require('../../lib/providers.js');
 
 const root = path.join(__dirname, '..', '..');
-const providerScripts = {
-  'google-ai-studio': 'ai_studio_content.js',
-  gemini: 'gemini_content.js',
-  perplexity: 'perplexity_content.js',
-  grok: 'grok_content.js',
-  claude: 'claude_content.js',
-  chatgpt: 'chatgpt_content.js',
-  'google-learning': 'google_learning_content.js',
-  deepseek: 'deepseek_content.js',
-  glm: 'glm_content.js',
-  kimi: 'kimi_content.js',
-  huggingchat: 'huggingchat_content.js',
-  qwen: 'qwen_content.js',
-  cerebras: 'cerebras_content.js'
-};
+const providerRuntimePrefix = [
+  'lib/errors.js',
+  'lib/chrome.js',
+  'lib/messages.js',
+  'content_scripts/lib/inject.js',
+  'content_scripts/lib/provider_runtime.js'
+];
 
 test('manifest and package versions stay synchronized', () => {
   assert.equal(manifest.version, packageJson.version);
@@ -30,15 +22,14 @@ test('manifest and package versions stay synchronized', () => {
 
 test('every provider has one runtime-backed manifest adapter', () => {
   assert.equal(providers.providers.length, 13);
+  assert.deepEqual(providers.validateRegistry(), []);
+
   for (const provider of providers.providers) {
-    const expected = `content_scripts/${providerScripts[provider.id]}`;
+    const expected = provider.contentScript.file;
     const blocks = manifest.content_scripts.filter(block => block.js?.includes(expected));
     assert.equal(blocks.length, 1, `${provider.id} adapter block`);
-    assert.deepEqual(blocks[0].js.slice(-3), [
-      'content_scripts/lib/inject.js',
-      'content_scripts/lib/provider_runtime.js',
-      expected
-    ]);
+    assert.deepEqual(blocks[0].matches, provider.contentScript.matches);
+    assert.deepEqual(blocks[0].js, [...providerRuntimePrefix, expected]);
   }
 });
 
@@ -81,6 +72,7 @@ test('shared extraction and message helpers load before the main content script'
     'lib/extraction.js',
     'lib/providers.js',
     'content_scripts/lib/inject.js',
+    'content_scripts/lib/page_ui.js',
     'content_scripts/content.js'
   ]);
 

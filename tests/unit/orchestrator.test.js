@@ -129,6 +129,22 @@ test('Reddit helper delivery failures fall back to shared page extraction', asyn
   assert.match(calls.handoffs[0][2], /page content/);
 });
 
+test('empty Reddit helper responses fall back to page extraction', async () => {
+  const { calls, orchestrator } = createHarness({
+    extractReddit: async () => ({ success: false, error: 'No Reddit post or comments were found.' })
+  });
+
+  const result = await orchestrator.run({
+    id: 6,
+    title: 'Thread',
+    url: 'https://www.reddit.com/r/test/comments/abc/thread/'
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(calls.handoffs[0][7], 'page');
+  assert.match(calls.handoffs[0][2], /page content/);
+});
+
 test('cached YouTube transcripts bypass live extraction', async () => {
   let liveExtractions = 0;
   const { calls, orchestrator } = createHarness({
@@ -158,6 +174,31 @@ test('cached YouTube transcripts bypass live extraction', async () => {
   assert.equal(liveExtractions, 0);
   assert.equal(calls.handoffs[0][2], 'Transcript: cached text');
   assert.equal(calls.handoffs[0][7], 'youtube-transcript');
+});
+
+test('non-transcript YouTube fallback text is rejected before handoff', async () => {
+  const { calls, orchestrator } = createHarness({
+    extractTranscript: async () => ({
+      success: true,
+      transcript: 'Could not extract transcript automatically. To access it manually, open YouTube captions.'
+    }),
+    transcriptCache: {
+      get: async () => null,
+      set: async () => false
+    }
+  });
+
+  const result = await orchestrator.run({
+    id: 5,
+    title: 'Captionless video - YouTube',
+    url: 'https://www.youtube.com/watch?v=abc123'
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(calls.handoffs.length, 0);
+  assert.deepEqual(calls.errors, [
+    'Could not extract a usable transcript. This video may not have captions available.'
+  ]);
 });
 
 test('empty captured pages produce one user-facing error and no handoff', async () => {

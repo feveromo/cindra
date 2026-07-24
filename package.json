@@ -1,6 +1,6 @@
 {
   "name": "cindra",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Chrome extension that routes page content to AI chat destinations for summarization.",
   "scripts": {

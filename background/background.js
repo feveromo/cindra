@@ -38,6 +38,7 @@ const PDF_SHORTCUT_SCRIPT_FILES = [
   'lib/extraction.js',
   'lib/providers.js',
   'content_scripts/lib/inject.js',
+  'content_scripts/lib/page_ui.js',
   'content_scripts/content.js'
 ];
 

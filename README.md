@@ -39,20 +39,20 @@ Cindra Summary is a Manifest V3 Chrome extension that extracts the current page,
 ## Supported destinations
 
 - Google AI Studio
+- Meta AI Playground (Muse Spark 1.2 Contributor)
 - Gemini
 - Perplexity
 - Grok
 - Claude
 - ChatGPT
 - Google Learning
-- DeepSeek
 - GLM (Z.AI)
 - Kimi
 - HuggingChat
 - Qwen
 - Cerebras
 
-Provider metadata, match patterns, limits, and storage keys are defined in `lib/providers.js`.
+Provider metadata, match patterns, limits, and storage keys are defined in `lib/providers.js`. Meta AI Playground uses the authenticated web UI and selects Muse Spark 1.2 Contributor for each handoff.
 
 ## Content sources
 

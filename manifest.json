@@ -63,6 +63,19 @@
     },
     {
       "matches": [
+        "https://dev.meta.ai/playground/chat/*"
+      ],
+      "js": [
+        "lib/errors.js",
+        "lib/chrome.js",
+        "lib/messages.js",
+        "content_scripts/lib/inject.js",
+        "content_scripts/lib/provider_runtime.js",
+        "content_scripts/meta_playground_content.js"
+      ]
+    },
+    {
+      "matches": [
         "*://*.perplexity.ai/*"
       ],
       "js": [
@@ -163,19 +176,6 @@
         "content_scripts/lib/inject.js",
         "content_scripts/lib/provider_runtime.js",
         "content_scripts/google_learning_content.js"
-      ]
-    },
-    {
-      "matches": [
-        "https://chat.deepseek.com/*"
-      ],
-      "js": [
-        "lib/errors.js",
-        "lib/chrome.js",
-        "lib/messages.js",
-        "content_scripts/lib/inject.js",
-        "content_scripts/lib/provider_runtime.js",
-        "content_scripts/deepseek_content.js"
       ]
     },
     {

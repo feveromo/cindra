@@ -2,6 +2,16 @@
 
 All notable changes to Cindra are documented here.
 
+## Unreleased
+
+### Added
+
+- Added Meta AI Playground as a web-UI destination, defaulting each handoff to Muse Spark 1.2 Contributor.
+
+### Removed
+
+- Removed the DeepSeek destination and its adapter.
+
 ## 1.4.0 - 2026-07-24
 
 ### Added

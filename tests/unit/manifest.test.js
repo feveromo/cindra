@@ -62,6 +62,20 @@ test('provider pending storage keys are unique and namespaced', () => {
   assert.ok(keys.every(key => key.startsWith('cindraPendingHandoff:')));
 });
 
+test('Meta Playground defaults to Muse Spark 1.2 Contributor', () => {
+  const provider = providers.getProvider('meta-playground');
+  const block = manifest.content_scripts.find(item =>
+    item.js?.includes('content_scripts/meta_playground_content.js'));
+
+  assert.equal(provider.label, 'Meta AI Playground');
+  assert.equal(
+    provider.targetUrl,
+    'https://dev.meta.ai/playground/chat/?model_id=muse-spark-1.2-contributor'
+  );
+  assert.doesNotMatch(provider.targetUrl, /(?:project_id|team_id)=/);
+  assert.deepEqual(block.matches, ['https://dev.meta.ai/playground/chat/*']);
+});
+
 test('Cerebras uses the public chat site only', () => {
   const provider = providers.getProvider('cerebras');
   const block = manifest.content_scripts.find(item =>

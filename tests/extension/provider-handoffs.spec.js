@@ -8,6 +8,11 @@ const providers = [
     body: '<textarea formcontrolname="promptText"></textarea><ms-run-button><button type="submit" data-submit>Run</button></ms-run-button>'
   },
   {
+    id: 'meta-playground',
+    url: 'https://dev.meta.ai/playground/chat/fixture',
+    body: '<div><span>Model</span><div role="combobox" aria-controls="meta-models">muse-spark-1.1</div><div id="meta-models" role="listbox" aria-label="Select a model" hidden><div role="option" data-model-option>muse-spark-1.2-contributor</div><div role="option">muse-spark-1.1</div></div></div><textarea aria-label="Message" placeholder="Ask Meta…"></textarea><button aria-label="Send" data-submit>Send</button>'
+  },
+  {
     id: 'gemini',
     url: 'https://gemini.google.com/app/fixture',
     body: '<div class="ql-editor" contenteditable="true" aria-label="Enter a prompt here"></div><button class="send-button" aria-label="Send message" data-submit>Send</button>'
@@ -36,11 +41,6 @@ const providers = [
     id: 'google-learning',
     url: 'https://learning.google.com/experiments/learn-about/fixture',
     body: '<textarea placeholder="Ask Learn About"></textarea><span style="font-family: Google Symbols; cursor: pointer" data-submit>send</span>'
-  },
-  {
-    id: 'deepseek',
-    url: 'https://chat.deepseek.com/fixture',
-    body: '<textarea placeholder="Message DeepSeek"></textarea><div class="bf38813a"><div role="button" class="ds-button--primary ds-button--circle" data-submit>Send</div></div>'
   },
   {
     id: 'glm',
@@ -86,6 +86,13 @@ function fixtureHtml(body) {
         });
         document.querySelectorAll('[data-model]').forEach(element => {
           element.addEventListener('click', () => { window.__modelClicks += 1; });
+        });
+        const metaModel = document.querySelector('[role="combobox"][aria-controls="meta-models"]');
+        const metaModels = document.getElementById('meta-models');
+        metaModel?.addEventListener('click', () => { metaModels.hidden = false; });
+        document.querySelector('[data-model-option]')?.addEventListener('click', event => {
+          metaModel.textContent = event.currentTarget.textContent;
+          metaModels.hidden = true;
         });
       </script>
     </body></html>`;
@@ -133,6 +140,10 @@ test('all provider adapters acknowledge a completed fixture handoff', async () =
 
       if (provider.id === 'qwen' || provider.id === 'glm') {
         expect(await page.evaluate(() => window.__modelClicks), `${provider.id} model`).toBe(0);
+      }
+      if (provider.id === 'meta-playground') {
+        await expect(page.locator('[role="combobox"]'))
+          .toHaveText('muse-spark-1.2-contributor');
       }
 
       const pending = await serviceWorker.evaluate(providerId =>
@@ -243,17 +254,17 @@ test('two provider tabs cannot submit the same queued handoff', async () => {
 test('adapter failures retain the pending handoff for recovery', async () => {
   const { context, serviceWorker } = await launchExtensionContext();
   try {
-    const provider = providers.find(item => item.id === 'deepseek');
+    const provider = providers.find(item => item.id === 'meta-playground');
     const page = await context.newPage();
     await page.route(`${new URL(provider.url).origin}/**`, route => route.fulfill({
       contentType: 'text/html',
-      body: fixtureHtml('<textarea placeholder="Message DeepSeek"></textarea>')
+      body: fixtureHtml('<div><span>Model</span><div role="combobox" aria-controls="meta-models">muse-spark-1.1</div><div id="meta-models" role="listbox" aria-label="Select a model" hidden><div role="option" data-model-option>muse-spark-1.2-contributor</div><div role="option">muse-spark-1.1</div></div></div><textarea aria-label="Message" placeholder="Ask Meta…"></textarea>')
     }));
     await page.goto(provider.url);
 
     const response = await deliverHandoff(serviceWorker, provider.url, provider.id, 'Retain me', 'failure');
     expect(response.success).toBe(false);
-    expect(response.error).toMatch(/Timeout waiting for DeepSeek submit control/);
+    expect(response.error).toMatch(/Timeout waiting for Meta AI Playground submit control/);
 
     const pending = await serviceWorker.evaluate(providerId =>
       chrome.storage.local.get([`cindraPendingHandoff:${providerId}`]), provider.id);
@@ -315,6 +326,8 @@ test('popup renders every provider and persists its source selection', async () 
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId(serviceWorker)}/ui/popup/popup.html`);
     await expect(page.locator('#ai-model option')).toHaveCount(13);
+    await expect(page.locator('#ai-model option[value="meta-playground"]'))
+      .toHaveText('Meta AI Playground');
     await expect(page.locator('#content-source option')).toHaveCount(4);
     await page.selectOption('#content-source', 'selection');
     await expect.poll(() => serviceWorker.evaluate(() =>

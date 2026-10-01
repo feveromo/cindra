@@ -17,13 +17,16 @@
 
   const COMPOSER_STYLES = `
     :host {
-      --cindra-bg: #0d0d0d;
-      --cindra-bg-subtle: #101111;
-      --cindra-border: #242728;
-      --cindra-border-hover: rgba(255, 255, 255, 0.16);
-      --cindra-text: #f4f4f6;
-      --cindra-text-muted: #9c9c9d;
-      --cindra-input-bg: rgba(255, 255, 255, 0.05);
+      --cindra-bg: #1b1917;
+      --cindra-bg-subtle: #231f1c;
+      --cindra-border: #34302c;
+      --cindra-border-hover: rgba(255, 238, 222, 0.2);
+      --cindra-text: #f3eee9;
+      --cindra-text-muted: #9d948c;
+      --cindra-input-bg: #231f1c;
+      --cindra-ember: #ff5b1f;
+      --cindra-flare: #ffae3d;
+      --cindra-divider: rgba(255, 238, 222, 0.07);
       all: initial;
       position: fixed;
       z-index: 2147483647;
@@ -39,9 +42,9 @@
     .cindra-composer {
       overflow: hidden;
       border: 1px solid var(--cindra-border);
-      border-radius: 10px;
+      border-radius: 12px;
       background: var(--cindra-bg);
-      color: #cdcdcd;
+      color: #d4ccc5;
       box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
     }
 
@@ -56,7 +59,7 @@
       padding: 10px 12px;
     }
 
-    .cindra-composer__header { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+    .cindra-composer__header { border-bottom: 1px solid var(--cindra-divider); }
     .cindra-composer__heading { min-width: 0; }
     .cindra-composer__title { color: var(--cindra-text); font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
     .cindra-composer__meta { margin-top: 2px; color: var(--cindra-text-muted); font-size: 12px; line-height: 1.4; }
@@ -66,8 +69,8 @@
       width: 100%;
       min-height: 92px;
       resize: vertical;
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
+      border: 1px solid var(--cindra-border);
+      border-radius: 9px;
       outline: none;
       background: var(--cindra-input-bg);
       color: var(--cindra-text);
@@ -78,51 +81,50 @@
       letter-spacing: 0.2px;
     }
 
-    .cindra-composer__question::placeholder { color: #6a6b6c; }
-    .cindra-composer__question:focus-visible { border-color: var(--cindra-border-hover); box-shadow: 0 0 0 1px var(--cindra-border-hover); }
-    .cindra-composer__actions { border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 0; }
+    .cindra-composer__question::placeholder { color: #6f6761; }
+    .cindra-composer__question:focus-visible { border-color: var(--cindra-ember); box-shadow: 0 0 0 3px rgba(255, 91, 31, 0.16); }
+    .cindra-composer__actions { border-top: 1px solid var(--cindra-divider); }
 
     .cindra-composer__button {
       min-height: 36px;
       border: 1px solid transparent;
-      border-radius: 8px;
+      border-radius: 9px;
       padding: 0 14px;
       font: inherit;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       letter-spacing: -0.005em;
       cursor: pointer;
     }
 
-    .cindra-composer__button:focus-visible { outline: 2px solid #5d9bff; outline-offset: 2px; }
+    .cindra-composer__button:focus-visible { outline: 2px solid var(--cindra-ember); outline-offset: 2px; }
     .cindra-composer__button:disabled { cursor: progress; opacity: 0.6; }
     .cindra-composer__button--close { width: 30px; height: 30px; min-height: 30px; border-color: var(--cindra-border); background: var(--cindra-bg-subtle); color: var(--cindra-text-muted); padding: 0; font-size: 18px; line-height: 1; }
     .cindra-composer__button--secondary { border-color: var(--cindra-border); background: transparent; color: var(--cindra-text); }
-    .cindra-composer__button--primary { background: #ffffff; color: #000000; }
+    .cindra-composer__button--primary { background: linear-gradient(100deg, var(--cindra-ember) 45%, var(--cindra-flare) 130%); color: #1c0c04; }
     .cindra-composer__button--close:hover,
     .cindra-composer__button--secondary:hover { border-color: var(--cindra-border-hover); color: var(--cindra-text); }
-    .cindra-composer__button--secondary:hover { background: #121212; }
-    .cindra-composer__button--primary:hover { background: #e8e8e8; }
+    .cindra-composer__button--secondary:hover { background: #2c2825; }
+    .cindra-composer__button--primary:hover { background: linear-gradient(100deg, var(--cindra-ember), var(--cindra-flare) 95%); }
     .cindra-composer__status { min-height: 28px; padding: 0 12px 10px; color: var(--cindra-text-muted); font-size: 12px; line-height: 1.4; }
+    .cindra-composer__status:empty { min-height: 0; padding: 0; }
 
     @media (prefers-color-scheme: light) {
       :host {
         --cindra-bg: #ffffff;
-        --cindra-bg-subtle: #f1f1f2;
-        --cindra-border: rgba(0, 0, 0, 0.12);
-        --cindra-border-hover: rgba(0, 0, 0, 0.2);
-        --cindra-text: #0a0a0a;
-        --cindra-text-muted: #6b6b6e;
-        --cindra-input-bg: rgba(0, 0, 0, 0.04);
+        --cindra-bg-subtle: #f2f0ed;
+        --cindra-border: #e2ded9;
+        --cindra-border-hover: rgba(40, 24, 10, 0.22);
+        --cindra-text: #1c1814;
+        --cindra-text-muted: #6d655e;
+        --cindra-input-bg: #f2f0ed;
+        --cindra-ember: #ec4d12;
+        --cindra-flare: #f7a128;
+        --cindra-divider: rgba(40, 24, 10, 0.07);
       }
-      .cindra-composer { color: #3a3a3c; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12); }
-      .cindra-composer__header,
-      .cindra-composer__actions { border-color: rgba(0, 0, 0, 0.06); }
-      .cindra-composer__question { border-color: rgba(0, 0, 0, 0.06); }
-      .cindra-composer__question::placeholder { color: #9a9a9d; }
-      .cindra-composer__button--secondary:hover { background: #e9e9ea; }
-      .cindra-composer__button--primary { background: #0a0a0a; color: #ffffff; }
-      .cindra-composer__button--primary:hover { background: #2a2a2c; }
+      .cindra-composer { color: #3d3732; box-shadow: 0 18px 40px rgba(40, 24, 10, 0.14); }
+      .cindra-composer__question::placeholder { color: #9c948c; }
+      .cindra-composer__button--secondary:hover { background: #e9e6e2; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -132,7 +134,7 @@
 
   const HIGHLIGHT_STYLES = `
     :host { all: initial; position: fixed; inset: 0; z-index: 2147483646; pointer-events: none; overflow: hidden; }
-    .cindra-highlight { position: fixed; background: rgba(47, 117, 255, 0.28); border-radius: 2px; }
+    .cindra-highlight { position: fixed; background: rgba(255, 122, 48, 0.26); border-radius: 2px; }
   `;
 
   const FLOATING_BUTTON_STYLES = `
@@ -152,17 +154,17 @@
       width: 42px;
       height: 42px;
       place-items: center;
-      border: 1px solid rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(255, 238, 222, 0.12);
       border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      background: #1b1917;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
       cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .cindra-launcher__button:hover,
-    .cindra-launcher__button:focus-visible { transform: scale(1.08); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28); }
+    .cindra-launcher__button:focus-visible { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(255, 91, 31, 0.28), 0 6px 18px rgba(0, 0, 0, 0.32); }
     .cindra-launcher__button:focus-visible,
-    .cindra-launcher__close:focus-visible { outline: 2px solid #2f75ff; outline-offset: 2px; }
+    .cindra-launcher__close:focus-visible { outline: 2px solid #ff5b1f; outline-offset: 2px; }
     .cindra-launcher__icon { display: block; width: 24px; height: 24px; transform: translateY(-1px); }
     .cindra-launcher__close {
       position: absolute;
@@ -174,8 +176,8 @@
       place-items: center;
       border: 0;
       border-radius: 50%;
-      background: #202124;
-      color: #ffffff;
+      background: #1b1917;
+      color: #f3eee9;
       cursor: pointer;
       font: 700 14px/1 system-ui, sans-serif;
       opacity: 0;
@@ -183,14 +185,14 @@
     }
     .cindra-launcher:hover .cindra-launcher__close,
     .cindra-launcher:focus-within .cindra-launcher__close { opacity: 1; }
-    .cindra-launcher__close:hover { background: #3c4043; }
+    .cindra-launcher__close:hover { background: #2c2825; }
     .cindra-launcher__tooltip {
       position: absolute;
       right: 6px;
       bottom: calc(100% + 8px);
-      border-radius: 4px;
-      background: #202124;
-      color: #ffffff;
+      border-radius: 6px;
+      background: #1b1917;
+      color: #f3eee9;
       padding: 8px 12px;
       font-size: 12px;
       line-height: 1.2;

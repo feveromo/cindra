@@ -9,16 +9,15 @@
   <link rel="stylesheet" href="error.css">
 </head>
 <body class="error-body">
-  <main class="error-shell" aria-labelledby="error-title">
-    <section class="error-card" role="alert" aria-describedby="error-message">
-      <div class="error-card__mark" aria-hidden="true">!</div>
-      <div class="error-card__copy">
-        <span class="eyebrow">Handoff interrupted</span>
-        <h1 id="error-title">Cindra could not finish</h1>
-        <p id="error-message">Cindra could not complete that request.</p>
-      </div>
+  <main class="error-card" role="alert" aria-labelledby="error-title" aria-describedby="error-message">
+    <div class="error-card__mark" aria-hidden="true"><img src="/images/icon48.png" alt=""></div>
+    <span class="eyebrow">Handoff interrupted</span>
+    <h1 id="error-title">Cindra couldn’t finish</h1>
+    <p id="error-message">Cindra could not complete that request.</p>
+    <div class="error-card__foot">
+      <span>Press Esc to close</span>
       <button id="close-button" class="primary-btn" type="button">Close Tab</button>
-    </section>
+    </div>
   </main>
   <script src="../../lib/errors.js"></script>
   <script src="error.js"></script>

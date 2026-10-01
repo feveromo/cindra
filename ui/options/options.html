@@ -8,66 +8,82 @@
   <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="options.css">
 </head>
-<body>
-  <main class="container" aria-labelledby="page-title">
-    <header class="header">
-      <div class="brand-mark" aria-hidden="true">
-        <img src="/images/icon48.png" alt="" class="logo">
+<body class="options-body">
+  <main class="settings" aria-labelledby="page-title">
+    <header class="settings-masthead">
+      <div class="brand">
+        <img src="/images/icon48.png" alt="" class="brand__mark">
+        <span class="wordmark" aria-hidden="true">Cindra</span>
+        <span class="version-pill" id="version-pill" aria-label="Extension version"></span>
       </div>
-      <div class="header-copy">
-        <span class="eyebrow">Control Center</span>
-        <h1 id="page-title">Cindra Summary Settings</h1>
-        <p class="header-description">Configure handoffs, on-page controls, privacy, and reusable prompts.</p>
-      </div>
-      <span class="version" id="version-pill" aria-label="Extension version"></span>
+      <h1 id="page-title">Settings</h1>
+      <p class="settings-lede">Defaults for where pages go, what gets sent, and how Cindra behaves on the page.</p>
     </header>
 
-    <section class="intro-grid" aria-label="Settings overview">
-      <div class="intro-card">
-        <span class="field-label">Workflow</span>
-        <h2>One set of defaults, every page</h2>
-        <p class="section-description">Choose a destination and source, then override either one from the popup when needed.</p>
-      </div>
-      <div class="intro-card intro-card-accent">
-        <span class="field-label">Keyboard Shortcut</span>
-        <div class="shortcut-row" aria-label="Control X X">
-          <kbd class="key">Ctrl</kbd><span aria-hidden="true">+</span>
-          <kbd class="key">X</kbd><span aria-hidden="true">+</span>
-          <kbd class="key">X</kbd>
-        </div>
-        <p class="section-description">Trigger Cindra from a supported page without opening the popup.</p>
-      </div>
-    </section>
-
-    <div class="settings-container">
-      <section class="settings-section" aria-labelledby="general-heading">
-        <div class="section-heading">
-          <h2 id="general-heading">General Settings</h2>
-          <p class="section-description">Control routing, appearance, page tools, and local handoff history.</p>
-        </div>
-
+    <section class="settings-group" aria-labelledby="routing-heading">
+      <h2 id="routing-heading" class="group-title">Routing</h2>
+      <div class="settings-card">
         <div class="setting-item">
           <div class="setting-copy">
-            <label class="setting-label" for="ai-model">AI Model</label>
-            <p class="setting-description">The service that receives new summaries by default.</p>
+            <label class="setting-label" for="ai-model">AI model</label>
+            <p class="setting-description">Where new summaries open by default.</p>
           </div>
-          <div class="setting-controls setting-controls-stack">
+          <div class="setting-controls">
             <div class="select-wrap provider-select-wrap"><select id="ai-model"></select></div>
           </div>
         </div>
-
         <div class="setting-item">
           <div class="setting-copy">
-            <span class="setting-label" id="source-label">Default Source</span>
-            <p class="setting-description">The content source used by the popup and shortcut.</p>
+            <span class="setting-label" id="source-label">Default source</span>
+            <p class="setting-description">What the popup and shortcut send unless you pick something else.</p>
           </div>
           <div class="setting-controls segmented-control" id="content-source-options" role="radiogroup" aria-labelledby="source-label"></div>
         </div>
+      </div>
+    </section>
 
+    <section class="settings-group" aria-labelledby="page-heading">
+      <h2 id="page-heading" class="group-title">On the page</h2>
+      <div class="settings-card">
+        <div class="setting-item">
+          <div class="setting-copy">
+            <span class="setting-label" id="floating-label">Floating summary button</span>
+            <p class="setting-description">A keyboard-accessible button in the corner of supported sites.</p>
+          </div>
+          <div class="setting-controls segmented-control" role="radiogroup" aria-labelledby="floating-label">
+            <label class="radio-container"><input type="radio" name="floating-button" value="visible"><span class="radio-label">Visible</span></label>
+            <label class="radio-container"><input type="radio" name="floating-button" value="hidden"><span class="radio-label">Hidden</span></label>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-copy">
+            <span class="setting-label" id="composer-label">Selection composer</span>
+            <p class="setting-description">Ask about highlighted text in a small window next to the selection.</p>
+          </div>
+          <div class="setting-controls segmented-control" role="radiogroup" aria-labelledby="composer-label">
+            <label class="radio-container"><input type="radio" name="selection-composer" value="visible"><span class="radio-label">Visible</span></label>
+            <label class="radio-container"><input type="radio" name="selection-composer" value="hidden"><span class="radio-label">Hidden</span></label>
+          </div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-copy">
+            <span class="setting-label">Keyboard shortcut</span>
+            <p class="setting-description">Summarize a supported page without opening the popup.</p>
+          </div>
+          <div class="setting-controls">
+            <span class="shortcut-hint shortcut-hint--large" aria-label="Control X X"><kbd>Ctrl</kbd><kbd>X</kbd><kbd>X</kbd></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-group" aria-labelledby="look-heading">
+      <h2 id="look-heading" class="group-title">Appearance</h2>
+      <div class="settings-card">
         <div class="setting-item">
           <div class="setting-copy">
             <span class="setting-label" id="theme-label">Theme</span>
-            <p class="setting-description">Follow the system or force a light or dark interface.</p>
+            <p class="setting-description">Follow the system, or always use light or dark.</p>
           </div>
           <div class="setting-controls segmented-control" role="radiogroup" aria-labelledby="theme-label">
             <label class="radio-container"><input type="radio" name="theme" value="auto"><span class="radio-label">Auto</span></label>
@@ -75,35 +91,18 @@
             <label class="radio-container"><input type="radio" name="theme" value="dark"><span class="radio-label">Dark</span></label>
           </div>
         </div>
+      </div>
+    </section>
 
+    <section class="settings-group" aria-labelledby="privacy-heading">
+      <h2 id="privacy-heading" class="group-title">Privacy</h2>
+      <div class="settings-card">
         <div class="setting-item">
           <div class="setting-copy">
-            <span class="setting-label" id="floating-label">Floating Summary Button</span>
-            <p class="setting-description">Show a native, keyboard-accessible page action on supported sites.</p>
+            <span class="setting-label" id="history-label">Prompt history</span>
+            <p class="setting-description">Keep your last five sent prompts on this device so you can copy or resend them.</p>
           </div>
-          <div class="setting-controls segmented-control" role="radiogroup" aria-labelledby="floating-label">
-            <label class="radio-container"><input type="radio" name="floating-button" value="visible"><span class="radio-label">Visible</span></label>
-            <label class="radio-container"><input type="radio" name="floating-button" value="hidden"><span class="radio-label">Hidden</span></label>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-copy">
-            <span class="setting-label" id="composer-label">Selection Composer</span>
-            <p class="setting-description">Open an accessible ask window after selecting text.</p>
-          </div>
-          <div class="setting-controls segmented-control" role="radiogroup" aria-labelledby="composer-label">
-            <label class="radio-container"><input type="radio" name="selection-composer" value="visible"><span class="radio-label">Visible</span></label>
-            <label class="radio-container"><input type="radio" name="selection-composer" value="hidden"><span class="radio-label">Hidden</span></label>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-copy">
-            <span class="setting-label" id="history-label">Prompt History</span>
-            <p class="setting-description">Keep up to five generated prompts locally for copy and resend recovery.</p>
-          </div>
-          <div class="setting-controls split-controls">
+          <div class="setting-controls">
             <div class="segmented-control" role="radiogroup" aria-labelledby="history-label">
               <label class="radio-container"><input type="radio" name="prompt-history" value="enabled"><span class="radio-label">Save prompts</span></label>
               <label class="radio-container"><input type="radio" name="prompt-history" value="disabled"><span class="radio-label">Don’t save</span></label>
@@ -111,19 +110,18 @@
             <button id="clear-history-btn" class="secondary-btn" type="button">Clear History</button>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <section class="settings-section" aria-labelledby="prompts-heading">
-        <div class="section-heading">
-          <h2 id="prompts-heading">Prompt Management</h2>
-          <p class="section-description">Create reusable instructions for different content and research workflows.</p>
-        </div>
-        <div class="prompts-list" id="prompts-list" aria-live="polite"></div>
+    <section class="settings-group" aria-labelledby="prompts-heading">
+      <div class="group-head">
+        <h2 id="prompts-heading" class="group-title">Prompts</h2>
         <button id="add-prompt-btn" class="secondary-btn" type="button">Add New Prompt</button>
-      </section>
-    </div>
+      </div>
+      <div class="prompts-list" id="prompts-list" aria-live="polite"></div>
+    </section>
 
-    <div class="actions">
+    <div class="save-bar">
       <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
       <button id="save-btn" class="primary-btn" type="button">Save Settings</button>
     </div>

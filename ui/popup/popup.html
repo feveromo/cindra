@@ -6,84 +6,69 @@
   <title>Cindra Summary</title>
   <script src="../theme.js"></script>
   <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body class="popup-body">
-  <main class="container" aria-labelledby="page-title">
-    <header class="header">
-      <div class="brand-mark" aria-hidden="true">
-        <img src="/images/icon48.png" alt="" class="logo">
+  <main class="popup" aria-labelledby="page-title">
+    <header class="masthead">
+      <div class="brand">
+        <img src="/images/icon48.png" alt="" class="brand__mark">
+        <h1 id="page-title" class="wordmark">Cindra</h1>
+        <span class="version-pill" id="version-pill" aria-label="Extension version"></span>
       </div>
-      <div class="header-copy">
-        <span class="eyebrow">Page Summary Router</span>
-        <h1 id="page-title">Cindra Summary</h1>
-        <p class="header-description">Send the current page to your preferred AI workspace with a reusable prompt.</p>
-      </div>
-      <span class="version-pill" id="version-pill" aria-label="Extension version"></span>
+      <button id="options-btn" class="icon-button" type="button" aria-label="Open settings" title="Settings">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M3 6h8M15 6h2M3 14h2M9 14h8"/>
+          <circle cx="13" cy="6" r="2"/>
+          <circle cx="7" cy="14" r="2"/>
+        </svg>
+      </button>
     </header>
 
-    <section class="section" aria-labelledby="destination-heading">
-      <div class="section-heading">
-        <h2 id="destination-heading">Destination</h2>
-        <p class="section-copy">Choose the AI workspace that should receive the handoff.</p>
+    <section class="route" aria-label="Handoff route">
+      <div class="route__step">
+        <label for="content-source" class="route__word"><span aria-hidden="true">Send</span><span class="sr-only">Content source</span></label>
+        <div class="select-wrap"><select id="content-source"></select></div>
       </div>
-      <label for="ai-model" class="field-label">AI Model</label>
-      <div class="select-wrap">
-        <select id="ai-model"></select>
+      <div class="route__step">
+        <label for="ai-model" class="route__word"><span aria-hidden="true">to</span><span class="sr-only">AI model</span></label>
+        <div class="select-wrap"><select id="ai-model"></select></div>
       </div>
-    </section>
-
-    <section class="section" aria-labelledby="source-heading">
-      <div class="section-heading">
-        <h2 id="source-heading">Source</h2>
-        <p class="section-copy">Choose the content Cindra should package.</p>
-      </div>
-      <label for="content-source" class="field-label">Content Source</label>
-      <div class="select-wrap">
-        <select id="content-source"></select>
+      <div class="route__step">
+        <label for="prompt-selector" class="route__word"><span aria-hidden="true">using</span><span class="sr-only">Prompt preset</span></label>
+        <div class="select-wrap"><select id="prompt-selector"></select></div>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="prompt-heading">
-      <div class="section-heading">
-        <h2 id="prompt-heading">Prompt</h2>
-        <p class="section-copy">Pick a preset, then adjust this handoff without changing the saved preset.</p>
+    <section class="draft">
+      <div class="draft__head">
+        <label for="summary-prompt" class="field-label">Prompt draft</label>
+        <span class="draft__note">Changes apply to this send only</span>
       </div>
-      <label for="prompt-selector" class="field-label">Prompt Preset</label>
-      <div class="select-wrap prompt-selector-wrap">
-        <select id="prompt-selector"></select>
-      </div>
-      <label for="summary-prompt" class="field-label prompt-draft-label">Prompt Draft</label>
-      <textarea id="summary-prompt" rows="4" maxlength="20000" placeholder="Enter your custom prompt here..."></textarea>
+      <textarea id="summary-prompt" rows="4" maxlength="20000" placeholder="Tell the AI what to do with this page…"></textarea>
     </section>
 
-    <div class="actions">
-      <button id="summarize-btn" class="primary-btn" type="button">Summarize Current Page</button>
-      <section id="handoff-status" class="status-panel is-idle" aria-labelledby="handoff-heading" aria-live="polite" aria-atomic="true">
-        <div>
-          <div class="field-label" id="handoff-heading">Last Handoff</div>
-          <div id="handoff-status-text" class="status-meta">Ready.</div>
-        </div>
-        <div id="handoff-actions" class="handoff-actions" hidden>
-          <button id="copy-last-prompt" class="secondary-btn compact-btn" type="button">Copy</button>
-          <button id="resend-last-prompt" class="secondary-btn compact-btn" type="button">Resend</button>
-          <button id="clear-handoff-history" class="secondary-btn compact-btn" type="button">Clear</button>
-        </div>
-      </section>
-      <div class="action-strip">
-        <div>
-          <div class="field-label">Shortcut</div>
-          <div class="status-meta">Trigger from a supported page</div>
-        </div>
-        <div class="shortcut-hint" aria-label="Control X X">
-          <kbd class="keycap">Ctrl</kbd><span aria-hidden="true">+</span>
-          <kbd class="keycap">X</kbd><span aria-hidden="true">+</span>
-          <kbd class="keycap">X</kbd>
-        </div>
-      </div>
-    </div>
+    <button id="summarize-btn" class="primary-btn send-btn" type="button">Summarize Current Page</button>
 
-    <footer class="footer">
-      <button id="options-btn" type="button">Open Settings</button>
+    <section id="handoff-status" class="status-line is-idle" aria-labelledby="handoff-heading" aria-live="polite" aria-atomic="true">
+      <span class="status-dot" aria-hidden="true"></span>
+      <p class="status-line__text">
+        <span id="handoff-heading" class="sr-only">Last handoff:</span>
+        <span id="handoff-status-text">Ready.</span>
+      </p>
+      <div id="handoff-actions" class="handoff-actions" hidden>
+        <button id="copy-last-prompt" class="text-btn" type="button">Copy</button>
+        <button id="resend-last-prompt" class="text-btn" type="button">Resend</button>
+        <button id="clear-handoff-history" class="text-btn" type="button">Clear</button>
+      </div>
+    </section>
+
+    <footer class="popup-foot">
+      <span>Or press</span>
+      <span class="shortcut-hint" aria-label="Control X X">
+        <kbd>Ctrl</kbd><kbd>X</kbd><kbd>X</kbd>
+      </span>
+      <span>on a supported page</span>
     </footer>
   </main>
   <script src="../../lib/errors.js"></script>

@@ -1,6 +1,7 @@
 CindraProviderRuntime.registerAdapter({
   providerId: 'chatgpt',
   inputSelectors: [
+    'form .ProseMirror[contenteditable="true"][role="textbox"]',
     '#prompt-textarea',
     'textarea[data-id="root"]',
     'textarea.w-full',

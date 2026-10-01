@@ -217,6 +217,63 @@ test('a queued prompt is submitted once after the provider page loads', async ()
   }
 });
 
+test('ChatGPT accepts queued and direct transcripts in its ID-less ProseMirror composer', async () => {
+  const { context, serviceWorker } = await launchExtensionContext();
+  try {
+    const provider = providers.find(item => item.id === 'chatgpt');
+    const promptText = [
+      'Summarize this YouTube transcript:',
+      'Title: Composer regression — 日本語',
+      'URL: https://www.youtube.com/watch?v=cindra-test',
+      '',
+      'Transcript:',
+      ...Array.from({ length: 300 }, (_, index) => `${index}: A transcript line with <markup> & Unicode café.`)
+    ].join('\n');
+    const handoff = {
+      id: `chatgpt-modern-${Date.now()}`,
+      providerId: 'chatgpt',
+      promptText,
+      title: 'Composer regression',
+      createdAt: Date.now()
+    };
+    await serviceWorker.evaluate(handoff => chrome.storage.local.set({
+      'cindraPendingHandoff:chatgpt': handoff
+    }), handoff);
+
+    const page = await context.newPage();
+    await page.route(`${new URL(provider.url).origin}/**`, route => route.fulfill({
+      contentType: 'text/html',
+      body: fixtureHtml(`
+        <form>
+          <div class="ProseMirror" role="textbox" aria-label="Ask ChatGPT" contenteditable="true"><p><br></p></div>
+          <button type="submit" aria-label="Send" disabled data-submit></button>
+        </form>
+        <script>
+          document.querySelector('[contenteditable]').addEventListener('input', event => {
+            document.querySelector('[data-submit]').disabled = !event.currentTarget.textContent.trim();
+          });
+        </script>
+      `)
+    }));
+    await page.goto(provider.url);
+    await expect.poll(() => page.evaluate(() => window.__submitted)).toBe(1);
+    expect(await page.evaluate(() => window.__submittedPrompt)).toBe(promptText);
+    await expect.poll(() => serviceWorker.evaluate(() =>
+      chrome.storage.local.get(['cindraPendingHandoff:chatgpt']))).toEqual({});
+
+    const directPrompt = 'A second transcript\n\nWith another paragraph.';
+    const response = await deliverHandoff(serviceWorker, provider.url, provider.id, directPrompt, 'modern');
+    expect(response).toMatchObject({ success: true });
+    expect(await page.evaluate(() => window.__submitted)).toBe(2);
+    expect(await page.evaluate(() => window.__submittedPrompt)).toBe(directPrompt);
+    const pending = await serviceWorker.evaluate(() =>
+      chrome.storage.local.get(['cindraPendingHandoff:chatgpt']));
+    expect(pending).toEqual({});
+  } finally {
+    await context.close();
+  }
+});
+
 test('two provider tabs cannot submit the same queued handoff', async () => {
   const { context, serviceWorker } = await launchExtensionContext();
   try {

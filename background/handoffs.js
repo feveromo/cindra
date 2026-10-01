@@ -216,7 +216,9 @@
           const summaries = Array.isArray(items.cindraRecentSummaries)
             ? items.cindraRecentSummaries
             : [];
-          const summary = summaries.find(item => item.id === summaryId) || summaries[0];
+          const summary = summaryId
+            ? summaries.find(item => item.id === summaryId)
+            : summaries[0];
           if (!summary?.promptText) {
             void setStatus('error', 'No saved prompt to resend.');
             respond({ success: false, error: 'No saved prompt to resend.' });
@@ -271,8 +273,12 @@
         targetUrl: provider.targetUrl,
         handoffId: handoff.id
       };
-      if (result?.response?.success) {
+      if (result?.response?.success && !result.response.accepted) {
         void setStatus('success', `Prompt submitted to ${provider.label}.`, details);
+      } else if (result?.response?.success && result.response.accepted) {
+        // The runtime also acknowledges in-flight and claimed-elsewhere work.
+        // Only a completed submission or its final result can report success.
+        void setStatus('working', `${provider.label} is still submitting the queued prompt...`, details);
       } else if (result?.delivered && result.response?.error) {
         void setStatus(
           'error',

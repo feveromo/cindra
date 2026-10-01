@@ -15,6 +15,17 @@ All notable changes to Cindra are documented here.
 - Rewrote the README with new screenshots, a banner and a selection-composer example.
 - Redesigned the popup, settings, error page, selection composer, and floating launcher in a graphite-and-ember theme. The popup now fits Chrome's 600px popup height without scrolling.
 
+### Fixed
+
+- Snapshot the popup destination, source, and draft at click time so delayed preference writes cannot route content to a previous provider.
+- Ignore stale preset reads after a newer selection and preserve edited drafts across storage and theme refreshes.
+- Keep asynchronous preset saves tied to their original preset and editor, preventing interrupted editing from overwriting another preset.
+- Guard repeated prompt saves and Resend clicks while their requests are pending.
+- Reject a resend for a missing history ID instead of substituting an unrelated recent prompt.
+- Keep accepted provider deliveries in a working state until submission completes.
+- Reserve same-tab handoffs before asynchronous claims to prevent duplicate submissions, and preserve newer recovery keys when older handoffs complete.
+- Add 25 deterministic regression tests for delayed storage, interrupted editing, routing, retries, and provider concurrency.
+
 ### Removed
 
 - Removed the DeepSeek destination and its adapter.

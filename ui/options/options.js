@@ -17,6 +17,8 @@
   const MAX_PROMPTS = 50;
   const elements = {};
   let editingPromptId = null;
+  let modalSession = 0;
+  let promptSavePending = false;
   let modalPreviousFocus = null;
   let modalFocusFrame = null;
   let statusTimer = null;
@@ -240,6 +242,8 @@
   }
 
   function openPromptModal(prompt = null, trigger = root.document.activeElement) {
+    modalSession += 1;
+    elements['modal-save'].disabled = promptSavePending;
     editingPromptId = prompt?.id || null;
     modalPreviousFocus = trigger;
     elements['modal-title'].textContent = prompt ? 'Edit Prompt' : 'Add New Prompt';
@@ -257,6 +261,7 @@
   }
 
   function closeModal({ restoreFocus = true } = {}) {
+    modalSession += 1;
     if (modalFocusFrame) root.cancelAnimationFrame(modalFocusFrame);
     modalFocusFrame = null;
     elements['prompt-modal'].classList.remove('active');
@@ -306,6 +311,9 @@
 
   async function savePrompt(event) {
     event.preventDefault();
+    if (promptSavePending || elements['prompt-modal'].hidden) return;
+    const session = modalSession;
+    const promptId = editingPromptId;
     const name = elements['prompt-name'].value.trim();
     const text = elements['prompt-text'].value.trim();
     if (!name) {
@@ -319,6 +327,7 @@
       return;
     }
 
+    promptSavePending = true;
     elements['modal-save'].disabled = true;
     try {
       const result = await chromeApi.storageGet(root.chrome.storage.sync, {
@@ -328,13 +337,17 @@
       const prompts = Array.isArray(result.savedPrompts) ? [...result.savedPrompts] : [];
       const updates = {};
 
-      if (editingPromptId) {
-        const index = prompts.findIndex(prompt => prompt.id === editingPromptId);
+      if (promptId) {
+        const index = prompts.findIndex(prompt => prompt.id === promptId);
         if (index < 0) throw new Error('The prompt no longer exists.');
         prompts[index] = { ...prompts[index], name, text };
       } else {
         if (prompts.length >= MAX_PROMPTS) {
-          setModalStatus(`Cindra supports up to ${MAX_PROMPTS} saved prompts.`);
+          if (session === modalSession) {
+            setModalStatus(`Cindra supports up to ${MAX_PROMPTS} saved prompts.`);
+          } else {
+            showStatus(`Cindra supports up to ${MAX_PROMPTS} saved prompts.`, 'error');
+          }
           return;
         }
         const prompt = { id: generateId(), name, text };
@@ -346,13 +359,16 @@
         ...updates,
         savedPrompts: prompts
       });
-      closeModal();
+      if (session === modalSession) closeModal();
       await loadSavedPrompts();
       showStatus('Prompt saved.', 'success');
     } catch (error) {
       errors.logError('Could not save prompt', error);
-      setModalStatus(error?.message || 'Could not save the prompt.');
+      const message = error?.message || 'Could not save the prompt.';
+      if (session === modalSession) setModalStatus(message);
+      else showStatus(message, 'error');
     } finally {
+      promptSavePending = false;
       elements['modal-save'].disabled = false;
     }
   }

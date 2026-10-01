@@ -91,9 +91,19 @@
 
   async function clearMatchingHandoff(config, handoff) {
     const key = pendingStorageKey(config.providerId);
-    const state = await storageGet([key]);
-    const keys = legacyStorageKeys(config);
-    if (!state[key] || state[key].id === handoff.id) keys.push(key);
+    const legacyKeys = legacyStorageKeys(config);
+    const state = await storageGet([key, ...legacyKeys]);
+    if (state[key] && state[key].id !== handoff.id) return;
+
+    const keys = [key];
+    // An older completion (including a duplicate acknowledgment) must not
+    // remove recovery data written for a newer prompt.
+    if (
+      state[config.legacyKeys?.prompt] === handoff.promptText &&
+      state[config.legacyKeys?.timestamp] === handoff.createdAt
+    ) {
+      keys.push(...legacyKeys);
+    }
     await storageRemove(keys);
   }
 
@@ -213,23 +223,27 @@
       throw new Error(`${config.providerLabel} is not ready for prompt input.`);
     }
 
-    const claim = await claimHandoff(config, handoff);
-    if (!claim.success) throw new Error(claim.error || 'Could not claim the pending handoff.');
-    if (!claim.claimed) {
-      return { success: true, accepted: true, claimedElsewhere: true, handoffId: handoff.id };
-    }
-
+    // Reserve this tab before awaiting the background claim. Startup polling
+    // and eager delivery can otherwise both enter while that claim is pending.
     inFlight.set(config.providerId, handoff.id);
     try {
-      await submitWithDeadline(config, handoff);
-      rememberCompleted(handoff.id);
-      await clearMatchingHandoff(config, handoff);
-      await reportResult(config, handoff, true);
-      return { success: true, handoffId: handoff.id };
-    } catch (error) {
-      const contextual = contextualError(config.providerLabel, 'submitting the prompt', error);
-      await reportResult(config, handoff, false, contextual);
-      throw contextual;
+      const claim = await claimHandoff(config, handoff);
+      if (!claim.success) throw new Error(claim.error || 'Could not claim the pending handoff.');
+      if (!claim.claimed) {
+        return { success: true, accepted: true, claimedElsewhere: true, handoffId: handoff.id };
+      }
+
+      try {
+        await submitWithDeadline(config, handoff);
+        rememberCompleted(handoff.id);
+        await clearMatchingHandoff(config, handoff);
+        await reportResult(config, handoff, true);
+        return { success: true, handoffId: handoff.id };
+      } catch (error) {
+        const contextual = contextualError(config.providerLabel, 'submitting the prompt', error);
+        await reportResult(config, handoff, false, contextual);
+        throw contextual;
+      }
     } finally {
       if (inFlight.get(config.providerId) === handoff.id) inFlight.delete(config.providerId);
     }

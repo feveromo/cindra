@@ -20,6 +20,11 @@
   const elements = {};
   let storageListener = null;
   let initialized = false;
+  let settingsLoadVersion = 0;
+  let promptSelectionVersion = 0;
+  let selectingPromptId = null;
+  let draftVersion = 0;
+  let draftDirty = false;
 
   function byId(id) {
     return root.document.getElementById(id);
@@ -95,7 +100,8 @@
     select.replaceChildren(fragment);
   }
 
-  function renderPromptOptions(prompts, activePromptId) {
+  function renderPromptOptions(prompts, activePromptId, preserveDraft = false) {
+    const selectedId = preserveDraft ? elements['prompt-selector'].value : activePromptId;
     const fragment = root.document.createDocumentFragment();
     for (const prompt of prompts) {
       const option = root.document.createElement('option');
@@ -104,16 +110,21 @@
       fragment.appendChild(option);
     }
     elements['prompt-selector'].replaceChildren(fragment);
-    const active = prompts.find(prompt => prompt.id === activePromptId) || prompts[0];
+    const active = prompts.find(prompt => prompt.id === selectedId) ||
+      prompts.find(prompt => prompt.id === activePromptId) || prompts[0];
     if (active) {
       elements['prompt-selector'].value = active.id;
-      elements['summary-prompt'].value = active.text || DEFAULT_PROMPT;
-    } else {
+      if (!preserveDraft) elements['summary-prompt'].value = active.text || DEFAULT_PROMPT;
+    } else if (!preserveDraft) {
       elements['summary-prompt'].value = DEFAULT_PROMPT;
     }
+    if (!preserveDraft) draftDirty = false;
   }
 
-  async function loadSettings() {
+  async function loadSettings({ preserveDraft = false } = {}) {
+    const loadVersion = ++settingsLoadVersion;
+    const selectionVersion = promptSelectionVersion;
+    const initialDraftVersion = draftVersion;
     const items = await chromeApi.storageGet(root.chrome.storage.sync, {
       aiModel: providerRegistry.DEFAULT_PROVIDER,
       contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE,
@@ -121,10 +132,13 @@
       activePromptId: null,
       theme: 'auto'
     });
+    if (loadVersion !== settingsLoadVersion || selectionVersion !== promptSelectionVersion) return;
+    const keepDraft = preserveDraft &&
+      (draftDirty || selectingPromptId !== null || initialDraftVersion !== draftVersion);
     const prompts = Array.isArray(items.savedPrompts) ? items.savedPrompts : [];
     elements['ai-model'].value = providerRegistry.getProvider(items.aiModel).id;
     elements['content-source'].value = providerRegistry.getContentSource(items.contentSource).id;
-    renderPromptOptions(prompts, items.activePromptId);
+    renderPromptOptions(prompts, items.activePromptId, keepDraft);
     theme.applyTheme(items.theme);
   }
 
@@ -137,11 +151,28 @@
 
   async function selectPrompt() {
     const selectedId = elements['prompt-selector'].value;
-    const items = await chromeApi.storageGet(root.chrome.storage.sync, { savedPrompts: [] });
-    const selected = (items.savedPrompts || []).find(prompt => prompt.id === selectedId);
-    if (!selected) return;
-    elements['summary-prompt'].value = selected.text || DEFAULT_PROMPT;
-    await chromeApi.storageSet(root.chrome.storage.sync, { activePromptId: selectedId });
+    const selectionVersion = ++promptSelectionVersion;
+    const initialDraftVersion = draftVersion;
+    settingsLoadVersion += 1;
+    selectingPromptId = selectedId;
+    try {
+      const items = await chromeApi.storageGet(root.chrome.storage.sync, { savedPrompts: [] });
+      if (selectionVersion !== promptSelectionVersion) return;
+      const selected = (items.savedPrompts || []).find(prompt => prompt.id === selectedId);
+      if (!selected) return;
+      if (initialDraftVersion === draftVersion) {
+        elements['summary-prompt'].value = selected.text || DEFAULT_PROMPT;
+        draftDirty = false;
+      }
+      await chromeApi.storageSet(root.chrome.storage.sync, { activePromptId: selectedId });
+    } catch (error) {
+      errors.logError('Could not select prompt', error);
+      if (selectionVersion === promptSelectionVersion) {
+        await setLocalStatus({ state: 'error', message: 'Could not save the selected prompt.' });
+      }
+    } finally {
+      if (selectionVersion === promptSelectionVersion) selectingPromptId = null;
+    }
   }
 
   async function setLocalStatus(status) {
@@ -191,16 +222,16 @@
 
   async function summarizeCurrentPage() {
     if (elements['summarize-btn'].disabled) return;
+    // This handoff belongs to the visible choices at click time. Preference
+    // writes and tab lookups are asynchronous and may still be in flight.
+    const provider = providerRegistry.getProvider(elements['ai-model'].value);
+    const contentSource = elements['content-source'].value;
+    const summaryPrompt = elements['summary-prompt'].value;
     setSummarizeBusy(true);
     try {
       const [tab] = await chromeApi.tabsQuery({ active: true, currentWindow: true });
       if (!tab || !Number.isInteger(tab.id)) throw new Error('No active tab found.');
 
-      const settings = await chromeApi.storageGet(root.chrome.storage.sync, {
-        aiModel: providerRegistry.DEFAULT_PROVIDER,
-        contentSource: providerRegistry.DEFAULT_CONTENT_SOURCE
-      });
-      const provider = providerRegistry.getProvider(settings.aiModel);
       await setLocalStatus({
         state: 'working',
         message: `Preparing handoff to ${provider.label}…`,
@@ -213,9 +244,9 @@
         action: ACTIONS.SUMMARIZE,
         tabId: tab.id,
         url: tab.url,
-        summaryPrompt: elements['summary-prompt'].value,
+        summaryPrompt,
         aiModel: provider.id,
-        contentSource: elements['content-source'].value
+        contentSource
       }, {
         context: 'start summary from popup',
         timeoutMs: 10000
@@ -254,20 +285,23 @@
   }
 
   async function resendLastPrompt() {
-    const summary = await latestSummary();
-    if (!summary?.id) {
-      await setLocalStatus({ state: 'error', message: 'No saved prompt to resend.' });
-      return;
-    }
-    const provider = providerRegistry.getProvider(summary.model);
-    await setLocalStatus({
-      state: 'working',
-      message: `Resending to ${provider.label}…`,
-      model: provider.id,
-      title: summary.title,
-      url: summary.url
-    });
+    const button = elements['resend-last-prompt'];
+    if (button.disabled) return;
+    button.disabled = true;
     try {
+      const summary = await latestSummary();
+      if (!summary?.id) {
+        await setLocalStatus({ state: 'error', message: 'No saved prompt to resend.' });
+        return;
+      }
+      const provider = providerRegistry.getProvider(summary.model);
+      await setLocalStatus({
+        state: 'working',
+        message: `Resending to ${provider.label}…`,
+        model: provider.id,
+        title: summary.title,
+        url: summary.url
+      });
       const response = await messages.runtimeSendMessage({
         action: ACTIONS.RESEND_SUMMARY,
         summaryId: summary.id
@@ -279,6 +313,8 @@
     } catch (error) {
       errors.logError('Could not resend recent prompt', error);
       await setLocalStatus({ state: 'error', message: error?.message || 'Could not resend the prompt.' });
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -303,6 +339,10 @@
     elements['ai-model'].addEventListener('change', () => void saveWorkflowSettings());
     elements['content-source'].addEventListener('change', () => void saveWorkflowSettings());
     elements['prompt-selector'].addEventListener('change', () => void selectPrompt());
+    elements['summary-prompt'].addEventListener('input', () => {
+      draftVersion += 1;
+      draftDirty = true;
+    });
     elements['summarize-btn'].addEventListener('click', () => void summarizeCurrentPage());
     elements['copy-last-prompt'].addEventListener('click', () => void copyLastPrompt());
     elements['resend-last-prompt'].addEventListener('click', () => void resendLastPrompt());
@@ -313,8 +353,11 @@
       if (areaName === 'local' && (changes.cindraLastStatus || changes.cindraRecentSummaries)) {
         void loadLastHandoff();
       }
-      if (areaName === 'sync' && (changes.savedPrompts || changes.activePromptId || changes.theme)) {
-        void loadSettings();
+      if (areaName === 'sync' && (changes.savedPrompts || changes.activePromptId)) {
+        void loadSettings({ preserveDraft: true });
+      }
+      if (areaName === 'sync' && changes.theme) {
+        theme.applyTheme(changes.theme.newValue);
       }
     };
     root.chrome.storage.onChanged.addListener(storageListener);

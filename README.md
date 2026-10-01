@@ -1,177 +1,140 @@
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/feveromo/cindra)
-
-# Cindra Summary
-
-Cindra Summary is a Manifest V3 Chrome extension that extracts the current page, selected text, PDF text, a YouTube transcript, or a Reddit thread and routes it to a selected AI chat workspace. It uses the destination’s existing web UI, so no API key is required.
-
-## Highlights
-
-- Popup routing to 13 AI destinations
-- `Ctrl + X + X` page shortcut
-- Accessible floating summarize button
-- Selection composer for focused questions about highlighted text
-- Reusable prompt presets and per-handoff prompt editing
-- Page, selection, PDF, YouTube, and Reddit extraction
-- Copy/resend recovery for recent generated prompts
-- Abortable, deadline-bounded provider handoffs that keep failed work queued for retry
-- Optional local prompt history with one-click clearing
-- Bounded long-page extraction that preserves the beginning and end
-- Serialized, isolated PDF parsing with vendored PDF.js
-- Expiring local YouTube transcript cache
-- Deterministic unit and unpacked-extension browser tests
-
-## Screenshots
-
-### Toolbar popup
-
 <p align="center">
-  <img src="images/screenshots/popup-main.png" alt="Cindra toolbar popup" width="320">
-  <img src="images/screenshots/popup-prompts.png" alt="Cindra toolbar popup prompt controls" width="320">
+  <img src="images/readme/hero.png" alt="Cindra: send any page to the AI you already use" width="100%">
 </p>
 
-### Settings page
+Cindra is a Chrome extension that sends the page you're reading to an AI chat, together with a prompt you choose. It works with the AI's normal website, signed in as you, so there are no API keys to set up and nothing goes through a Cindra server.
+
+It can send a whole page, the text you've selected, a PDF, a YouTube video's transcript or a Reddit thread to 13 AI chats.
 
 <p align="center">
-  <img src="images/screenshots/settings-light.png" alt="Cindra settings page in light mode" width="48%">
-  <img src="images/screenshots/settings-dark.png" alt="Cindra settings page in dark mode" width="48%">
+  <a href="https://deepwiki.com/feveromo/cindra"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
-## Supported destinations
+## Three ways to send
 
-- Google AI Studio
-- Meta AI Playground (Muse Spark 1.2 Contributor)
-- Gemini
-- Perplexity
-- Grok
-- Claude
-- ChatGPT
-- Google Learning
-- GLM (Z.AI)
-- Kimi
-- HuggingChat
-- Qwen
-- Cerebras
+**The popup.** Pick what to send, which AI gets it and which prompt to use, edit the prompt if you like, then press **Summarize Current Page**. Cindra opens the AI site in a tab, pastes the prompt and the content, and sends it.
 
-Provider metadata, match patterns, limits, and storage keys are defined in `lib/providers.js`. Meta AI Playground uses the authenticated web UI and selects Muse Spark 1.2 Contributor for each handoff.
+**The shortcut.** Hold `Ctrl` and press `X` twice on any page to send it with your default settings. The shortcut is ignored while you're typing in a text field.
 
-## Content sources
+**The selection composer.** Highlight some text and a small window appears next to it. Ask a question about the selection, or summarize just that part.
 
-- **Best Available**: automatically chooses a specialized source when supported
-- **Page Text**: extracts the largest readable page region and removes surrounding controls
-- **Selected Text**: uses the active browser selection
-- **PDF Text**: extracts selectable PDF text or parses the current HTTP(S) PDF with PDF.js
-- **YouTube**: extracts a genuine caption transcript and rejects manual-instruction fallback text
-- **Reddit**: extracts post/comment structure and falls back to readable page text
+<p align="center">
+  <img src="images/readme/composer.png" alt="The selection composer open over a highlighted paragraph, with a question typed in and an Ask Claude button" width="720">
+</p>
 
-Very long page captures are limited to 500,000 characters. Cindra preserves the beginning and end and inserts an omission notice. Each destination can apply a stricter final prompt limit.
+## What it can send
 
-## Installation
+Choose a source in the popup, or set a default in settings.
 
-```bash
-git clone https://github.com/feveromo/cindra.git
-cd cindra
-pnpm install
-```
+| Source | What Cindra sends |
+| --- | --- |
+| Best Available | The default. Picks the right content for the page you're on (see below). |
+| Page Text | The main readable part of the page, without menus, forms and sidebars. |
+| Selected Text | Whatever you've highlighted. |
+| PDF Text | The text of the PDF you're viewing, read with a bundled copy of PDF.js. |
 
-Then:
+With Best Available, Cindra recognises a few kinds of page:
 
-1. Open `chrome://extensions/`.
-2. Enable **Developer mode**.
-3. Choose **Load unpacked**.
-4. Select the repository directory.
+| On | It sends |
+| --- | --- |
+| A YouTube video | The full caption transcript, with the title, channel and description. Cindra checks that the transcript belongs to the video you're watching. |
+| A Reddit thread | The post, then each comment with its author's name. |
+| A PDF | The PDF's text. |
+| Anything else | The page text. |
 
-## Usage
+Very long pages are cut to 500,000 characters, keeping the beginning and the end. Some AI sites accept less than that, so Cindra trims further for those.
 
-1. Open the popup.
-2. Select an AI destination and content source.
-3. Select a prompt preset and optionally adjust the draft.
-4. Choose **Summarize Current Page**.
+## Where it can send
 
-On supported pages, you can also use `Ctrl + X + X`, the floating button, or highlight text to open the selection composer.
+Google AI Studio, Meta AI Playground, Gemini, Perplexity, Grok, Claude, ChatGPT, Google Learning, GLM (Z.AI), Kimi, HuggingChat, Qwen and Cerebras.
 
-## Privacy and local data
+You need to be signed in to the AI site in the same browser. Meta AI Playground selects the Muse Spark 1.2 Contributor model for each send.
 
-Cindra does not send content to a Cindra-operated server. Extracted content is delivered only to the AI destination selected by the user.
+## Install
 
-- Workflow preferences and prompt presets use `chrome.storage.sync`.
-- Pending handoffs, status, transcript cache, and optional recent generated prompts use `chrome.storage.local`.
-- Recent prompt history keeps at most five entries and can be disabled or cleared in Settings.
-- YouTube transcript cache entries expire after seven days and are capped at 20 entries.
-- PDF downloads accept only HTTP(S), enforce a 50 MiB limit, validate the PDF signature, and disable PDF.js JavaScript evaluation.
+Cindra isn't on the Chrome Web Store, so you load it from this repository. There's no build step.
 
-Chrome requests access to HTTP and HTTPS pages because Cindra’s shortcut and optional page controls run there and because explicit summary actions need to read the selected source.
+1. Clone the repository: `git clone https://github.com/feveromo/cindra.git`
+2. Open `chrome://extensions` and turn on **Developer mode**.
+3. Choose **Load unpacked** and select the `cindra` folder.
+4. Pin Cindra to the toolbar.
+
+To update, run `git pull` and press the reload button on Cindra's card in `chrome://extensions`. Cindra needs Chrome 125 or later.
+
+## Popup and settings
+
+<p align="center">
+  <img src="images/readme/popup-dark.png" alt="Cindra popup in dark mode, set to send Best Available to Claude using the Key points prompt" width="300">
+  &nbsp;
+  <img src="images/readme/popup-light.png" alt="The same popup in light mode" width="300">
+</p>
+
+Open settings from the slider icon in the popup.
+
+| Setting | What it does |
+| --- | --- |
+| AI model | Where new summaries go by default. |
+| Default source | What the popup and shortcut send unless you choose otherwise. |
+| Floating summary button | A small flame button in the corner of most web pages. On by default. |
+| Selection composer | The window that appears when you highlight text. On by default. |
+| Theme | Follow your system, or always use light or dark. |
+| Prompt history | Keeps your last five sent prompts so you can copy or resend them. |
+| Prompts | Create, edit and delete reusable prompts, and choose the active one. |
+
+<p align="center">
+  <img src="images/readme/settings-light.png" alt="Cindra settings page in light mode" width="49%">
+  <img src="images/readme/settings-dark.png" alt="Cindra settings page in dark mode" width="49%">
+</p>
+
+## Privacy
+
+Cindra has no server and no analytics. The content you send goes only to the AI site you picked.
+
+- Your settings and prompts are stored with `chrome.storage.sync`, so Chrome syncs them if you've turned on sync.
+- Recent prompts, the status of the last send and cached YouTube transcripts stay on your device in `chrome.storage.local`.
+- Prompt history holds at most five entries. You can turn it off or clear it in settings.
+- Cached transcripts expire after seven days, and at most 20 are kept.
+- PDFs are only downloaded over HTTP(S), up to 50 MiB, and PDF.js runs with scripting turned off.
+
+Chrome asks for access to all websites because the shortcut, the floating button and the selection composer run on every page, and because Cindra has to read a page to send it.
 
 ## Known limitations
 
-- Scanned image-only PDFs require OCR before Cindra can summarize their text.
-- Provider automation depends on live destination DOMs and may need maintenance when those sites redesign their composers.
-- Some providers enforce small input limits, so Cindra may trim the final content more aggressively for those destinations.
-- Protected pages and Chrome-internal URLs do not allow normal content-script extraction.
-
-## Project structure
-
-```text
-cindra/
-├── background/
-│   ├── background.js          # MV3 service-worker wiring and trusted message entry point
-│   ├── orchestrator.js        # normalize → route → extract → format → handoff pipeline
-│   ├── handoffs.js            # destination opening, pending envelopes, status, recovery
-│   ├── pdf.js                 # serialized offscreen and tab PDF extraction
-│   └── transcript-cache.js    # expiring LRU YouTube transcript cache
-├── content_scripts/
-│   ├── *_content.js           # provider, YouTube, and Reddit adapters
-│   └── lib/
-│       ├── inject.js          # shared DOM input/click helpers
-│       ├── provider_runtime.js
-│       ├── page_ui.js         # floating button and selection composer
-│       ├── youtube_ui.js      # lifecycle-managed YouTube transcript control
-│       └── youtube_parser.js
-├── lib/
-│   ├── chrome.js              # Promise wrappers for Chrome APIs
-│   ├── errors.js              # contextual diagnostics and safe user messages
-│   ├── extraction.js          # shared page/selection/PDF DOM extraction
-│   ├── messages.js            # action constants, validation, messaging timeouts
-│   ├── prompt.js
-│   ├── providers.js
-│   └── pdf.js
-├── offscreen/                 # isolated PDF.js document
-├── ui/                        # popup, settings, shared theme and styles
-├── tests/                     # Node unit tests and Playwright extension fixtures
-├── vendor/pdfjs/              # pinned PDF.js runtime and Apache 2.0 license
-├── ARCHITECTURE.md
-├── CHANGELOG.md
-└── manifest.json
-```
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for runtime boundaries, message flow, cache behavior, storage, and handoff details.
+- Scanned PDFs that are only images have no text to send. Run them through OCR first.
+- Cindra fills in each AI site's message box the way you would. When a site redesigns that box, its adapter may need an update.
+- Chrome doesn't let extensions read its own pages (`chrome://`) or the Chrome Web Store.
 
 ## Development
 
 ```bash
-pnpm check
-pnpm test:unit
-pnpm test:extension
-# or run both suites
-pnpm test
+pnpm install
+pnpm check            # syntax, manifest and HTML references, provider registry
+pnpm test:unit        # Node unit tests
+pnpm test:extension   # loads the unpacked extension in Playwright against local fixtures
+pnpm test             # both test suites
 ```
 
-- `pnpm check` validates JavaScript syntax, version synchronization, provider registry invariants, and manifest/HTML references.
-- `pnpm test:unit` covers routing, extraction, messages, errors, caches, UI helpers, prompt limits, PDF validation, and YouTube parsing.
-- `pnpm test:extension` loads the unpacked extension against deterministic local fixtures. It does not probe or monitor live AI sites.
+The browser tests use local stand-ins for every site and never contact the real AI services.
 
-## Adding a provider
+[`ARCHITECTURE.md`](ARCHITECTURE.md) explains how the pieces fit together: the background worker, content scripts, message validation, the handoff to each AI site, caching and storage.
 
-1. Add provider metadata to `lib/providers.js`, including `contentScript.matches`, `contentScript.file`, target URL, storage keys, and any content limit.
-2. Add one manifest block that loads, in order:
-   - `lib/errors.js`
-   - `lib/chrome.js`
-   - `lib/messages.js`
-   - `content_scripts/lib/inject.js`
-   - `content_scripts/lib/provider_runtime.js`
-   - the provider adapter
-3. Implement only destination-specific input/submit behavior in `content_scripts/<provider>_content.js` and register it with `CindraProviderRuntime.registerAdapter()`.
-4. Add deterministic unit or Playwright coverage and run all validation commands.
+```text
+background/        service worker: routing, extraction, handoffs, PDF and transcript cache
+content_scripts/   one adapter per AI site, plus YouTube, Reddit and on-page controls
+lib/               shared code: provider registry, messages, prompts, extraction
+offscreen/         isolated document for reading PDFs
+ui/                popup, settings, error page, theme and fonts
+tests/             unit tests and Playwright extension tests
+vendor/pdfjs/      pinned PDF.js
+```
+
+### Adding an AI site
+
+1. Add the site to `lib/providers.js`: its URL, which pages the adapter runs on, its storage key and any length limit.
+2. Add a `content_scripts` entry to `manifest.json` that loads, in this order: `lib/errors.js`, `lib/chrome.js`, `lib/messages.js`, `content_scripts/lib/inject.js`, `content_scripts/lib/provider_runtime.js`, then your adapter.
+3. Write `content_scripts/<site>_content.js`. It only needs to find the message box and send button, then register itself with `CindraProviderRuntime.registerAdapter()`.
+4. Add a test, then run `pnpm check` and `pnpm test`.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE). Vendored PDF.js licensing is retained in `vendor/pdfjs/LICENSE`.
+MIT, see [`LICENSE`](LICENSE). PDF.js is under the Apache 2.0 license (`vendor/pdfjs/LICENSE`). The Bricolage Grotesque font is under the SIL Open Font License (`ui/fonts/OFL.txt`).

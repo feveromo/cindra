@@ -8,6 +8,13 @@ All notable changes to Cindra are documented here.
 
 - Added Meta AI Playground as a web-UI destination, defaulting each handoff to Muse Spark 1.2 Contributor.
 
+### Changed
+
+- YouTube transcripts now come from caption tracks, YouTube's transcript endpoint, or the transcript panel's data instead of scraping the visible panel. Results are tied to the requested video, partial transcripts are rejected, and transcripts cached by older versions are discarded.
+- ChatGPT handoffs support the composer that has no element ID.
+- Rewrote the README with new screenshots, a banner and a selection-composer example.
+- Redesigned the popup, settings, error page, selection composer, and floating launcher in a graphite-and-ember theme. The popup now fits Chrome's 600px popup height without scrolling.
+
 ### Removed
 
 - Removed the DeepSeek destination and its adapter.

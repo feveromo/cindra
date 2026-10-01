@@ -43,6 +43,9 @@ function createHarness(overrides = {}) {
     extractTranscript: async () => ({
       success: true,
       transcript: 'Transcript: new transcript',
+      videoId: 'abc123',
+      complete: true,
+      extractionVersion: 2,
       channelName: 'Channel',
       description: 'Video description'
     }),
@@ -180,7 +183,10 @@ test('non-transcript YouTube fallback text is rejected before handoff', async ()
   const { calls, orchestrator } = createHarness({
     extractTranscript: async () => ({
       success: true,
-      transcript: 'Could not extract transcript automatically. To access it manually, open YouTube captions.'
+      transcript: 'Could not extract transcript automatically. To access it manually, open YouTube captions.',
+      videoId: 'abc123',
+      complete: true,
+      extractionVersion: 2
     }),
     transcriptCache: {
       get: async () => null,
@@ -199,6 +205,34 @@ test('non-transcript YouTube fallback text is rejected before handoff', async ()
   assert.deepEqual(calls.errors, [
     'Could not extract a usable transcript. This video may not have captions available.'
   ]);
+});
+
+test('wrong-video, partial, and navigated YouTube results never reach the model', async () => {
+  for (const overrides of [
+    { extractTranscript: async () => ({ success: true, videoId: 'wrong01', complete: true, extractionVersion: 2, transcript: 'Transcript: wrong video' }) },
+    { extractTranscript: async () => ({ success: true, videoId: 'abc123', complete: false, extractionVersion: 2, transcript: 'Transcript: prefix only' }) },
+    { isCurrentYouTubeVideo: async () => false }
+  ]) {
+    let writes = 0;
+    const { calls, orchestrator } = createHarness({
+      ...overrides,
+      transcriptCache: { get: async () => null, set: async () => { writes++; return true; } }
+    });
+    const result = await orchestrator.run({ id: 3, url: 'https://www.youtube.com/watch?v=abc123' });
+    assert.equal(result.success, false);
+    assert.equal(writes, 0);
+    assert.equal(calls.handoffs.length, 0);
+  }
+});
+
+test('navigation during a cache hit prevents handoff too', async () => {
+  let current = true;
+  const { calls, orchestrator } = createHarness({
+    isCurrentYouTubeVideo: async () => current,
+    transcriptCache: { get: async () => { current = false; return { content: 'Transcript: old video' }; } }
+  });
+  assert.equal((await orchestrator.run({ id: 3, url: 'https://www.youtube.com/watch?v=abc123' })).success, false);
+  assert.equal(calls.handoffs.length, 0);
 });
 
 test('empty captured pages produce one user-facing error and no handoff', async () => {

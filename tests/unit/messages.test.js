@@ -34,6 +34,15 @@ test('message contracts reject malformed actions, ids, and URLs', () => {
   }).error, /Provider id/);
 });
 
+test('YouTube extraction messages require a video identity and a boolean panel flag', () => {
+  for (const action of [ACTIONS.EXTRACT_TRANSCRIPT, ACTIONS.READ_YOUTUBE_PAGE]) {
+    assert.equal(messages.validateMessage({ action }).ok, false);
+    assert.equal(messages.validateMessage({ action, videoId: '../bad' }).ok, false);
+    assert.equal(messages.validateMessage({ action, videoId: 'valid-video', includePanel: 'yes' }).ok, false);
+    assert.equal(messages.validateMessage({ action, videoId: 'valid-video', includePanel: true }).ok, true);
+  }
+});
+
 test('prompt handoff contracts reject malformed envelopes', () => {
   assert.match(messages.validateMessage({
     action: ACTIONS.INSERT_PROMPT,

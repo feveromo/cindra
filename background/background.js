@@ -8,6 +8,7 @@ importScripts(
   '../lib/pdf.js',
   'content.js',
   'pdf.js',
+  'youtube.js',
   'transcript-cache.js',
   'orchestrator.js',
   'handoffs.js'
@@ -29,7 +30,8 @@ const BACKGROUND_ACTIONS = [
   ACTIONS.SUMMARIZE,
   ACTIONS.RESEND_SUMMARY,
   ACTIONS.PROVIDER_HANDOFF_RESULT,
-  ACTIONS.CLAIM_PROVIDER_HANDOFF
+  ACTIONS.CLAIM_PROVIDER_HANDOFF,
+  ACTIONS.READ_YOUTUBE_PAGE
 ];
 const PDF_SHORTCUT_SCRIPT_FILES = [
   'lib/errors.js',
@@ -77,11 +79,18 @@ const orchestrator = new ContentExtractionOrchestrator({
     timeoutMs: 5000
   }),
   extractTranscript: tab => messages.tabsSendMessage(tab.id, {
-    action: ACTIONS.EXTRACT_TRANSCRIPT
+    action: ACTIONS.EXTRACT_TRANSCRIPT,
+    videoId: new URL(tab.url).searchParams.get('v')
   }, {
     context: `extract YouTube transcript from tab ${tab.id}`,
-    timeoutMs: 45000
+    timeoutMs: 20000
   }),
+  isCurrentYouTubeVideo: async (tab, videoId) => {
+    const current = await chromeApi.tabsGet(tab.id);
+    const url = new URL(current.url);
+    return url.origin === 'https://www.youtube.com' && url.pathname === '/watch' &&
+      url.searchParams.get('v') === videoId;
+  },
   transcriptCache,
   sendToModel: sendToSelectedModel,
   setStatus,
@@ -99,6 +108,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!validation.ok) {
     respond({ success: false, error: validation.error });
     return false;
+  }
+
+  if (message.action === ACTIONS.READ_YOUTUBE_PAGE) {
+    let trusted = false;
+    try {
+      const url = new URL(sender.url);
+      // sender.url can retain the document's original URL after pushState.
+      // The MAIN-world reader checks the live URL and video ID in this exact document.
+      trusted = sender.id === chrome.runtime.id && Number.isInteger(sender.tab?.id) &&
+        sender.frameId === 0 && typeof sender.documentId === 'string' &&
+        url.origin === 'https://www.youtube.com';
+    } catch (_) {}
+    if (!trusted) {
+      respond({ success: false, error: 'YouTube page request was not trusted.' });
+      return false;
+    }
+    chromeApi.executeScript({
+      target: { tabId: sender.tab.id, documentIds: [sender.documentId] },
+      world: 'MAIN',
+      func: globalThis.CindraYouTubePage.readYouTubePageData,
+      args: [message.videoId, Boolean(message.includePanel)]
+    }).then(results => respond({ success: true, data: results?.[0]?.result || null }))
+      .catch(() => respond({ success: false, error: 'YouTube page is no longer available.' }));
+    return true;
   }
 
   if (message.action === ACTIONS.SUMMARIZE) {

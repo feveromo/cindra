@@ -30,6 +30,11 @@
       .test(text);
   }
 
+  function isCacheableRecord(videoId, transcript) {
+    return transcript?.videoId === videoId && transcript.extractionVersion === 2 &&
+      transcript.complete === true && isCacheableTranscript(transcript.content);
+  }
+
   function normalizeMetadata(value) {
     const entries = value?.version === 1 && value.entries && typeof value.entries === 'object'
       ? value.entries
@@ -65,16 +70,15 @@
       for (const [key, transcript] of Object.entries(state)) {
         if (!key.startsWith(CACHE_KEY_PREFIX)) continue;
         const videoId = key.slice(CACHE_KEY_PREFIX.length);
-        if (!VIDEO_ID_PATTERN.test(videoId) || !isCacheableTranscript(transcript?.content)) {
+        if (!VIDEO_ID_PATTERN.test(videoId) || !isCacheableRecord(videoId, transcript)) {
           removals.push(key);
           delete metadata.entries[videoId];
           continue;
         }
 
         const existing = metadata.entries[videoId] || {};
-        // Older Cindra versions stored only transcript_<videoId>. Adopt those
-        // entries on first maintenance instead of treating missing metadata as
-        // an expired cache record.
+        // Records from the old DOM-slice extractor are discarded above: their
+        // completeness and video association were never verified.
         const cachedAt = Number(existing.cachedAt || transcript.cachedAt || 0) || timestamp;
         const lastAccessedAt = videoId === accessedVideoId
           ? timestamp
@@ -120,12 +124,12 @@
       if (maintenance.removedKeys.includes(key)) return null;
 
       const transcript = state[key];
-      return isCacheableTranscript(transcript?.content) ? transcript : null;
+      return isCacheableRecord(videoId, transcript) ? transcript : null;
     }
 
     async function setTranscript(videoId, transcript) {
       const key = cacheKey(videoId);
-      if (!isCacheableTranscript(transcript?.content)) {
+      if (!isCacheableRecord(videoId, transcript)) {
         await remove([key]);
         const state = await loadState();
         await maintain(state);

@@ -25,12 +25,14 @@ function transcript(videoId) {
     videoId,
     title: videoId,
     url: `https://www.youtube.com/watch?v=${videoId}`,
-    content: `Transcript: ${videoId} content`
+    content: `Transcript: ${videoId} content`,
+    complete: true,
+    extractionVersion: 2
   };
 }
 
-test('legacy transcript keys are adopted instead of discarded', async () => {
-  const storage = createStorage({ transcript_abc123: transcript('abc123') });
+test('legacy or incomplete transcripts are discarded rather than trusted as full transcripts', async () => {
+  const storage = createStorage({ transcript_abc123: { ...transcript('abc123'), extractionVersion: undefined } });
   const cache = cacheModule.create({
     get: storage.get,
     set: storage.set,
@@ -39,11 +41,12 @@ test('legacy transcript keys are adopted instead of discarded', async () => {
   });
 
   await cache.cleanup();
-  assert.deepEqual(await cache.get('abc123'), transcript('abc123'));
-  assert.deepEqual(storage.state[cacheModule.METADATA_KEY].entries.abc123, {
-    cachedAt: 100000,
-    lastAccessedAt: 100000
-  });
+  assert.equal(await cache.get('abc123'), null);
+  assert.equal(storage.state.transcript_abc123, undefined);
+  assert.equal(await cache.set('abc123', { ...transcript('abc123'), complete: false }), false);
+  assert.equal(await cache.set('abc123', transcript('other01')), false);
+  assert.equal(await cache.set('abc123', transcript('abc123')), true);
+  assert.deepEqual(await cache.get('abc123'), { ...transcript('abc123'), cachedAt: 100000 });
 });
 
 test('cache rejects manual transcript instructions and clears poisoned entries', async () => {
